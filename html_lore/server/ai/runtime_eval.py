@@ -370,6 +370,9 @@ def public_agent_qa_report(result: AgentRunResult, evidence: dict[str, Any]) -> 
     local_evidence = tool_output(result, "evidence.build")
     policy = tool_output(result, "expansion.policy")
     planner = dict(result.plan.metadata.get("planner") or {}) if getattr(result.plan, "metadata", None) else {}
+    resolution = planner.get("conversation_resolution") if isinstance(planner.get("conversation_resolution"), dict) else None
+    if resolution is not None:
+        planner["conversation_resolution"] = public_conversation_resolution(resolution)
     research = tool_output(result, "external.research")
     external_status = research.get("status") if isinstance(research.get("status"), dict) else {}
     research_trace = research.get("trace") if isinstance(research.get("trace"), list) else []
@@ -438,6 +441,16 @@ def public_agent_qa_report(result: AgentRunResult, evidence: dict[str, Any]) -> 
             "metrics": metrics,
         },
         "sources": normalize_sources(sources),
+    }
+
+
+def public_conversation_resolution(resolution: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "is_followup": bool(resolution.get("is_followup")),
+        "topic_shift": bool(resolution.get("topic_shift")),
+        "focus_type": str(resolution.get("focus_type") or "none"),
+        "confidence": float(resolution.get("confidence") or 0.0),
+        "reason": str(resolution.get("reason") or ""),
     }
 
 

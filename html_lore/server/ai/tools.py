@@ -8,6 +8,7 @@ from html_lore.server.items import ItemService
 from .context import ContextResolver
 from .external_search import DisabledExternalSearchAdapter, ExternalSearchAdapter
 from .guardrails import validate_answer, validate_message_budget, validate_prompt_budget, validate_user_message
+from .conversation_resolution import resolve_conversation_turn
 from .knowledge_qa_graph import (
     EXTERNAL_UNAVAILABLE_ANSWER,
     assess_evidence_coverage,
@@ -108,9 +109,11 @@ class EvidenceTool:
         if not context and isinstance(state.get("context"), dict):
             context = dict(state["context"])
         query = str(values.get("query") or state.get("query") or "").strip()
-        retrieval_query = build_retrieval_query(query, recent_conversation_messages(state.get("conversation_messages")))
+        resolution = resolve_conversation_turn(query, recent_conversation_messages(state.get("conversation_messages")))
+        retrieval_query = str(resolution.get("resolved_query") or query)
         if retrieval_query:
             query = retrieval_query
+        state["conversation_resolution"] = resolution
         state["retrieval_query"] = query
         mode = str(values.get("retrieval_mode") or self.retrieval_mode or "keyword")
         max_results = max(1, int(values.get("max_results") or self.max_results))
@@ -363,7 +366,13 @@ class EvidenceAssessmentTool:
         context_output = state.get("tool_outputs", {}).get("context.resolve", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         context = context_output.get("context") if isinstance(context_output.get("context"), dict) else {}
         policy = state.get("tool_outputs", {}).get("expansion.policy", {}) if isinstance(state.get("tool_outputs"), dict) else {}
+        research = state.get("tool_outputs", {}).get("external.research", {}) if isinstance(state.get("tool_outputs"), dict) else {}
+        search_plan = research.get("search_plan") if isinstance(research.get("search_plan"), dict) else {}
         if is_assessment_exempt(query, context, policy):
+            if str(policy.get("mode") or "") == "web_research" and search_requires_attribute_evidence(search_plan):
+                external_check = external_evidence_assessment(chunks=chunks, query=query, search_plan=search_plan)
+                if external_check["insufficient_evidence"] or external_check["weak_relevance"]:
+                    return external_check
             return {
                 "query": query,
                 "metrics": {"status": "ok", "requires_attention": False, "flags": []},
@@ -567,6 +576,63 @@ def is_specific_relevance_token(token: str) -> bool:
         "是什么",
     }
     return normalized not in generic
+
+
+def external_evidence_assessment(*, chunks: list[dict[str, Any]], query: str, search_plan: dict[str, Any]) -> dict[str, Any]:
+    search = search_plan.get("search") if isinstance(search_plan.get("search"), dict) else {}
+    evidence_terms = [str(term).lower() for term in search.get("evidence_terms") or [] if str(term).strip()]
+    required_terms = [str(term).lower() for term in search.get("required_terms") or [] if str(term).strip()]
+    texts: list[str] = []
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        title = str(chunk.get("title") or "")
+        snippet = str(chunk.get("snippet") or "")
+        url = str(chunk.get("url") or "")
+        if title.lower().startswith("external reference for "):
+            title = ""
+        if snippet.lower().startswith("fake external source related to:"):
+            snippet = ""
+        if "example.test/search" in url:
+            url = ""
+        texts.append(" ".join(part for part in (title, snippet, url) if part))
+    haystack = " ".join(texts).lower()
+    normalized_query = str(query or "").strip().lower()
+    if normalized_query:
+        haystack = haystack.replace(normalized_query, " ")
+    for marker in ("external reference for", "fake external source related to:"):
+        haystack = haystack.replace(marker, " ")
+    missing_required_terms = [term for term in required_terms if term not in haystack]
+    matched_evidence_terms = [term for term in evidence_terms if term in haystack]
+    insufficient = not chunks or bool(missing_required_terms)
+    weak_relevance = bool(chunks) and bool(evidence_terms) and not matched_evidence_terms
+    flags: list[str] = []
+    if insufficient:
+        flags.append("insufficient_evidence")
+    if weak_relevance:
+        flags.append("weak_relevance")
+    return {
+        "query": query,
+        "metrics": {
+            "status": "needs_attention" if flags else "ok",
+            "requires_attention": bool(flags),
+            "flags": flags,
+            "matched_evidence_terms": matched_evidence_terms,
+            "missing_required_terms": missing_required_terms,
+        },
+        "status": "insufficient_evidence" if insufficient else ("needs_attention" if weak_relevance else "ok"),
+        "requires_attention": insufficient or weak_relevance,
+        "insufficient_evidence": insufficient,
+        "weak_relevance": weak_relevance,
+        "matched_evidence_terms": matched_evidence_terms,
+        "missing_required_terms": missing_required_terms,
+    }
+
+
+def search_requires_attribute_evidence(search_plan: dict[str, Any]) -> bool:
+    search = search_plan.get("search") if isinstance(search_plan.get("search"), dict) else {}
+    intent = str(search.get("search_intent") or search_plan.get("reason") or "").lower()
+    return intent.startswith("entity_")
 
 
 def context_title(context: dict[str, Any]) -> str:

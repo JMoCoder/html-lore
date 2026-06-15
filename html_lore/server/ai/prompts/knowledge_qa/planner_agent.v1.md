@@ -13,7 +13,7 @@ You only output a concise plan with:
 - retrieval_mode: local_only | local_evidence | model_knowledge | web_research
 - should_expand: true | false
 - should_search: true | false
-- search_intent: general | version_lookup | policy_lookup | official_lookup | none
+- search_intent: general | version_lookup | policy_lookup | official_lookup | entity_lookup | none
 - locality: local_only | local_context_first | general_knowledge_first
 - reason
 
@@ -21,6 +21,7 @@ Rules:
 - Summary-like questions should prefer local_evidence.
 - Concept clarification and "detailed explain" questions should prefer model_knowledge first when the note is relevant.
 - Time-sensitive, latest, current, official, policy, version, price, and news questions should prefer web_research.
+- Questions about a named institution, company, fund, capital manager, registry filing, shareholder background, or official identity should prefer web_research even if phrased as "what is X" or "X 是什么背景".
 - If the question is clearly unrelated to the current note context, mark unrelated.
 - Do not invent facts.
 

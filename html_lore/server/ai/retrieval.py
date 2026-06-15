@@ -17,6 +17,13 @@ RETRIEVAL_MODES = {"keyword", "vector", "hybrid"}
 MAX_CHUNKS_PER_ITEM = 2
 KEYWORD_MIN_SCORE = 8
 KEYWORD_RELATIVE_SCORE_RATIO = 0.34
+LOW_TRUST_GENERATED_PATTERNS = (
+    "based on 1 context note(s):",
+    "based on ",
+    "当前上下文没有足够资料回答这个问题",
+    "请调整上下文、选择相关笔记，或开启内容拓展后再试",
+    "question answer referenced context",
+)
 
 
 @dataclass(frozen=True)
@@ -202,6 +209,8 @@ def retrieve_keyword_evidence(item_service: ItemService, context_snapshot: dict[
         except ItemContentError:
             continue
         text = evidence_text(item, html)
+        if should_skip_low_trust_generated_item(item, text, scope=scope):
+            continue
         blocks = extract_safe_blocks(html)
         chunks = chunk_blocks(blocks) or [text]
         aggressive_stopwords = scope not in {"reader", "manual"}
@@ -399,7 +408,8 @@ def retrieve_vector_evidence(
     chunks = build_vector_chunks(item_service, context_snapshot, embedding_model, model_client, store)
     store.upsert_chunks(chunks)
     query_vector = model_client.embed(text=query)
-    return store.search(query_vector=query_vector, item_ids=item_ids, model=embedding_model, limit=max_results)
+    evidence = store.search(query_vector=query_vector, item_ids=item_ids, model=embedding_model, limit=max_results)
+    return filter_vector_evidence(item_service, context_snapshot, evidence)
 
 
 def build_vector_chunks(
@@ -421,6 +431,8 @@ def build_vector_chunks(
         try:
             html = item_service.read_item_content(item_id)
         except ItemContentError:
+            continue
+        if should_skip_low_trust_generated_item(item, evidence_text(item, html), scope=str(context_snapshot.get("scope") or "")):
             continue
         blocks = extract_safe_blocks(html)
         text_chunks = chunk_blocks(blocks) or [evidence_text(item, html)]
@@ -446,6 +458,21 @@ def build_vector_chunks(
     return chunks
 
 
+def filter_vector_evidence(item_service: ItemService, context_snapshot: dict[str, Any], evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not evidence:
+        return []
+    manifest_items = {str(item.get("id") or ""): item for item in item_service.manifest().get("items", [])}
+    scope = str(context_snapshot.get("scope") or "")
+    filtered: list[dict[str, Any]] = []
+    for item in evidence:
+        item_id = str(item.get("item_id") or "")
+        manifest_item = manifest_items.get(item_id)
+        if manifest_item and should_skip_low_trust_generated_item(manifest_item, str(item.get("snippet") or ""), scope=scope):
+            continue
+        filtered.append(item)
+    return filtered
+
+
 def normalize_retrieval_mode(mode: str) -> str:
     normalized = str(mode or "keyword").strip().lower()
     return normalized if normalized in RETRIEVAL_MODES else "keyword"
@@ -468,6 +495,35 @@ def evidence_text(item: dict[str, Any], html: str) -> str:
         extract_safe_text(html),
     ]
     return normalize_space(" ".join(fields))[:MAX_EVIDENCE_CHARS]
+
+
+def should_skip_low_trust_generated_item(item: dict[str, Any], text: str, *, scope: str) -> bool:
+    if scope in {"reader", "manual"}:
+        return False
+    if not is_low_trust_generated_item(item, text):
+        return False
+    return True
+
+
+def is_low_trust_generated_item(item: dict[str, Any], text: str) -> bool:
+    agent = item.get("agent") if isinstance(item.get("agent"), dict) else {}
+    source_type = str(item.get("source_type") or "").strip().lower()
+    generated = bool(agent.get("generated")) or source_type in {"topic", "generated"}
+    if not generated:
+        return False
+    haystack = normalize_space(
+        " ".join(
+            [
+                str(item.get("title") or ""),
+                str(item.get("summary") or ""),
+                str(text or ""),
+            ],
+        ),
+    ).lower()
+    matched = sum(1 for pattern in LOW_TRUST_GENERATED_PATTERNS if pattern in haystack)
+    if "当前上下文没有足够资料回答这个问题" in haystack:
+        return True
+    return matched >= 2
 
 
 def score_item_metadata(query: str, item: dict[str, Any], *, aggressive_stopwords: bool = True) -> int:

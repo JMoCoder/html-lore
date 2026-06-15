@@ -4,6 +4,26 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-06-15
+
+### Added
+
+- ナレッジベース Q&A に汎用的な retrieval 汚染対策を追加し、低信頼の生成ノートが
+  無関係なグローバル質問を乗っ取らないようにしました。keyword / vector の両経路を対象にしています。
+- 現行 live Q&A ランタイムから conversation resolution と route planner
+  を独立モジュールとして切り出し、追問処理と意図ルーティングを今後の AI
+  アーキテクチャでも再利用しやすくしました。
+
+### Changed
+
+- live Q&A の prompt builder は raw retrieval ではなく `evidence.gate`
+  後の証拠を使うように変更し、回答段階も verifier / reviewer と同じ evidence
+  契約に従うようにしました。
+- 特定の業務名をハードコードせずに、entity 属性系の外部証拠評価と、
+  グローバルな弱関連質問の拒否ロジックをさらに厳格化しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `0.9.7` に更新しました。
+
 ## [0.9.6] - 2026-06-15
 
 ### Added

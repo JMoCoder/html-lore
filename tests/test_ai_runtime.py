@@ -5,6 +5,9 @@ from html_lore.server.ai.context import AIContextError
 from html_lore.server.ai.model_client import ModelClient
 from html_lore.server.ai.prompts import build_qa_answer_messages
 from html_lore.server.ai.providers import AIProviderConfig
+from html_lore.server.ai.route_planner import plan_ai_route, plan_qa_route
+from html_lore.server.ai.conversation_resolution import resolve_conversation_turn
+from html_lore.server.ai.retrieval import is_low_trust_generated_item, retrieve_keyword_evidence
 from html_lore.server.ai.runtime import (
     AgentPlan,
     AgentRequest,
@@ -21,7 +24,7 @@ from html_lore.server.ai.runtime import (
     VerificationResult,
 )
 from html_lore.server.ai.runtime_eval import compare_qa_runtimes, evaluate_qa_result
-from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, build_evidence_pack, evidence_chunks_overlap_query
+from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, build_evidence_pack, evidence_chunks_overlap_query, external_evidence_assessment
 from html_lore.server.ai.qa_search_plan import build_qa_search_plan
 from html_lore.server.ai.eval import InMemoryEvalConversationStore
 from html_lore.server.ai.knowledge_qa_graph import build_retrieval_query
@@ -58,6 +61,42 @@ def make_note(content_dir, meta_dir, item_id: str, *, title: str, collection: st
                 "tags:",
                 *[f"  - {tag}" for tag in tags],
                 f"archived: {'true' if archived else 'false'}",
+                "",
+            ],
+        ),
+        encoding="utf-8",
+    )
+
+
+def make_generated_note(
+    content_dir,
+    meta_dir,
+    item_id: str,
+    *,
+    title: str,
+    summary: str,
+    body: str,
+    tags: list[str],
+) -> None:
+    content_path = content_dir / item_id
+    content_path.parent.mkdir(parents=True, exist_ok=True)
+    content_path.write_text(
+        f"<!doctype html><html><body><h1>{title}</h1><p>{body}</p></body></html>",
+        encoding="utf-8",
+    )
+    metadata_path = meta_dir / "items" / f"{item_id.removesuffix('.html')}.yml"
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(
+        "\n".join(
+            [
+                f"title: {title}",
+                f"summary: \"{summary}\"",
+                "source_type: topic",
+                "collection: Inbox",
+                "tags:",
+                *[f"  - {tag}" for tag in tags],
+                "agent:",
+                "  generated: true",
                 "",
             ],
         ),
@@ -255,6 +294,106 @@ def test_agent_runtime_blocks_unauthorized_tool_call() -> None:
 
     with pytest.raises(ToolPermissionError):
         runtime.run(AgentRequest(content="总结"))
+
+
+def test_low_trust_generated_item_detector_flags_decline_artifact() -> None:
+    item = {
+        "title": "zzzz_unrelated_quantum_banana",
+        "summary": "Based on 1 context note(s): 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。",
+        "source_type": "topic",
+        "agent": {"generated": True},
+    }
+
+    assert is_low_trust_generated_item(
+        item,
+        "Question zzzz_unrelated_quantum_banana Answer 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。 Referenced Context SNEC 2026",
+    ) is True
+
+
+def test_low_trust_generated_item_detector_keeps_normal_generated_note() -> None:
+    item = {
+        "title": "EPC 是什么",
+        "summary": "EPC 是工程、采购、施工总承包模式。",
+        "source_type": "topic",
+        "agent": {"generated": True},
+    }
+
+    assert is_low_trust_generated_item(
+        item,
+        "EPC 可以简单理解为一种工程总包模式，涵盖设计、采购与施工。",
+    ) is False
+
+
+def test_global_keyword_retrieval_skips_low_trust_generated_artifact(tmp_path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(content_dir, meta_dir, "imported/snec.html", title="SNEC 2026", collection="Expo", tags=["SNEC"])
+    make_generated_note(
+        content_dir,
+        meta_dir,
+        "generated/2026/06/zzzz_unrelated_quantum_banana.html",
+        title="zzzz_unrelated_quantum_banana",
+        summary="Based on 1 context note(s): 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。",
+        body="Question zzzz_unrelated_quantum_banana Answer 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。 Referenced Context SNEC 2026",
+        tags=["zzzz", "unrelated", "quantum", "banana", "SNEC"],
+    )
+    service = ItemService(
+        ServerSettings(
+            content_dir=content_dir,
+            meta_dir=meta_dir,
+            public_dir=public_dir,
+            site_title="Runtime Test",
+            max_upload_bytes=10 * 1024 * 1024,
+        ),
+    )
+
+    evidence = retrieve_keyword_evidence(
+        service,
+        {
+            "scope": "workspace",
+            "item_ids": ["imported/snec.html", "generated/2026/06/zzzz_unrelated_quantum_banana.html"],
+            "source_mode": "local_only",
+        },
+        "unrelated quantum banana",
+        max_results=5,
+    )
+
+    assert evidence == []
+
+
+def test_reader_keyword_retrieval_keeps_selected_generated_note(tmp_path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_generated_note(
+        content_dir,
+        meta_dir,
+        "generated/2026/06/zzzz_unrelated_quantum_banana.html",
+        title="zzzz_unrelated_quantum_banana",
+        summary="Based on 1 context note(s): 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。",
+        body="Question zzzz_unrelated_quantum_banana Answer 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。 Referenced Context SNEC 2026",
+        tags=["zzzz", "unrelated", "quantum", "banana", "SNEC"],
+    )
+    service = ItemService(
+        ServerSettings(
+            content_dir=content_dir,
+            meta_dir=meta_dir,
+            public_dir=public_dir,
+            site_title="Runtime Test",
+            max_upload_bytes=10 * 1024 * 1024,
+        ),
+    )
+
+    evidence = retrieve_keyword_evidence(
+        service,
+        {
+            "scope": "reader",
+            "item_ids": ["generated/2026/06/zzzz_unrelated_quantum_banana.html"],
+            "source_mode": "local_only",
+        },
+        "总结这篇笔记",
+        max_results=5,
+    )
+
+    assert len(evidence) == 1
+    assert evidence[0]["item_id"] == "generated/2026/06/zzzz_unrelated_quantum_banana.html"
 
 
 def test_context_tool_resolves_reader_context(tmp_path) -> None:
@@ -538,6 +677,54 @@ def test_knowledge_qa_agent_declines_insufficient_evidence_before_model_call(tmp
     assert result.review.checks["declined"] == "insufficient_evidence"
 
 
+def test_external_evidence_assessment_rejects_results_without_attribute_terms() -> None:
+    assessment = external_evidence_assessment(
+        chunks=[
+            {
+                "kind": "external",
+                "title": "风泉资本走进德化共探产业投资新机遇",
+                "snippet": "介绍风泉资本的产业投资布局和背景。",
+                "url": "https://example.test/profile",
+            },
+        ],
+        query="风泉资本的股权结构如何",
+        search_plan={
+            "search": {
+                "required_terms": ["风泉资本"],
+                "evidence_terms": ["股东", "持股", "股权", "实控"],
+            },
+        },
+    )
+
+    assert assessment["weak_relevance"] is True
+    assert assessment["insufficient_evidence"] is False
+    assert assessment["matched_evidence_terms"] == []
+
+
+def test_external_evidence_assessment_accepts_results_with_attribute_terms() -> None:
+    assessment = external_evidence_assessment(
+        chunks=[
+            {
+                "kind": "external",
+                "title": "风泉资本股东及持股信息",
+                "snippet": "披露股东、持股比例和股权结构。",
+                "url": "https://example.test/shareholders",
+            },
+        ],
+        query="风泉资本的股权结构如何",
+        search_plan={
+            "search": {
+                "required_terms": ["风泉资本"],
+                "evidence_terms": ["股东", "持股", "股权", "实控"],
+            },
+        },
+    )
+
+    assert assessment["weak_relevance"] is False
+    assert assessment["insufficient_evidence"] is False
+    assert "股东" in assessment["matched_evidence_terms"]
+
+
 def test_build_retrieval_query_uses_recent_user_messages_only() -> None:
     query = build_retrieval_query(
         "联网搜索",
@@ -549,6 +736,44 @@ def test_build_retrieval_query_uses_recent_user_messages_only() -> None:
 
     assert "电力市场交易" in query
     assert "上一轮回答" not in query
+
+
+def test_build_retrieval_query_prefers_recent_entity_focus_for_pronoun_followup() -> None:
+    query = build_retrieval_query(
+        "他的股权结构是怎样的？",
+        [
+            {"role": "user", "content": "风泉资本是什么背景"},
+            {"role": "assistant", "content": "我先给你查风泉资本的背景。"},
+        ],
+    )
+
+    assert query.startswith("风泉资本")
+    assert "他的股权结构" in query
+
+
+def test_build_retrieval_query_handles_cross_domain_named_topic_followup() -> None:
+    query = build_retrieval_query(
+        "它和 Logic Pro 有什么区别？",
+        [
+            {"role": "user", "content": "Ableton Live 的 warping 是什么？"},
+            {"role": "assistant", "content": "Warping 是 Ableton Live 的时间拉伸机制。"},
+        ],
+    )
+
+    assert query.startswith("Ableton Live")
+    assert "Logic Pro" in query
+
+
+def test_build_retrieval_query_does_not_carry_previous_focus_into_explicit_new_topic() -> None:
+    query = build_retrieval_query(
+        "什么是 Lydian mode？",
+        [
+            {"role": "user", "content": "风泉资本是什么背景？"},
+            {"role": "assistant", "content": "我先给你查风泉资本的背景。"},
+        ],
+    )
+
+    assert query == "什么是 Lydian mode？"
 
 
 def test_expansion_policy_uses_model_knowledge_for_concept_question_without_local_definition() -> None:
@@ -658,7 +883,7 @@ def test_knowledge_qa_fallback_answer_varies_by_intent() -> None:
 
 def test_knowledge_qa_reviewer_accepts_concept_answer_with_explanatory_markers() -> None:
     reviewer = KnowledgeQAReviewer()
-    draft = AgentDraft("微电网可以理解为园区内部资源协同运行的局部能源系统。\n\n来源：[1] 微电网说明", metadata={"chunk_count": 1})
+    draft = AgentDraft("微电网可以理解为园区内部资源协同运行的局部能源系统。它通常把分布式电源、储能和负荷放在同一个局部范围内统一调度，用来提升供电可靠性和能源利用效率。\n\n来源：[1] 微电网说明", metadata={"chunk_count": 1})
     result = reviewer.review(
         AgentRequest(content="什么是微电网"),
         AgentPlan(task_type="qa", metadata={"planner": {"intent": "concept_clarify"}}),
@@ -692,6 +917,33 @@ def test_build_qa_answer_messages_includes_task_intent_and_search_plan() -> None
     assert "3-5 coherent points" in joined
 
 
+def test_build_qa_answer_messages_prefers_gated_evidence_over_raw_evidence() -> None:
+    messages = build_qa_answer_messages(
+        {"question": "详细介绍下微电网"},
+        {
+            "query": "详细介绍下微电网",
+            "plan_metadata": {"planner": {"intent": "explain_deeper"}},
+            "tool_outputs": {
+                "context.resolve": {"context_title": "微电网"},
+                "evidence.build": {
+                    "chunks": [{"source_index": 1, "chunk_index": 1, "title": "原始证据", "snippet": "raw evidence should not be used"}],
+                    "sources": [{"source_index": 1, "title": "原始证据"}],
+                },
+                "evidence.gate": {
+                    "chunks": [{"source_index": 1, "chunk_index": 1, "title": "过滤后证据", "snippet": "gated evidence should be used"}],
+                    "sources": [{"source_index": 1, "title": "过滤后证据"}],
+                },
+                "external.research": {"search_plan": {"should_search": False, "locality_hint": "global", "language_hint": "zh", "reason": "planner_default"}},
+            },
+        },
+    )
+
+    joined = "\n".join(message["content"] for message in messages)
+    assert "过滤后证据" in joined
+    assert "gated evidence should be used" in joined
+    assert "raw evidence should not be used" not in joined
+
+
 def test_heuristic_planner_routes_logic_relationship_questions_to_explain_deeper() -> None:
     agent = KnowledgeQATaskAgent(use_model=False)
     plan = agent._heuristic_plan("详细分析储能和光伏场景的逻辑关系", {}, {})
@@ -699,6 +951,134 @@ def test_heuristic_planner_routes_logic_relationship_questions_to_explain_deeper
     assert plan["intent"] == "explain_deeper"
     assert plan["retrieval_mode"] == "model_knowledge"
     assert plan["should_search"] is False
+
+
+def test_heuristic_planner_routes_entity_background_questions_to_web_research() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    plan = agent._heuristic_plan("风泉资本是什么背景", {}, {})
+
+    assert plan["intent"] == "current_info"
+    assert plan["retrieval_mode"] == "web_research"
+    assert plan["should_search"] is True
+    assert plan["search_intent"] == "entity_lookup"
+    assert plan["reason"] == "entity_background_lookup"
+
+
+def test_heuristic_planner_routes_entity_ownership_questions_to_web_research() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    plan = agent._heuristic_plan("风泉资本的股权结构如何", {}, {})
+
+    assert plan["intent"] == "current_info"
+    assert plan["retrieval_mode"] == "web_research"
+    assert plan["should_search"] is True
+    assert plan["search_intent"] == "entity_lookup"
+    assert plan["reason"] == "entity_ownership_lookup"
+
+
+def test_heuristic_planner_routes_entity_followup_questions_to_web_research() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    plan = agent._heuristic_plan(
+        "他的股权结构是怎样的",
+        {},
+        {
+            "conversation_messages": [
+                {"role": "user", "content": "风泉资本是什么背景"},
+                {"role": "assistant", "content": "我先给你查风泉资本的背景。"},
+            ],
+        },
+    )
+
+    assert plan["intent"] == "current_info"
+    assert plan["retrieval_mode"] == "web_research"
+    assert plan["should_search"] is True
+    assert plan["search_intent"] == "entity_lookup"
+    assert plan["reason"] == "entity_ownership_followup"
+
+
+def test_route_planner_keeps_explicit_new_topic_out_of_old_followup_context() -> None:
+    plan = plan_ai_route(
+        "什么是 Lydian mode？",
+        state={
+            "conversation_messages": [
+                {"role": "user", "content": "风泉资本是什么背景？"},
+                {"role": "assistant", "content": "我先给你查风泉资本的背景。"},
+            ]
+        },
+    )
+
+    assert plan["intent"] == "concept_clarify"
+    assert plan["conversation_resolution"]["is_followup"] is False
+    assert plan["conversation_resolution"]["topic_shift"] is True
+
+
+def test_route_planner_handles_cross_domain_named_product_followup() -> None:
+    plan = plan_ai_route(
+        "它和 Logic Pro 有什么区别？",
+        state={
+            "conversation_messages": [
+                {"role": "user", "content": "Ableton Live 的 warping 是什么？"},
+                {"role": "assistant", "content": "Warping 是 Ableton Live 的时间拉伸机制。"},
+            ]
+        },
+    )
+
+    assert plan["conversation_resolution"]["is_followup"] is True
+    assert plan["conversation_resolution"]["focus_type"] in {"named_topic", "topic"}
+    assert "Ableton Live" in plan["conversation_resolution"]["resolved_query"]
+
+
+def test_conversation_resolution_infers_alias_based_entity_followup() -> None:
+    resolution = resolve_conversation_turn(
+        "风泉的股权结构如何",
+        [
+            {"role": "user", "content": "风泉资本是什么背景"},
+            {"role": "assistant", "content": "我先给你查风泉资本的背景。"},
+        ],
+    )
+
+    assert resolution["is_followup"] is True
+    assert resolution["topic_shift"] is False
+    assert resolution["focus_type"] == "entity"
+    assert resolution["resolved_focus"] == "风泉资本"
+    assert resolution["resolved_query"].startswith("风泉资本")
+
+
+def test_conversation_resolution_infers_alias_based_named_topic_followup() -> None:
+    resolution = resolve_conversation_turn(
+        "Ableton 和 Logic Pro 的区别是什么",
+        [
+            {"role": "user", "content": "Ableton Live 的 warping 是什么？"},
+            {"role": "assistant", "content": "Warping 是 Ableton Live 的时间拉伸机制。"},
+        ],
+    )
+
+    assert resolution["is_followup"] is True
+    assert resolution["topic_shift"] is False
+    assert resolution["resolved_query"].startswith("Ableton Live")
+
+
+def test_ai_route_planner_returns_unified_workflow_envelope() -> None:
+    plan = plan_ai_route("总结这篇笔记")
+
+    assert plan["route_version"] == "ai-route.v1"
+    assert plan["workflow"] == "knowledge_qa"
+    assert plan["task_family"] == "qa"
+    assert plan["operation"] == "answer_question"
+    assert plan["entrypoint"] == "knowledge_qa"
+    assert plan["execution_mode"] == "sync"
+    assert plan["future_workflows"] == {
+        "generate": "note_generation",
+        "modify": "note_modification",
+        "manage": "knowledge_management",
+    }
+
+
+def test_legacy_qa_route_planner_keeps_backward_compatible_shape() -> None:
+    plan = plan_qa_route("总结这篇笔记")
+
+    assert "route_version" not in plan
+    assert plan["intent"] == "summary"
+    assert plan["retrieval_mode"] == "local_evidence"
 
 
 def test_qa_search_plan_prefers_chinese_context_for_policy_questions() -> None:
@@ -738,6 +1118,21 @@ def test_qa_search_plan_keeps_english_version_lookup_global() -> None:
     assert plan.locality_hint == "global"
     assert "中文" not in plan.plan.original_query
     assert "中国" not in plan.plan.original_query
+
+
+def test_qa_search_plan_builds_entity_background_queries() -> None:
+    plan = build_qa_search_plan(
+        "风泉资本是什么背景",
+        planner={"should_search": True, "intent": "current_info"},
+        context={"items": [{"title": "储能基金两层结构方案"}]},
+    )
+
+    assert plan.should_search is True
+    assert plan.language_hint == "zh"
+    assert plan.plan is not None
+    assert plan.plan.intent == "entity_background"
+    assert "风泉资本" in plan.plan.required_terms
+    assert any("工商" in query or "备案" in query for query in plan.plan.queries)
 
 
 def test_knowledge_qa_verifier_rejects_mechanical_answer() -> None:

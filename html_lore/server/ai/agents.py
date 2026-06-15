@@ -106,89 +106,9 @@ class KnowledgeQATaskAgent:
         return self._heuristic_plan(question, context, state)
 
     def _heuristic_plan(self, question: str, context: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
-        text = str(question or "").strip()
-        lowered = text.lower()
-        from .tools import is_concept_explanation_question, is_time_sensitive_question, asks_for_external_search
-        if asks_for_external_search(text) or is_time_sensitive_question(text):
-            return {
-                "intent": "current_info",
-                "retrieval_mode": "web_research",
-                "should_expand": True,
-                "should_search": True,
-                "search_intent": "official_lookup" if any(marker in lowered for marker in ("official", "官网", "官方")) else "general",
-                "locality": "local_context_first",
-                "reason": "time_sensitive_or_search_requested",
-            }
-        if is_concept_explanation_question(text):
-            return {
-                "intent": "concept_clarify",
-                "retrieval_mode": "model_knowledge",
-                "should_expand": True,
-                "should_search": False,
-                "search_intent": "none",
-                "locality": "local_context_first",
-                "reason": "concept_clarification",
-            }
-        if any(
-            marker in lowered
-            for marker in (
-                "详细介绍",
-                "详细分析",
-                "展开讲",
-                "more detail",
-                "explain more",
-                "深入",
-                "继续说",
-                "具体说",
-                "逻辑关系",
-                "关系",
-                "机制",
-                "路径",
-                "怎么配合",
-                "协同",
-                "作用链",
-                "why",
-                "how they work together",
-            )
-        ):
-            return {
-                "intent": "explain_deeper",
-                "retrieval_mode": "model_knowledge",
-                "should_expand": True,
-                "should_search": False,
-                "search_intent": "none",
-                "locality": "local_context_first",
-                "reason": "deeper_explanation",
-            }
-        if any(marker in lowered for marker in ("总结", "概括", "summary", "summarize")):
-            return {
-                "intent": "summary",
-                "retrieval_mode": "local_evidence",
-                "should_expand": False,
-                "should_search": False,
-                "search_intent": "none",
-                "locality": "local_only",
-                "reason": "summary_request",
-            }
-        if any(marker in lowered for marker in ("对比", "比较", "区别", "联系", "compare", "validate", "验证")):
-            return {
-                "intent": "compare_validate",
-                "retrieval_mode": "local_evidence",
-                "should_expand": True,
-                "should_search": False,
-                "search_intent": "none",
-                "locality": "local_context_first",
-                "reason": "comparison_request",
-            }
-        return {
-            "intent": "summary",
-            "retrieval_mode": "local_evidence",
-            "should_expand": True,
-            "should_search": False,
-            "search_intent": "none",
-            "locality": "local_context_first",
-            "reason": "default_local_context",
-        }
+        from .route_planner import plan_ai_route
+
+        return plan_ai_route(question, context=context, state=state)
 
     def draft(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple[ToolResult, ...], state: dict[str, Any]) -> AgentDraft:
         context_output = tool_result_output(tool_results, "context.resolve")
@@ -357,7 +277,7 @@ class KnowledgeQAReviewer:
             "reviewer_prompt": self.prompt_spec.public_dict(),
             "intent": intent,
         }
-        if intent == "concept_clarify" and "Fake AI response" not in draft.content and not any(marker in draft.content for marker in ("可以理解为", "是指", "本质", "定义")):
+        if intent == "concept_clarify" and "Fake AI response" not in draft.content and len(str(draft.content or "").strip()) < 80:
             return ReviewResult(False, checks=checks, reason="concept_answer_not_explanatory_enough", retryable=True)
         return ReviewResult(True, checks=checks, reason="ok", retryable=False)
 
@@ -385,8 +305,12 @@ def natural_answer_from_chunks(question: str, context_title: str, chunks: list[d
 
 def decline_reason_from_assessment(assessment: dict[str, Any]) -> str:
     if bool(assessment.get("insufficient_evidence")):
+        if "matched_evidence_terms" in assessment or "missing_required_terms" in assessment:
+            return "weak_external_evidence"
         return "insufficient_evidence"
     if bool(assessment.get("weak_relevance")):
+        if assessment.get("matched_evidence_terms") == []:
+            return "weak_external_evidence"
         return "weak_relevance"
     return ""
 
@@ -394,6 +318,8 @@ def decline_reason_from_assessment(assessment: dict[str, Any]) -> str:
 def decline_answer(context_title: str, reason: str) -> str:
     if reason == "insufficient_evidence":
         return f"「{context_title}」中没有找到足够资料回答这个问题。请换一个更具体的问题，或重新选择上下文。"
+    if reason == "weak_external_evidence":
+        return f"我已经扩展检索了与「{context_title}」相关的外部资料，但当前返回结果里缺少能直接支撑这个问题的可核验证据。请换一个更具体的问题，或继续追问你想核实的字段。"
     return f"当前问题和「{context_title}」中的资料关联不足，我不能基于现有上下文给出可靠回答。请换一个与当前笔记相关的问题，或重新选择上下文。"
 
 

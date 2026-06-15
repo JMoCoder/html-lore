@@ -8,6 +8,12 @@ from typing import Any, Protocol
 
 from html_lore.server.items import ItemService
 
+from .conversation_resolution import (
+    build_retrieval_query as resolve_build_retrieval_query,
+    is_followup_question as resolve_is_followup_question,
+    recent_conversation_messages as resolve_recent_conversation_messages,
+    resolve_conversation_turn,
+)
 from .conversations import ConversationStore
 from .external_search import DisabledExternalSearchAdapter, ExternalSearchAdapter
 from .guardrails import GuardrailError, validate_answer, validate_message_budget, validate_prompt_budget, validate_user_message
@@ -37,6 +43,7 @@ class KnowledgeQAState:
     content: str
     context_snapshot: dict[str, Any] = field(default_factory=dict)
     recent_messages: list[dict[str, str]] = field(default_factory=list)
+    conversation_resolution: dict[str, Any] = field(default_factory=dict)
     retrieval_query: str = ""
     evidence: list[dict[str, Any]] = field(default_factory=list)
     retrieval_status: dict[str, Any] = field(default_factory=dict)
@@ -134,7 +141,8 @@ class InputGuardrailNode:
         state.budget["max_message_chars"] = self.max_message_chars
         state.context_snapshot = state.conversation.get("context_snapshot") if isinstance(state.conversation.get("context_snapshot"), dict) else {}
         state.recent_messages = recent_conversation_messages(state.conversation.get("messages"))
-        state.retrieval_query = build_retrieval_query(state.content, state.recent_messages)
+        state.conversation_resolution = resolve_conversation_turn(state.content, state.recent_messages)
+        state.retrieval_query = str(state.conversation_resolution.get("resolved_query") or state.content)
 
 
 class RetrieverNode:
@@ -1185,74 +1193,15 @@ def format_context_for_prompt(snapshot: dict[str, Any]) -> str:
 
 
 def recent_conversation_messages(messages: Any, *, limit: int = 6) -> list[dict[str, str]]:
-    if not isinstance(messages, list):
-        return []
-    normalized: list[dict[str, str]] = []
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        role = str(message.get("role") or "").strip().lower()
-        content = str(message.get("content") or "").strip()
-        if role not in {"user", "assistant"} or not content:
-            continue
-        normalized.append({"role": role, "content": content[:900]})
-    return normalized[-max(1, int(limit or 6)) :]
+    return resolve_recent_conversation_messages(messages, limit=limit)
 
 
 def build_retrieval_query(content: str, recent_messages: list[dict[str, str]]) -> str:
-    question = str(content or "").strip()
-    if not recent_messages or not is_followup_question(question):
-        return question
-    user_history = [message["content"] for message in recent_messages if message.get("role") == "user"]
-    if not user_history:
-        return question
-    history = " ".join(user_history[-3:])
-    return f"{history[:1600]} {question}".strip()
+    return resolve_build_retrieval_query(content, recent_messages)
 
 
 def is_followup_question(content: str) -> bool:
-    normalized = str(content or "").strip().lower()
-    if not normalized:
-        return False
-    if len(normalized) > 120:
-        return False
-    followup_markers = [
-        "continue",
-        "tell me more",
-        "what about",
-        "how about",
-        "that",
-        "this",
-        "it",
-        "they",
-        "them",
-        "those",
-        "继续",
-        "展开",
-        "详细",
-        "再说",
-        "这个",
-        "这些",
-        "它",
-        "他们",
-        "上述",
-        "前面",
-        "刚才",
-        "还有",
-        "搜索",
-        "联网",
-        "查一下",
-        "网上查",
-        "官网查",
-        "呢",
-        "続け",
-        "詳しく",
-        "それ",
-        "これ",
-        "検索",
-        "調べ",
-    ]
-    return any(marker in normalized for marker in followup_markers)
+    return resolve_is_followup_question(content)
 
 
 def asks_for_external_search(content: str) -> bool:

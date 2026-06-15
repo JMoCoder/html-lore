@@ -9,6 +9,27 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-06-15
+
+### Added
+
+- Added generic retrieval pollution controls for knowledge-base Q&A so
+  low-trust generated artifacts no longer hijack unrelated global questions,
+  including matching protection for both keyword and vector retrieval paths.
+- Added extracted conversation resolution and route planning modules for the
+  live Q&A runtime, keeping follow-up handling and intent routing reusable for
+  the broader AI architecture.
+
+### Changed
+
+- Updated the live Q&A prompt builder to use gated evidence instead of raw
+  retrieval output, so the answer stage now follows the same filtered evidence
+  contract used by verification and review.
+- Tightened entity attribute external-evidence assessment and global weak-signal
+  refusal behavior without hardcoding business-specific names.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `0.9.7`.
+
 ## [0.9.6] - 2026-06-15
 
 ### Added

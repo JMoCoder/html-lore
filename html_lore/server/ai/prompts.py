@@ -6,7 +6,7 @@ from typing import Any
 def build_qa_answer_messages(arguments: dict[str, Any], state: dict[str, Any]) -> list[dict[str, str]]:
     question = str(arguments.get("question") or state.get("query") or "").strip()
     context_output = tool_output(state, "context.resolve")
-    evidence_pack = tool_output(state, "evidence.build")
+    evidence_pack = tool_output(state, "evidence.gate") or tool_output(state, "evidence.build")
     planner = state.get("plan_metadata", {}).get("planner") if isinstance(state.get("plan_metadata"), dict) else {}
     context_title = str(context_output.get("context_title") or "Current context")
     chunks = evidence_pack.get("chunks") if isinstance(evidence_pack.get("chunks"), list) else []

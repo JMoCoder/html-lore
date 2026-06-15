@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "html-lore"
-version = "0.9.6"
+version = "0.9.7"
 description = "Static-first HTML knowledge workspace with card browsing and manifest generation."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -335,6 +335,47 @@ def test_search_planner_builds_authoritative_mcp_version_plan() -> None:
     assert plan.queries[0].startswith("Model Context Protocol specification latest version")
 
 
+def test_search_planner_builds_entity_background_plan() -> None:
+    plan = plan_external_search("风泉资本是什么背景")
+
+    assert plan.intent == "entity_background"
+    assert "风泉资本" in plan.required_terms
+    assert any("官网" in query for query in plan.queries)
+    assert any("工商" in query or "备案" in query for query in plan.queries)
+
+
+def test_search_planner_builds_entity_ownership_plan() -> None:
+    plan = plan_external_search("风泉资本的股权结构如何")
+
+    assert plan.intent == "entity_ownership"
+    assert "风泉资本" in plan.required_terms
+    assert "股权" in "".join(plan.evidence_terms)
+    assert any("持股比例" in query or "股东" in query for query in plan.queries)
+
+
+def test_search_planner_filters_generic_background_results_for_entity_ownership() -> None:
+    plan = plan_external_search("风泉资本的股权结构如何")
+    sources = [
+        {
+            "kind": "external",
+            "title": "“风泉资本”走进德化共探产业投资新机遇",
+            "url": "https://example.test/fengquan-profile",
+            "snippet": "介绍风泉资本的产业投资布局和活动背景。",
+        },
+        {
+            "kind": "external",
+            "title": "风泉资本股东及持股信息",
+            "url": "https://example.test/fengquan-shareholders",
+            "snippet": "股东、持股比例、企业股权结构。",
+        },
+    ]
+
+    kept, report = verify_planned_sources(sources, plan)
+
+    assert [source["title"] for source in kept] == ["风泉资本股东及持股信息"]
+    assert report == {"verified_count": 1, "dropped_count": 1}
+
+
 def test_search_planner_filters_unrelated_mcp_search_results() -> None:
     plan = plan_external_search("请联网查一下 2026 年 MCP 官方规范最近一次发布的版本和日期")
     sources = [
@@ -1392,6 +1433,71 @@ def test_vector_retrieval_mode_uses_local_index_when_embedding_is_configured(tmp
         server.close()
 
 
+def test_vector_retrieval_skips_low_trust_generated_artifact(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "imported/snec.html",
+        title="SNEC 2026",
+        collection="Expo",
+        tags=["SNEC"],
+        summary="SNEC note.",
+        html="<!doctype html><html><body><p>SNEC expo notebook.</p></body></html>",
+    )
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "generated/2026/06/zzzz_unrelated_quantum_banana.html",
+        title="zzzz_unrelated_quantum_banana",
+        collection="Inbox",
+        tags=["zzzz", "unrelated", "quantum", "banana", "SNEC"],
+        summary="Based on 1 context note(s): 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。",
+        html="<!doctype html><html><body><h1>zzzz_unrelated_quantum_banana</h1><p>Question zzzz_unrelated_quantum_banana Answer 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。 Referenced Context SNEC 2026</p></body></html>",
+    )
+    metadata_path = meta_dir / "items" / "generated/2026/06/zzzz_unrelated_quantum_banana.yml"
+    metadata_path.write_text(
+        "\n".join(
+            [
+                "title: zzzz_unrelated_quantum_banana",
+                "summary: \"Based on 1 context note(s): 当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。\"",
+                "source_type: topic",
+                "collection: Inbox",
+                "tags:",
+                "  - zzzz",
+                "  - unrelated",
+                "  - quantum",
+                "  - banana",
+                "  - SNEC",
+                "archived: false",
+                "agent:",
+                "  generated: true",
+                "",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_embedding_model="baai/bge-m3",
+        ai_enabled=True,
+        ai_retrieval_mode="vector",
+    )
+    try:
+        server.json("POST", "/api/ai/vector-index/rebuild", {})
+        conversation = server.json("POST", "/api/ai/conversations", {"context": {"scope": "global"}})["conversation"]
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "unrelated quantum banana"})
+        assert "没有找到足够资料" in response["message"]["content"]
+        source_titles = [source.get("title") for source in response.get("sources") or []]
+        assert "zzzz_unrelated_quantum_banana" not in source_titles
+    finally:
+        server.close()
+
+
 def test_vector_index_maintenance_api_rebuilds_prunes_and_smoke_tests(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = make_dirs(tmp_path)
     make_note_with_html(
@@ -1929,6 +2035,142 @@ def test_ai_message_exposes_search_plan_without_changing_external_status_shape(t
         runs = server.request("GET", "/api/ai/runs")
         assert runs["runs"][0]["agent_trace"]
         assert runs["runs"][0]["prompt_trace"]
+    finally:
+        server.close()
+
+
+def test_ai_message_entity_background_question_triggers_external_search(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "fund.html",
+        title="储能基金两层结构方案",
+        collection="Energy",
+        tags=["储能", "风泉"],
+        summary="围绕风泉晶科基金两层结构的内部方案。",
+        html="""
+        <!doctype html><html><body>
+          <h1>储能基金两层结构方案</h1>
+          <p>本方案提到风泉晶科基金，但没有给出风泉资本的机构背景。</p>
+        </body></html>
+        """,
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_external_search="fake",
+        ai_external_search_max_results=3,
+    )
+    try:
+        conversation = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "fund.html"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "风泉资本是什么背景"})
+
+        assert response["external_status"]["provider"] == "fake"
+        assert response["external_status"]["queried"] is True
+        assert response["qa_report"]["planner"]["retrieval_mode"] == "web_research"
+        assert response["qa_report"]["planner"]["reason"] == "entity_background_lookup"
+        assert response["qa_report"]["search_plan"]["should_search"] is True
+        assert response["qa_report"]["search_plan"]["search"]["search_intent"] == "entity_background"
+        assert "风泉资本" in " ".join(str(source.get("url") or "") for source in response["sources"])
+    finally:
+        server.close()
+
+
+def test_ai_message_entity_followup_question_inherits_recent_entity_context(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "fund.html",
+        title="储能基金两层结构方案",
+        collection="Energy",
+        tags=["储能", "风泉"],
+        summary="围绕风泉晶科基金两层结构的内部方案。",
+        html="""
+        <!doctype html><html><body>
+          <h1>储能基金两层结构方案</h1>
+          <p>本方案提到风泉晶科基金，但没有给出风泉资本的机构背景。</p>
+        </body></html>
+        """,
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_external_search="fake",
+        ai_external_search_max_results=3,
+    )
+    try:
+        conversation = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "fund.html"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+        server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "风泉资本是什么背景"})
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "他的股权结构是怎样的"})
+
+        assert response["external_status"]["provider"] == "fake"
+        assert response["external_status"]["queried"] is True
+        assert response["qa_report"]["planner"]["retrieval_mode"] == "web_research"
+        assert response["qa_report"]["planner"]["reason"] == "entity_ownership_followup"
+        assert response["qa_report"]["search_plan"]["should_search"] is True
+        assert response["qa_report"]["search_plan"]["search"]["search_intent"] == "entity_ownership"
+        assert any("风泉资本" in query for query in response["qa_report"]["search_plan"]["queries"])
+    finally:
+        server.close()
+
+
+def test_ai_message_declines_when_entity_ownership_search_returns_only_background_sources(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "fund.html",
+        title="储能基金两层结构方案",
+        collection="Energy",
+        tags=["储能", "风泉"],
+        summary="围绕风泉晶科基金两层结构的内部方案。",
+        html="""
+        <!doctype html><html><body>
+          <h1>储能基金两层结构方案</h1>
+          <p>本方案提到风泉晶科基金，但没有给出风泉资本的机构背景。</p>
+        </body></html>
+        """,
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_external_search="fake",
+        ai_external_search_max_results=3,
+    )
+    try:
+        conversation = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "fund.html"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+        server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "风泉资本是什么背景"})
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "风泉资本的股权结构如何"})
+
+        assert "缺少能直接支撑这个问题的可核验证据" in response["message"]["content"]
+        assert response["qa_report"]["answer_quality"]["flags"]
+        assert "weak_external_evidence" in response["qa_report"]["answer_quality"]["flags"]
     finally:
         server.close()
 
