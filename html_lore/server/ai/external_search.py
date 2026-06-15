@@ -10,6 +10,7 @@ from typing import Any, Protocol
 from urllib.parse import urlparse
 
 from html_lore.server.config import ServerSettings
+from .search_planner import MAX_EXTERNAL_QUERY_CHARS, drop_internal_url_tokens, expand_search_query_terms, prepare_external_search_query
 
 
 class ExternalSearchError(RuntimeError):
@@ -24,7 +25,6 @@ class ExternalSearchProviderError(ExternalSearchError):
     pass
 
 
-MAX_EXTERNAL_QUERY_CHARS = 240
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 TAVILY_DEPTHS = {"basic", "fast", "ultra-fast", "advanced"}
 TAVILY_TOPICS = {"general", "news", "finance"}
@@ -141,7 +141,7 @@ class TavilyExternalSearchAdapter:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/0.9.5 tavily-search",
+                "User-Agent": "HTMlore/0.9.6 tavily-search",
                 "Accept": "application/json",
             },
         )
@@ -172,27 +172,6 @@ def build_external_search_adapter(settings: ServerSettings) -> ExternalSearchAda
             include_raw_content=settings.ai_external_search_include_raw_content,
         )
     return DisabledExternalSearchAdapter()
-
-
-def prepare_external_search_query(query: Any, *, max_chars: int = MAX_EXTERNAL_QUERY_CHARS) -> tuple[str, dict[str, Any]]:
-    normalized = " ".join(str(query or "").split())
-    normalized = drop_internal_url_tokens(normalized)
-    truncated = len(normalized) > max_chars
-    prepared = normalized[:max_chars].strip()
-    return prepared, {
-        "query_chars": len(prepared),
-        "query_truncated": truncated,
-        "blocked_internal_url_tokens": prepared != " ".join(str(query or "").split())[: len(prepared)].strip(),
-    }
-
-
-def drop_internal_url_tokens(value: str) -> str:
-    kept: list[str] = []
-    for token in str(value or "").split():
-        if "://" in token and not is_safe_external_url(token):
-            continue
-        kept.append(token)
-    return " ".join(kept)
 
 
 def sanitize_external_results(results: list[ExternalSearchResult]) -> tuple[list[dict[str, Any]], int]:

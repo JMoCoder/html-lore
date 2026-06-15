@@ -189,7 +189,6 @@ def context_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def context_key(snapshot: dict[str, Any]) -> str:
-    source_mode = normalize_source_mode(snapshot.get("source_mode", "local_only"))
     scope = str(snapshot.get("scope") or "global").strip() or "global"
     item_ids = [str(item_id) for item_id in snapshot.get("item_ids") or [] if str(item_id)]
     requested = snapshot.get("requested") if isinstance(snapshot.get("requested"), dict) else {}
@@ -210,7 +209,16 @@ def context_key(snapshot: dict[str, Any]) -> str:
             "include_archived": bool(requested.get("include_archived", False)),
             "sort": str(requested.get("sort") or "newest"),
         }
-    return f"{source_mode}:{scope}:{json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(',', ':'))}"
+    return f"{scope}:{json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(',', ':'))}"
+
+
+def canonical_context_key(value: Any) -> str:
+    key = str(value or "").strip()
+    for source_mode in VALID_SOURCE_MODES:
+        prefix = f"{source_mode}:"
+        if key.startswith(prefix):
+            return key[len(prefix) :]
+    return key
 
 
 def utc_now() -> str:

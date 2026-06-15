@@ -395,6 +395,20 @@ def create_app() -> FastAPI:
         except AIRunError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    @app.post("/api/ai/eval/qa-runtime-comparison")
+    def compare_ai_qa_runtimes(values: dict, _: ApiAuth, __: AiRateLimit, service: Annotated[AIConversationService, Depends(get_ai_conversation_service)]) -> dict:
+        try:
+            return service.compare_qa_runtimes(values)
+        except (AIContextError, ConversationError, AIProviderConfigError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/ai/eval/agent-qa-run")
+    def run_ai_agent_qa_once(values: dict, _: ApiAuth, __: AiRateLimit, service: Annotated[AIConversationService, Depends(get_ai_conversation_service)]) -> dict:
+        try:
+            return service.run_agent_qa_once(values)
+        except (AIContextError, ConversationError, AIProviderConfigError, AIRunError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.get("/api/ai/jobs")
     def ai_jobs(_: ApiAuth, service: Annotated[AIConversationService, Depends(get_ai_conversation_service)], limit: int = 20) -> dict:
         try:

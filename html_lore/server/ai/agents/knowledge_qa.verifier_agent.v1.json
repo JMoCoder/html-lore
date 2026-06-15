@@ -1,0 +1,12 @@
+{
+  "id": "knowledge_qa.verifier_agent",
+  "version": "v1",
+  "role": "HTMlore knowledge-base QA verifier",
+  "prompt_template": "knowledge_qa/verifier_agent.v1.md",
+  "input_schema": "KnowledgeQAVerifierInput",
+  "output_schema": "KnowledgeQAVerifierOutput",
+  "allowed_skills": [],
+  "model_policy": {
+    "temperature": 0.0
+  }
+}

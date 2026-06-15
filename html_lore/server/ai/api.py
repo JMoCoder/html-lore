@@ -5,17 +5,18 @@ from typing import Any
 from html_lore.server.config import ServerSettings
 from html_lore.server.items import ItemService
 
-from .context import AIContextError, ContextResolver
+from .context import AIContextError, ContextResolver, normalize_source_mode
 from .conversations import ConversationError, ConversationStore
 from .external_search import build_external_search_adapter
 from .guardrails import GuardrailError
 from .html_generation import GenerationSpec, HtmlGenerationError, generate_note_from_conversation
 from .jobs import AIJobError, AIJobStore, ai_job_queue
-from .knowledge_qa_graph import KnowledgeQAGraph, KnowledgeQAState, public_qa_run
 from .material_generation import MaterialGenerationError, generate_note_from_material
 from .model_client import ModelClient, test_provider
 from .providers import AIProviderConfigError, AIProviderConfigStore, ProviderCallError
 from .runs import AIRunError, AIRunStore
+from .runtime import AgentRequest
+from .runtime_eval import build_qa_agent_runtime, compare_qa_runtimes, public_agent_run
 from .vector_maintenance import VectorMaintenanceError, vector_maintenance_for_config
 
 
@@ -110,39 +111,45 @@ class AIConversationService:
     def add_message(self, conversation_id: str, values: dict[str, Any]) -> dict[str, Any]:
         content = str(values.get("content") or values.get("message") or "").strip()
         conversation = self.store.get(conversation_id)
-        state = KnowledgeQAState(
-            conversation_id=conversation_id,
-            conversation=conversation,
-            content=content,
-        )
+        if "source_mode" in values:
+            snapshot = dict(conversation.get("context_snapshot") if isinstance(conversation.get("context_snapshot"), dict) else {})
+            snapshot["source_mode"] = normalize_source_mode(values.get("source_mode"))
+            conversation = dict(conversation)
+            conversation["source_mode"] = snapshot["source_mode"]
+            conversation["context_snapshot"] = snapshot
         try:
-            state = KnowledgeQAGraph(
+            runtime = build_qa_agent_runtime(
                 item_service=self.item_service,
                 model_client=ModelClient(self.provider_store.get()),
-                conversation_store=self.store,
-                external_search=build_external_search_adapter(self.settings),
-                max_message_chars=self.settings.ai_max_message_chars,
-                max_prompt_chars=self.settings.ai_max_prompt_chars,
-                max_response_tokens=self.settings.ai_max_response_tokens,
-                retrieval_mode=self.settings.ai_retrieval_mode,
-            ).run(state)
+                settings=self.settings,
+                use_model=True,
+            )
+            result = runtime.run(AgentRequest(content=content, context=agent_request_context(conversation), requested_task="qa"))
         except GuardrailError as exc:
-            self.run_store.add(public_qa_run(state, status="failed", error={"code": "guardrail_failed", "message": str(exc)}))
+            self.run_store.add(failed_agent_qa_run(conversation_id=conversation_id, code="guardrail_failed", message=str(exc), budget=budget_from_error(str(exc))))
             raise
         except (AIProviderConfigError, ProviderCallError) as exc:
-            self.run_store.add(public_qa_run(state, status="failed", error={"code": "provider_failed", "message": str(exc)}))
+            self.run_store.add(failed_agent_qa_run(conversation_id=conversation_id, code="provider_failed", message=str(exc)))
             raise ConversationError(str(exc)) from exc
-        run = public_qa_run(state)
+        run = public_agent_run(result, conversation_id=conversation_id)
         self.run_store.add(run)
+        sources = run["qa_report"].get("sources") if isinstance(run["qa_report"].get("sources"), list) else []
+        stored_conversation = self.store.append_messages(
+            conversation_id,
+            [
+                {"role": "user", "content": content, "sources": []},
+                {"role": "assistant", "content": result.answer, "sources": sources},
+            ],
+        )
         return {
-            "conversation": state.stored_conversation,
-            "message": state.stored_conversation["messages"][-1],
-            "sources": state.sources,
-            "usage": state.usage,
-            "graph": KnowledgeQAGraph.name,
-            "node_trace": state.node_trace,
-            "external_status": state.external_status,
-            "retrieval_status": state.retrieval_status,
+            "conversation": stored_conversation,
+            "message": stored_conversation["messages"][-1],
+            "sources": sources,
+            "usage": run["usage"],
+            "graph": "AgentRuntime.qa.v1",
+            "node_trace": run["node_trace"],
+            "external_status": run["qa_report"].get("external_status") or {},
+            "retrieval_status": run["qa_report"].get("retrieval") or {},
             "qa_status": qa_status_from_report(run["qa_report"]),
             "qa_report": run["qa_report"],
         }
@@ -215,6 +222,42 @@ class AIConversationService:
 
     def run(self, run_id: str) -> dict[str, Any]:
         return {"run": self.run_store.get(run_id)}
+
+    def compare_qa_runtimes(self, values: dict[str, Any]) -> dict[str, Any]:
+        if values.get("enabled") is not True:
+            raise ConversationError("Runtime comparison is a development tool. Pass enabled=true to run it.")
+        question = str(values.get("question") or values.get("content") or "").strip()
+        if not question:
+            raise ConversationError("Question is required.")
+        context = values.get("context") if isinstance(values.get("context"), dict) else {}
+        return compare_qa_runtimes(
+            question=question,
+            context=context,
+            item_service=self.item_service,
+            conversation_store=self.store,
+            model_client=ModelClient(self.provider_store.get()),
+            settings=self.settings,
+            run_legacy=bool(values.get("run_legacy", values.get("runLegacy", True))),
+            run_agent=bool(values.get("run_agent", values.get("runAgent", True))),
+            agent_uses_model=bool(values.get("agent_uses_model", values.get("agentUsesModel", True))),
+        )
+
+    def run_agent_qa_once(self, values: dict[str, Any]) -> dict[str, Any]:
+        if values.get("enabled") is not True:
+            raise ConversationError("Agent QA run is a development tool. Pass enabled=true to run it.")
+        question = str(values.get("question") or values.get("content") or "").strip()
+        if not question:
+            raise ConversationError("Question is required.")
+        context = values.get("context") if isinstance(values.get("context"), dict) else {}
+        runtime = build_qa_agent_runtime(
+            item_service=self.item_service,
+            model_client=ModelClient(self.provider_store.get()),
+            settings=self.settings,
+            use_model=bool(values.get("use_model", values.get("useModel", True))),
+        )
+        result = runtime.run(AgentRequest(content=question, context=context, requested_task="qa"))
+        run = self.run_store.add(public_agent_run(result))
+        return {"run": run, "answer": result.answer}
 
     def jobs(self, limit: int = 20) -> dict[str, Any]:
         jobs = AIJobStore(self.settings).list(limit=limit)
@@ -291,9 +334,89 @@ def qa_status_from_report(report: dict[str, Any]) -> dict[str, Any]:
         "status": str(quality.get("status") or "unknown"),
         "requires_attention": bool(quality.get("requires_attention") or flags),
         "flags": flags,
-        "citation_status": str(citation.get("status") or ""),
+        "citation_status": str(citation.get("status") or citation.get("reason") or ""),
         "source_count": int(report.get("source_count") or 0),
     }
+
+
+def agent_request_context(conversation: dict[str, Any]) -> dict[str, Any]:
+    snapshot = conversation.get("context_snapshot") if isinstance(conversation.get("context_snapshot"), dict) else {}
+    requested = snapshot.get("requested") if isinstance(snapshot.get("requested"), dict) else {}
+    scope = str(snapshot.get("scope") or requested.get("scope") or "global")
+    item_ids = [str(item_id) for item_id in snapshot.get("item_ids") or [] if str(item_id)]
+    context: dict[str, Any] = {"scope": scope}
+    if scope == "reader":
+        context["item_id"] = str(requested.get("item_id") or (item_ids[0] if item_ids else ""))
+    elif scope == "manual":
+        context["manual_item_ids"] = list(requested.get("manual_item_ids") or item_ids)
+    else:
+        for key in ("q", "library", "collection", "tags", "tag_match", "favorite", "include_archived", "sort", "limit"):
+            if key in requested:
+                context[key] = requested[key]
+    if snapshot.get("source_mode"):
+        context["source_mode"] = snapshot["source_mode"]
+    if isinstance(conversation.get("messages"), list):
+        context["_conversation_messages"] = list(conversation.get("messages") or [])
+    return context
+
+
+def failed_agent_qa_run(*, conversation_id: str, code: str, message: str, budget: dict[str, int] | None = None) -> dict[str, Any]:
+    from datetime import datetime, timezone
+    import uuid
+
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": f"qa_agent_{uuid.uuid4().hex}",
+        "kind": "knowledge_qa",
+        "status": "failed",
+        "started_at": now,
+        "completed_at": now,
+        "duration_ms": 0,
+        "conversation_id": conversation_id,
+        "spec": {"engine": "AgentRuntime.qa.v1"},
+        "graph": "AgentRuntime.qa.v1",
+        "generation_intent": {},
+        "qa_report": {
+            "source_count": 0,
+            "local_source_count": 0,
+            "external_source_count": 0,
+            "skipped_model_call": True,
+            "retrieval": {},
+            "external_status": {},
+            "research_trace": [],
+            "expansion_policy": {},
+            "evidence_scope": {},
+            "evidence_ranking": {},
+            "evidence_rerank": {},
+            "evidence_budget": {},
+            "evidence_coverage": {},
+            "evidence_sufficiency": {},
+            "citation": {},
+            "answer_quality": {"status": "needs_attention", "requires_attention": True, "flags": [code]},
+            "sources": [],
+        },
+        "review_decision": {},
+        "node_trace": [],
+        "agent_trace": [],
+        "prompt_trace": [],
+        "skill_trace": [],
+        "usage": {},
+        "budget": budget or {},
+        "error": {"code": code, "message": message},
+        "material": {},
+        "item_id": "",
+        "retryable": code == "provider_failed",
+        "cancellable": False,
+    }
+
+
+def budget_from_error(message: str) -> dict[str, int]:
+    import re
+
+    match = re.search(r"\((\d+) characters, limit (\d+)\)", str(message or ""))
+    if not match:
+        return {}
+    return {"prompt_chars": int(match.group(1)), "max_prompt_chars": int(match.group(2))}
 
 
 __all__ = [

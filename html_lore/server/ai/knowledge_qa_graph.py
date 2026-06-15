@@ -165,11 +165,11 @@ class ExternalSearchNode:
             return
         if state.expansion_policy.get("mode") != "web_research":
             return
-        research = self.research_workflow.run(state.content)
+        research = self.research_workflow.run(state.retrieval_query or state.content)
         state.external_status = research.status
         state.research_trace = research.trace
         state.external_sources = research.sources
-        state.evidence.extend(state.external_sources)
+        state.evidence = list(state.external_sources)
 
 
 class ExpansionPolicyNode:
@@ -177,7 +177,8 @@ class ExpansionPolicyNode:
 
     def run(self, state: KnowledgeQAState) -> None:
         source_mode = str(state.context_snapshot.get("source_mode") or "local_only")
-        has_local_evidence = any(source.get("kind") != "external" for source in state.evidence)
+        local_signal = assess_local_evidence_signal(state.evidence, state.context_snapshot, state.content)
+        has_local_evidence = bool(local_signal["sufficient"])
         explicit_search = asks_for_external_search(state.content)
         time_sensitive = is_time_sensitive_question(state.content)
         if source_mode != "local_plus_external":
@@ -202,13 +203,15 @@ class ExpansionPolicyNode:
                 "reason": "local_evidence_available",
                 "confidence": 0.85,
                 "requires_citation": True,
+                "local_evidence_signal": local_signal,
             }
             return
         state.expansion_policy = {
             "mode": "model_knowledge",
-            "reason": "general_knowledge_fallback",
+            "reason": "weak_local_evidence_fallback" if local_signal["source_count"] else "general_knowledge_fallback",
             "confidence": 0.72,
             "requires_citation": False,
+            "local_evidence_signal": local_signal,
         }
 
 
@@ -269,10 +272,11 @@ class EvidenceGateNode:
             state.recent_messages = budgeted_history
             state.evidence_budget = budget_report
             state.retrieval_status["budget"] = budget_report
-            state.sources = assign_source_indices(state.evidence)
+            state.sources = assign_source_indices(dedupe_display_sources(state.evidence))
+            prompt_evidence = evidence_with_display_source_indices(state.evidence, state.sources)
             state.prompt_messages = build_answer_prompt(
                 state.content,
-                state.sources,
+                prompt_evidence,
                 state.context_snapshot,
                 budgeted_history,
                 expansion_policy=state.expansion_policy,
@@ -588,11 +592,29 @@ def evidence_priority(item: dict[str, Any]) -> int:
 
 
 def should_reject_weak_evidence(evidence: list[dict[str, Any]], snapshot: dict[str, Any], query: str) -> bool:
+    if any(item.get("kind") == "external" for item in evidence):
+        return False
+    return not assess_local_evidence_signal(evidence, snapshot, query)["sufficient"]
+
+
+def assess_local_evidence_signal(evidence: list[dict[str, Any]], snapshot: dict[str, Any], query: str) -> dict[str, Any]:
     scope = str(snapshot.get("scope") or "")
     if scope in {"reader", "manual"} and is_generic_context_question(query):
-        return False
+        local_count = sum(1 for item in evidence if item.get("kind") != "external")
+        return {
+            "sufficient": bool(local_count),
+            "reason": "generic_reader_context",
+            "top_score": max_local_score(evidence),
+            "source_count": local_count,
+        }
     if is_context_overview_question(query):
-        return False
+        local_count = sum(1 for item in evidence if item.get("kind") != "external")
+        return {
+            "sufficient": bool(local_count),
+            "reason": "context_overview",
+            "top_score": max_local_score(evidence),
+            "source_count": local_count,
+        }
     local_scores = [
         safe_int(item.get("score"), 0)
         for item in evidence
@@ -600,13 +622,172 @@ def should_reject_weak_evidence(evidence: list[dict[str, Any]], snapshot: dict[s
     ]
     external_count = sum(1 for item in evidence if item.get("kind") == "external")
     if external_count and not local_scores:
-        return False
+        return {
+            "sufficient": False,
+            "reason": "external_only",
+            "top_score": 0,
+            "source_count": 0,
+        }
     if not local_scores:
-        return False
+        return {
+            "sufficient": False,
+            "reason": "no_local_evidence",
+            "top_score": 0,
+            "source_count": 0,
+        }
     top_score = max(local_scores)
     if scope in {"reader", "manual"}:
-        return top_score < 4
-    return top_score < 10
+        threshold = 4
+    else:
+        threshold = 18 if str(snapshot.get("source_mode") or "local_only") == "local_plus_external" else 10
+    retrieval_sources = {
+        str(source)
+        for item in evidence
+        if item.get("kind") != "external"
+        for source in (item.get("retrieval_sources") if isinstance(item.get("retrieval_sources"), list) else [])
+    }
+    pure_vector = retrieval_sources == {"vector"}
+    if pure_vector and top_score < 62:
+        return {
+            "sufficient": False,
+            "reason": "weak_vector_only_evidence",
+            "top_score": top_score,
+            "threshold": 62,
+            "source_count": len(local_scores),
+            "retrieval_sources": sorted(retrieval_sources),
+        }
+    return {
+        "sufficient": top_score >= threshold,
+        "reason": "local_score_threshold",
+        "top_score": top_score,
+        "threshold": threshold,
+        "source_count": len(local_scores),
+    }
+
+
+def is_concept_explanation_question(content: str) -> bool:
+    normalized = str(content or "").strip().lower()
+    if not normalized:
+        return False
+    markers = (
+        "what is",
+        "what are",
+        "define",
+        "definition",
+        "concept",
+        "explain",
+        "是什么",
+        "什么是",
+        "定义",
+        "概念",
+        "如何理解",
+        "解释一下",
+        "解释",
+        "とは",
+        "定義",
+        "概念",
+        "説明",
+    )
+    return any(marker in normalized for marker in markers)
+
+
+def local_evidence_defines_query(evidence: list[dict[str, Any]], query: str) -> bool:
+    if not is_concept_explanation_question(query):
+        return False
+    terms = concept_terms_from_question(query)
+    haystacks = [
+        normalize_answer_evidence_text(" ".join([str(item.get("title") or ""), str(item.get("snippet") or "")])).lower()
+        for item in evidence
+        if item.get("kind") != "external"
+    ]
+    if not haystacks:
+        return False
+    definition_markers = (
+        " is ",
+        " are ",
+        " refers to ",
+        " means ",
+        " defined as ",
+        "是一种",
+        "是一个",
+        "是指",
+        "指的是",
+        "定义为",
+        "とは",
+        "を指",
+    )
+    for haystack in haystacks:
+        if not any(marker in haystack for marker in definition_markers):
+            continue
+        if not terms:
+            return True
+        if any(term and term.lower() in haystack for term in terms):
+            return True
+    return False
+
+
+def concept_terms_from_question(content: str) -> list[str]:
+    text = normalize_answer_evidence_text(str(content or "")).strip()
+    if not text:
+        return []
+    patterns = (
+        r"什么是\s*([^？?，,。.!；;：:]{2,40})",
+        r"([^？?，,。.!；;：:]{2,40})\s*是什么",
+        r"解释一下\s*([^？?，,。.!；;：:]{2,40})",
+        r"如何理解\s*([^？?，,。.!；;：:]{2,40})",
+        r"what\s+(?:is|are)\s+([^?.,;:!]{2,60})",
+        r"define\s+([^?.,;:!]{2,60})",
+    )
+    terms: list[str] = []
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            terms.extend(split_concept_term(match.group(1)))
+    if not terms:
+        tokens = [token for token in answer_query_tokens(text) if is_concept_token(token)]
+        terms.extend(tokens[:3])
+    seen: set[str] = set()
+    result: list[str] = []
+    for term in terms:
+        normalized = term.strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(term.strip())
+    return result
+
+
+def split_concept_term(value: str) -> list[str]:
+    cleaned = re.sub(r"\b(in|for|with|about|as|a|an|the)\b", " ", str(value or ""), flags=re.IGNORECASE)
+    cleaned = re.sub(r"(用小白能懂的话|简单|基本原理|概念|定义|一下|请|the concept of)", " ", cleaned, flags=re.IGNORECASE)
+    parts = [part.strip(" \t\r\n\"'“”‘’()（）") for part in re.split(r"[/、,，和与]| and | or ", cleaned) if part.strip()]
+    return [part for part in parts if len(part) >= 2][:4]
+
+
+def is_concept_token(token: str) -> bool:
+    normalized = str(token or "").strip().lower()
+    if len(normalized) < 2:
+        return False
+    generic = {
+        "what",
+        "define",
+        "definition",
+        "concept",
+        "explain",
+        "什么是",
+        "是什么",
+        "解释",
+        "概念",
+        "定义",
+        "如何理解",
+        "小白",
+    }
+    return normalized not in generic
+
+
+def max_local_score(evidence: list[dict[str, Any]]) -> int:
+    scores = [safe_int(item.get("score"), 0) for item in evidence if item.get("kind") != "external"]
+    return max(scores) if scores else 0
 
 
 def safe_int(value: Any, fallback: int) -> int:
@@ -778,6 +959,37 @@ def assign_source_indices(evidence: list[dict[str, Any]]) -> list[dict[str, Any]
     return indexed
 
 
+def dedupe_display_sources(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in evidence:
+        key = display_source_key(item)
+        if key in seen:
+            continue
+        deduped.append(item)
+        seen.add(key)
+    return deduped
+
+
+def evidence_with_display_source_indices(evidence: list[dict[str, Any]], display_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    display_index_by_key = {
+        display_source_key(source): int(source.get("source_index") or index)
+        for index, source in enumerate(display_sources, start=1)
+    }
+    indexed: list[dict[str, Any]] = []
+    for item in evidence:
+        copied = dict(item)
+        copied["source_index"] = display_index_by_key.get(display_source_key(item), len(display_index_by_key) + 1)
+        indexed.append(copied)
+    return indexed
+
+
+def display_source_key(item: dict[str, Any]) -> tuple[str, str]:
+    if item.get("kind") == "external":
+        return ("external", str(item.get("url") or item.get("title") or "").strip().lower())
+    return ("local", str(item.get("item_id") or item.get("title") or "").strip().lower())
+
+
 def normalize_answer_evidence_text(value: str) -> str:
     return " ".join(str(value or "").split())
 
@@ -919,9 +1131,10 @@ def assess_evidence_sufficiency(
 
 
 def format_evidence_for_prompt(index: int, item: dict[str, Any]) -> str:
+    source_index = safe_int(item.get("source_index"), index)
     if item.get("kind") == "external":
-        return f"[{index}] EXTERNAL: {item.get('title')} ({item.get('url')})\n{item.get('snippet')}"
-    return f"[{index}] LOCAL: {item.get('title')} ({item.get('item_id')})\n{item.get('snippet')}"
+        return f"[{source_index}] EXTERNAL: {item.get('title')} ({item.get('url')})\n{item.get('snippet')}"
+    return f"[{source_index}] LOCAL: {item.get('title')} ({item.get('item_id')})\n{item.get('snippet')}"
 
 
 def format_expansion_policy_for_prompt(policy: dict[str, Any]) -> str:
@@ -990,7 +1203,10 @@ def build_retrieval_query(content: str, recent_messages: list[dict[str, str]]) -
     question = str(content or "").strip()
     if not recent_messages or not is_followup_question(question):
         return question
-    history = " ".join(message["content"] for message in recent_messages[-4:])
+    user_history = [message["content"] for message in recent_messages if message.get("role") == "user"]
+    if not user_history:
+        return question
+    history = " ".join(user_history[-3:])
     return f"{history[:1600]} {question}".strip()
 
 
@@ -1023,11 +1239,18 @@ def is_followup_question(content: str) -> bool:
         "前面",
         "刚才",
         "还有",
+        "搜索",
+        "联网",
+        "查一下",
+        "网上查",
+        "官网查",
         "呢",
         "続け",
         "詳しく",
         "それ",
         "これ",
+        "検索",
+        "調べ",
     ]
     return any(marker in normalized for marker in followup_markers)
 

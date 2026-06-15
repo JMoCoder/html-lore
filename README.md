@@ -78,6 +78,9 @@ Implemented today:
   summaries, recent-conversation grounding for follow-up questions,
   Markdown-rendered answers, source pills, conversation persistence,
   latest-conversation restore, and per-context history.
+- The Q&A runtime now exposes staged planner, search-planner, answer,
+  verifier, and reviewer contracts together with agent/prompt traces for
+  backend evolution and debugging.
 - Strict / external-expansion mode for AI answers. Strict mode answers from the
   selected notebook context; expansion mode is wired for explicit external
   sources when an external search adapter is configured.
@@ -371,6 +374,9 @@ answer. Search starts in low-cost `basic` mode, switches topic/time range for
 time-sensitive or finance questions, can infer country from the user's query,
 and only escalates to `advanced` when the user explicitly asks for deep,
 multi-source research or the operator configures that depth.
+Short follow-up prompts such as `联网搜索` inherit the most recent user
+question before search planning, instead of reusing prior assistant answer
+text as the query body.
 
 Vector / hybrid retrieval stores a lightweight local index under the active
 user metadata directory, for example `meta/ai/vector_index.json` or the

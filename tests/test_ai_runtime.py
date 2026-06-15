@@ -1,0 +1,945 @@
+import pytest
+
+from html_lore.server.ai.agents import KnowledgeQATaskAgent, KnowledgeQAVerifier, KnowledgeQAReviewer
+from html_lore.server.ai.context import AIContextError
+from html_lore.server.ai.model_client import ModelClient
+from html_lore.server.ai.prompts import build_qa_answer_messages
+from html_lore.server.ai.providers import AIProviderConfig
+from html_lore.server.ai.runtime import (
+    AgentPlan,
+    AgentRequest,
+    AgentRuntime,
+    BasicVerifier,
+    CallableTool,
+    AgentDraft,
+    TaskAgent,
+    ToolCall,
+    ToolPermissionError,
+    ToolRegistry,
+    ToolResult,
+    ReviewResult,
+    VerificationResult,
+)
+from html_lore.server.ai.runtime_eval import compare_qa_runtimes, evaluate_qa_result
+from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, build_evidence_pack, evidence_chunks_overlap_query
+from html_lore.server.ai.qa_search_plan import build_qa_search_plan
+from html_lore.server.ai.eval import InMemoryEvalConversationStore
+from html_lore.server.ai.knowledge_qa_graph import build_retrieval_query
+from html_lore.server.config import ServerSettings
+from html_lore.server.items import ItemService
+
+
+def make_dirs(tmp_path):
+    content_dir = tmp_path / "content"
+    meta_dir = tmp_path / "meta"
+    public_dir = tmp_path / "public"
+    content_dir.mkdir()
+    (meta_dir / "items").mkdir(parents=True)
+    public_dir.mkdir()
+    return content_dir, meta_dir, public_dir
+
+
+def make_note(content_dir, meta_dir, item_id: str, *, title: str, collection: str, tags: list[str], archived: bool = False) -> None:
+    content_path = content_dir / item_id
+    content_path.parent.mkdir(parents=True, exist_ok=True)
+    content_path.write_text(
+        f"<!doctype html><html><body><h1>{title}</h1><p>{title} explains MCP Docker context and runtime evidence.</p></body></html>",
+        encoding="utf-8",
+    )
+    metadata_path = meta_dir / "items" / f"{item_id.removesuffix('.html')}.yml"
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(
+        "\n".join(
+            [
+                f"title: {title}",
+                "summary: Test summary",
+                "source_type: imported",
+                f"collection: {collection}",
+                "tags:",
+                *[f"  - {tag}" for tag in tags],
+                f"archived: {'true' if archived else 'false'}",
+                "",
+            ],
+        ),
+        encoding="utf-8",
+    )
+
+
+def item_service(tmp_path) -> ItemService:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(content_dir, meta_dir, "a.html", title="Alpha MCP", collection="AI", tags=["MCP", "Docker"])
+    make_note(content_dir, meta_dir, "b.html", title="Beta Docker", collection="Dev", tags=["Docker"])
+    make_note(content_dir, meta_dir, "archived.html", title="Archived MCP", collection="AI", tags=["MCP"], archived=True)
+    return ItemService(
+        ServerSettings(
+            content_dir=content_dir,
+            meta_dir=meta_dir,
+            public_dir=public_dir,
+            site_title="Runtime Test",
+            max_upload_bytes=10 * 1024 * 1024,
+        ),
+    )
+
+
+class EchoAgent:
+    id = "agent.qa"
+    task_type = "qa"
+    allowed_tools = ("context.read",)
+
+    def __init__(self) -> None:
+        self.attempts: list[int] = []
+
+    def plan(self, request: AgentRequest, state: dict, *, attempt: int) -> AgentPlan:
+        self.attempts.append(attempt)
+        return AgentPlan(
+            task_type="qa",
+            steps=(ToolCall("context.read", {"topic": request.content}, reason="load context"),),
+            response_strategy="answer_from_context",
+            attempt=attempt,
+        )
+
+    def draft(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple, state: dict) -> AgentDraft:
+        return AgentDraft(f"Answer: {tool_results[0].output['title']}")
+
+
+class WriterAgent:
+    id = "agent.writer"
+    task_type = "writer"
+    allowed_tools = ("note.draft",)
+
+    def plan(self, request: AgentRequest, state: dict, *, attempt: int) -> AgentPlan:
+        return AgentPlan(task_type="writer", steps=(ToolCall("note.draft", {"instruction": request.content}),), attempt=attempt)
+
+    def draft(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple, state: dict) -> AgentDraft:
+        return AgentDraft(tool_results[0].output["html"])
+
+
+class RetryVerifier:
+    id = "verifier.retry_once"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def verify(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple, answer: str, state: dict) -> VerificationResult:
+        self.calls += 1
+        if self.calls == 1:
+            return VerificationResult(False, checks={"naturalness": "mechanical"}, reason="mechanical_answer", retryable=True)
+        return VerificationResult(True, checks={"naturalness": "ok"}, reason="ok")
+
+
+class AlwaysFailVerifier:
+    id = "verifier.always_fail"
+
+    def verify(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple, answer: str, state: dict) -> VerificationResult:
+        return VerificationResult(False, checks={"quality": "bad"}, reason="quality_failed", retryable=True)
+
+
+class RetryReviewer:
+    id = "reviewer.retry_once"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def review(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple, draft: AgentDraft, verification: VerificationResult, state: dict) -> ReviewResult:
+        self.calls += 1
+        if self.calls == 1:
+            return ReviewResult(False, checks={"final_check": "too_mechanical"}, reason="review_failed", retryable=True)
+        return ReviewResult(True, checks={"final_check": "ok"}, reason="ok")
+
+
+def runtime_with_tools(*agents: TaskAgent, verifier=None) -> AgentRuntime:
+    tools = ToolRegistry()
+    tools.register(CallableTool("context.read", lambda arguments, state: {"title": f"Context for {arguments['topic']}"}))
+    tools.register(CallableTool("note.draft", lambda arguments, state: {"html": f"<html>{arguments['instruction']}</html>"}))
+    return AgentRuntime(agents=agents, tools=tools, verifier=verifier or BasicVerifier(), max_attempts=2)
+
+
+def qa_tools(service: ItemService, *, model_client: ModelClient | None = None, use_model: bool = False) -> ToolRegistry:
+    tools = ToolRegistry()
+    tools.register(InputGuardrailTool(max_message_chars=4000))
+    tools.register(ContextTool(service, max_context_items=5))
+    tools.register(EvidenceTool(service, model_client=model_client, retrieval_mode="keyword", max_results=5))
+    tools.register(ExpansionPolicyTool())
+    tools.register(ExternalResearchTool())
+    tools.register(EvidenceGateTool(max_prompt_chars=12000))
+    tools.register(EvidenceAssessmentTool())
+    if use_model and model_client is not None:
+        tools.register(
+            LLMChatTool(
+                model_client,
+                prompt_builders={"qa.answer.v1": build_qa_answer_messages},
+            ),
+        )
+    return tools
+
+
+def test_agent_runtime_routes_explicit_qa_task_and_executes_allowed_tool() -> None:
+    agent = EchoAgent()
+    runtime = runtime_with_tools(agent)
+
+    result = runtime.run(AgentRequest(content="总结这篇笔记", requested_task="qa"))
+
+    assert result.status == "completed"
+    assert result.task_type == "qa"
+    assert result.answer == "Answer: Context for 总结这篇笔记"
+    assert [tool.tool_id for tool in result.tool_results] == ["context.read"]
+    assert [event["node"] for event in result.trace] == [
+        "TaskRouter",
+        "Planner",
+        "ToolExecutor",
+        "DraftBuilder",
+        "Verifier",
+        "Reviewer",
+        "Finalizer",
+        "OrchestratorReview",
+    ]
+
+
+def test_agent_runtime_auto_routes_generation_to_writer_agent() -> None:
+    runtime = runtime_with_tools(EchoAgent(), WriterAgent())
+
+    result = runtime.run(AgentRequest(content="生成一篇 HTML 笔记"))
+
+    assert result.status == "completed"
+    assert result.task_type == "writer"
+    assert result.answer == "<html>生成一篇 HTML 笔记</html>"
+
+
+def test_agent_runtime_replans_once_when_verifier_returns_retryable_failure() -> None:
+    agent = EchoAgent()
+    verifier = RetryVerifier()
+    runtime = runtime_with_tools(agent, verifier=verifier)
+
+    result = runtime.run(AgentRequest(content="总结"))
+
+    assert result.status == "completed"
+    assert agent.attempts == [1, 2]
+    assert verifier.calls == 2
+    assert [event["status"] for event in result.trace if event["node"] == "OrchestratorReview"] == ["retry", "completed"]
+
+
+def test_agent_runtime_replans_once_when_reviewer_returns_retryable_failure() -> None:
+    agent = EchoAgent()
+    reviewer = RetryReviewer()
+    tools = ToolRegistry()
+    tools.register(CallableTool("context.read", lambda arguments, state: {"title": "Context"}))
+    runtime = AgentRuntime(agents=(agent,), tools=tools, verifier=BasicVerifier(), reviewer=reviewer, max_attempts=2)
+
+    result = runtime.run(AgentRequest(content="总结"))
+
+    assert result.status == "completed"
+    assert agent.attempts == [1, 2]
+    assert reviewer.calls == 2
+    assert result.review is not None
+    assert result.review.reason == "ok"
+
+
+def test_agent_runtime_stops_after_max_attempts_with_needs_attention() -> None:
+    runtime = runtime_with_tools(EchoAgent(), verifier=AlwaysFailVerifier())
+
+    result = runtime.run(AgentRequest(content="总结"))
+
+    assert result.status == "needs_attention"
+    assert result.verification is not None
+    assert result.verification.reason == "quality_failed"
+    assert result.trace[-1]["node"] == "OrchestratorReview"
+    assert result.trace[-1]["status"] == "needs_attention"
+
+
+def test_agent_runtime_blocks_unauthorized_tool_call() -> None:
+    class BadAgent(EchoAgent):
+        def plan(self, request: AgentRequest, state: dict, *, attempt: int) -> AgentPlan:
+            return AgentPlan(task_type="qa", steps=(ToolCall("note.draft", {"instruction": "write"}),), attempt=attempt)
+
+    runtime = runtime_with_tools(BadAgent())
+
+    with pytest.raises(ToolPermissionError):
+        runtime.run(AgentRequest(content="总结"))
+
+
+def test_context_tool_resolves_reader_context(tmp_path) -> None:
+    tool = ContextTool(item_service(tmp_path), max_context_items=5)
+
+    result = tool.run({"context": {"item_id": "a.html"}, "source_mode": "local_plus_external"}, {})
+
+    assert result["scope"] == "reader"
+    assert result["context_key"] == 'reader:{"item_id":"a.html"}'
+    assert result["context_title"] == "Alpha MCP"
+    assert result["item_ids"] == ["a.html"]
+    assert result["context"]["source_mode"] == "local_plus_external"
+
+
+def test_context_tool_resolves_collection_and_excludes_archived(tmp_path) -> None:
+    tool = ContextTool(item_service(tmp_path), max_context_items=5)
+
+    result = tool.run({"context": {"scope": "collection", "collection": "AI"}}, {})
+
+    assert result["scope"] == "collection"
+    assert result["context_title"] == "Collection: AI"
+    assert result["item_ids"] == ["a.html"]
+
+
+def test_context_tool_manual_context_excludes_archived_by_default(tmp_path) -> None:
+    tool = ContextTool(item_service(tmp_path), max_context_items=5)
+
+    result = tool.run({"context": {"manual_item_ids": ["b.html", "archived.html"]}}, {})
+
+    assert result["scope"] == "manual"
+    assert result["context_title"] == "Selected notes (1)"
+    assert result["item_ids"] == ["b.html"]
+
+
+def test_context_tool_enforces_context_item_limit(tmp_path) -> None:
+    tool = ContextTool(item_service(tmp_path), max_context_items=1)
+
+    with pytest.raises(AIContextError):
+        tool.run({"context": {"scope": "global"}}, {})
+
+
+def test_agent_runtime_can_execute_context_tool(tmp_path) -> None:
+    class ContextAgent:
+        id = "agent.qa"
+        task_type = "qa"
+        allowed_tools = ("context.resolve",)
+
+        def plan(self, request: AgentRequest, state: dict, *, attempt: int) -> AgentPlan:
+            return AgentPlan(task_type="qa", steps=(ToolCall("context.resolve", {"context": {"item_id": "a.html"}}),), attempt=attempt)
+
+        def draft(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple, state: dict) -> AgentDraft:
+            return AgentDraft(f"Context: {tool_results[0].output['context_title']}")
+
+    tools = ToolRegistry()
+    tools.register(ContextTool(item_service(tmp_path), max_context_items=5))
+    runtime = AgentRuntime(agents=(ContextAgent(),), tools=tools, verifier=BasicVerifier())
+
+    result = runtime.run(AgentRequest(content="总结"))
+
+    assert result.status == "completed"
+    assert result.answer == "Context: Alpha MCP"
+    assert result.tool_results[0].output["item_ids"] == ["a.html"]
+
+
+def test_evidence_pack_separates_chunks_sources_and_citations() -> None:
+    pack = build_evidence_pack(
+        query="MCP",
+        chunks=[
+            {"item_id": "a.html", "title": "Alpha", "snippet": "first", "score": 10},
+            {"item_id": "a.html", "title": "Alpha", "snippet": "second", "score": 8},
+            {"item_id": "b.html", "title": "Beta", "snippet": "third", "score": 6},
+        ],
+        status={"effective_mode": "keyword"},
+    )
+
+    assert len(pack["chunks"]) == 3
+    assert len(pack["sources"]) == 2
+    assert [source["source_index"] for source in pack["sources"]] == [1, 2]
+    assert [chunk["source_index"] for chunk in pack["chunks"]] == [1, 1, 2]
+    assert pack["citation_map"] == {"chunk-1": 1, "chunk-2": 1, "chunk-3": 2}
+    assert pack["status"]["chunk_count"] == 3
+    assert pack["status"]["source_count"] == 2
+
+
+def test_evidence_tool_builds_pack_from_resolved_context(tmp_path) -> None:
+    service = item_service(tmp_path)
+    context = ContextTool(service, max_context_items=5).run({"context": {"item_id": "a.html"}}, {})["context"]
+    tool = EvidenceTool(service, retrieval_mode="keyword", max_results=5)
+
+    pack = tool.run({"context": context, "query": "MCP Docker"}, {})
+
+    assert pack["query"] == "MCP Docker"
+    assert pack["chunks"]
+    assert pack["sources"] == [{"kind": "local", "source_index": 1, "title": "Alpha MCP", "item_id": "a.html"}]
+    assert all(chunk["source_index"] == 1 for chunk in pack["chunks"])
+    assert pack["status"]["effective_mode"] == "keyword"
+
+
+def test_agent_runtime_can_execute_context_then_evidence_tools(tmp_path) -> None:
+    class EvidenceAgent:
+        id = "agent.qa"
+        task_type = "qa"
+        allowed_tools = ("context.resolve", "evidence.build")
+
+        def plan(self, request: AgentRequest, state: dict, *, attempt: int) -> AgentPlan:
+            return AgentPlan(
+                task_type="qa",
+                steps=(
+                    ToolCall("context.resolve", {"context": {"item_id": "a.html"}}),
+                    ToolCall("evidence.build", {"context": {"item_ids": ["a.html"], "scope": "reader"}, "query": request.content}),
+                ),
+                attempt=attempt,
+            )
+
+        def draft(self, request: AgentRequest, plan: AgentPlan, tool_results: tuple, state: dict) -> AgentDraft:
+            evidence_pack = tool_results[1].output
+            return AgentDraft(f"Sources: {len(evidence_pack['sources'])}; Chunks: {len(evidence_pack['chunks'])}")
+
+    service = item_service(tmp_path)
+    tools = ToolRegistry()
+    tools.register(ContextTool(service, max_context_items=5))
+    tools.register(EvidenceTool(service, retrieval_mode="keyword", max_results=5))
+    runtime = AgentRuntime(agents=(EvidenceAgent(),), tools=tools, verifier=BasicVerifier())
+
+    result = runtime.run(AgentRequest(content="MCP Docker"))
+
+    assert result.status == "completed"
+    assert result.answer.startswith("Sources: 1; Chunks:")
+    assert [tool.tool_id for tool in result.tool_results] == ["context.resolve", "evidence.build"]
+
+
+def test_knowledge_qa_agent_happy_path_uses_context_and_evidence_tools(tmp_path) -> None:
+    service = item_service(tmp_path)
+    runtime = AgentRuntime(
+        agents=(KnowledgeQATaskAgent(),),
+        tools=qa_tools(service),
+        verifier=KnowledgeQAVerifier(),
+        reviewer=KnowledgeQAReviewer(),
+    )
+
+    result = runtime.run(AgentRequest(content="总结这篇笔记", context={"item_id": "a.html"}, requested_task="qa"))
+
+    assert result.status == "completed"
+    assert result.task_type == "qa"
+    assert "Alpha MCP 的核心内容可以先这样理解" in result.answer
+    assert "来源：[1] Alpha MCP" in result.answer
+    assert "笔记提到" not in result.answer
+    assert [tool.tool_id for tool in result.tool_results] == [
+        "guardrail.input",
+        "context.resolve",
+        "evidence.build",
+        "expansion.policy",
+        "external.research",
+        "evidence.gate",
+        "evidence.assess",
+    ]
+    assert result.verification is not None
+    assert result.verification.reason == "ok"
+    assert result.review is not None
+    assert result.review.reason == "ok"
+
+
+def test_llm_chat_tool_uses_registered_prompt_builder() -> None:
+    tool = LLMChatTool(
+        ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model")),
+        prompt_builders={
+            "test.prompt": lambda arguments, state: [
+                {"role": "system", "content": "test"},
+                {"role": "user", "content": f"Question: {arguments['question']}"},
+            ],
+        },
+    )
+
+    result = tool.run({"prompt_id": "test.prompt", "question": "MCP"}, {})
+
+    assert result["model"] == "fake-model"
+    assert result["prompt_id"] == "test.prompt"
+    assert result["message_count"] == 2
+    assert "Question: MCP" in result["content"]
+
+
+def test_knowledge_qa_agent_can_call_model_tool_after_evidence_build(tmp_path) -> None:
+    service = item_service(tmp_path)
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    runtime = AgentRuntime(
+        agents=(KnowledgeQATaskAgent(use_model=True),),
+        tools=qa_tools(service, model_client=model_client, use_model=True),
+        verifier=KnowledgeQAVerifier(),
+        reviewer=KnowledgeQAReviewer(),
+    )
+
+    result = runtime.run(AgentRequest(content="总结这篇笔记", context={"item_id": "a.html"}, requested_task="qa"))
+
+    assert result.status == "completed"
+    assert [tool.tool_id for tool in result.tool_results][-2:] == ["evidence.assess", "llm.chat"]
+    assert result.answer.startswith("Fake AI response for:")
+    assert "来源：" in result.answer
+    assert result.final_output is not None
+    assert result.verification is not None
+    assert result.verification.checks["invalid_citations"] == []
+
+
+def test_knowledge_qa_agent_declines_weak_relevance_before_model_call(tmp_path) -> None:
+    service = item_service(tmp_path)
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    runtime = AgentRuntime(
+        agents=(KnowledgeQATaskAgent(use_model=True),),
+        tools=qa_tools(service, model_client=model_client, use_model=True),
+        verifier=KnowledgeQAVerifier(),
+        reviewer=KnowledgeQAReviewer(),
+    )
+
+    result = runtime.run(AgentRequest(content="What does runtime evidence say about Kyoto travel?", context={"scope": "global"}, requested_task="qa"))
+
+    assert result.status == "completed"
+    assert "关联不足" in result.answer
+    llm_result = next(tool for tool in result.tool_results if tool.tool_id == "llm.chat")
+    assert llm_result.output["skipped"] is True
+    assert llm_result.output["skip_reason"] == "weak_relevance"
+    assert result.review is not None
+    assert result.review.checks["declined"] == "weak_relevance"
+
+
+def test_knowledge_qa_agent_accepts_reader_question_when_chunk_matches_query(tmp_path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(
+        content_dir,
+        meta_dir,
+        "octopus.html",
+        title="章鱼能源小白入门版深度分析报告",
+        collection="Energy",
+        tags=["Octopus"],
+    )
+    (content_dir / "octopus.html").write_text(
+        "<!doctype html><html><body><p>Kraken 像公用事业公司的操作系统，把客户、账单、电表、客服、交易、设备调度放在同一套系统里运行。</p></body></html>",
+        encoding="utf-8",
+    )
+    service = ItemService(
+        ServerSettings(
+            content_dir=content_dir,
+            meta_dir=meta_dir,
+            public_dir=public_dir,
+            site_title="Runtime Test",
+            max_upload_bytes=10 * 1024 * 1024,
+        ),
+    )
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    runtime = AgentRuntime(
+        agents=(KnowledgeQATaskAgent(use_model=True),),
+        tools=qa_tools(service, model_client=model_client, use_model=True),
+        verifier=KnowledgeQAVerifier(),
+        reviewer=KnowledgeQAReviewer(),
+    )
+
+    result = runtime.run(AgentRequest(content="解释 Kraken 平台是什么", context={"item_id": "octopus.html"}, requested_task="qa"))
+
+    assert result.status == "completed"
+    assert result.answer.startswith("Fake AI response")
+    assessment = next(tool.output for tool in result.tool_results if tool.tool_id == "evidence.assess")
+    assert assessment["weak_relevance"] is False
+
+
+def test_knowledge_qa_agent_declines_insufficient_evidence_before_model_call(tmp_path) -> None:
+    service = item_service(tmp_path)
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    runtime = AgentRuntime(
+        agents=(KnowledgeQATaskAgent(use_model=True),),
+        tools=qa_tools(service, model_client=model_client, use_model=True),
+        verifier=KnowledgeQAVerifier(),
+        reviewer=KnowledgeQAReviewer(),
+    )
+
+    result = runtime.run(AgentRequest(content="Write a travel plan for Kyoto.", context={"scope": "global"}, requested_task="qa"))
+
+    assert result.status == "completed"
+    assert "没有找到足够资料" in result.answer
+    llm_result = next(tool for tool in result.tool_results if tool.tool_id == "llm.chat")
+    assert llm_result.output["skipped"] is True
+    assert llm_result.output["skip_reason"] == "insufficient_evidence"
+    assert result.review is not None
+    assert result.review.checks["declined"] == "insufficient_evidence"
+
+
+def test_build_retrieval_query_uses_recent_user_messages_only() -> None:
+    query = build_retrieval_query(
+        "联网搜索",
+        [
+            {"role": "user", "content": "先解释一下这篇笔记里的电力市场交易和协同增效。"},
+            {"role": "assistant", "content": "这是上一轮回答，不应该进入检索词。"},
+        ],
+    )
+
+    assert "电力市场交易" in query
+    assert "上一轮回答" not in query
+
+
+def test_expansion_policy_uses_model_knowledge_for_concept_question_without_local_definition() -> None:
+    state = {
+        "query": "什么是微电网",
+        "source_mode": "local_plus_external",
+        "tool_outputs": {
+            "context.resolve": {"context": {"scope": "reader", "source_mode": "local_plus_external"}},
+            "evidence.build": {
+                "chunks": [
+                    {
+                        "item_id": "microgrid.html",
+                        "title": "工商业光储+微电网+虚拟电厂协同增效方案",
+                        "snippet": "方案讨论工商业光储、微电网、虚拟电厂协同增效，但没有直接给出微电网定义。",
+                        "score": 34,
+                    },
+                ],
+            },
+        },
+    }
+
+    result = ExpansionPolicyTool().run({"query": "什么是微电网"}, state)
+
+    assert result["mode"] == "model_knowledge"
+    assert result["reason"] == "concept_explanation_fallback"
+
+
+def test_expansion_policy_prefers_local_evidence_when_concept_is_defined_locally() -> None:
+    state = {
+        "query": "什么是微电网",
+        "source_mode": "local_plus_external",
+        "tool_outputs": {
+            "context.resolve": {"context": {"scope": "reader", "source_mode": "local_plus_external"}},
+            "evidence.build": {
+                "chunks": [
+                    {
+                        "item_id": "microgrid.html",
+                        "title": "微电网学习指南",
+                        "snippet": "微电网是指由分布式电源、储能、负荷和控制系统组成的小型电力系统。",
+                        "score": 34,
+                    },
+                ],
+            },
+        },
+    }
+
+    result = ExpansionPolicyTool().run({"query": "什么是微电网"}, state)
+
+    assert result["mode"] == "local_evidence"
+    assert result["reason"] == "local_evidence_available"
+
+
+def test_expansion_policy_keeps_concept_question_local_only_when_expansion_is_disabled() -> None:
+    state = {
+        "query": "什么是微电网",
+        "source_mode": "local_only",
+        "tool_outputs": {
+            "context.resolve": {"context": {"scope": "reader", "source_mode": "local_only"}},
+            "evidence.build": {"chunks": []},
+        },
+    }
+
+    result = ExpansionPolicyTool().run({"query": "什么是微电网"}, state)
+
+    assert result["mode"] == "local_only"
+    assert result["reason"] == "content_expansion_disabled"
+
+
+def test_evidence_overlap_uses_chinese_concept_term_instead_of_bigram_noise() -> None:
+    assert evidence_chunks_overlap_query(
+        "什么是微电网",
+        [
+            {
+                "title": "工商业光储+微电网+虚拟电厂协同增效方案",
+                "snippet": "方案讨论工商业光储、微电网和虚拟电厂协同增效。",
+            },
+        ],
+    )
+
+
+def test_knowledge_qa_fallback_answer_varies_by_intent() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    chunks = [{"snippet": "微电网负责园区内资源协同和本地自治控制。", "title": "微电网说明"}]
+    sources = [{"source_index": 1, "title": "微电网说明"}]
+    tool_results = (
+        ToolResult(tool_id="context.resolve", status="completed", output={"context_title": "微电网说明"}),
+        ToolResult(tool_id="evidence.gate", status="completed", output={"chunks": chunks, "sources": sources}),
+        ToolResult(tool_id="evidence.assess", status="completed", output={}),
+    )
+
+    concept = agent.draft(
+        AgentRequest(content="什么是微电网"),
+        AgentPlan(task_type="qa", metadata={"planner": {"intent": "concept_clarify"}}),
+        tool_results,
+        {},
+    )
+    deeper = agent.draft(
+        AgentRequest(content="详细介绍下微电网"),
+        AgentPlan(task_type="qa", metadata={"planner": {"intent": "explain_deeper"}}),
+        tool_results,
+        {},
+    )
+
+    assert concept.content.startswith("如果只抓住核心定义")
+    assert deeper.content.startswith("围绕这个主题，可以先从核心机制讲起")
+
+
+def test_knowledge_qa_reviewer_accepts_concept_answer_with_explanatory_markers() -> None:
+    reviewer = KnowledgeQAReviewer()
+    draft = AgentDraft("微电网可以理解为园区内部资源协同运行的局部能源系统。\n\n来源：[1] 微电网说明", metadata={"chunk_count": 1})
+    result = reviewer.review(
+        AgentRequest(content="什么是微电网"),
+        AgentPlan(task_type="qa", metadata={"planner": {"intent": "concept_clarify"}}),
+        (),
+        draft,
+        VerificationResult(True, checks={}, reason="ok"),
+        {},
+    )
+
+    assert result.passed is True
+    assert result.checks["intent"] == "concept_clarify"
+
+
+def test_build_qa_answer_messages_includes_task_intent_and_search_plan() -> None:
+    messages = build_qa_answer_messages(
+        {"question": "详细介绍下微电网"},
+        {
+            "query": "详细介绍下微电网",
+            "plan_metadata": {"planner": {"intent": "explain_deeper"}},
+            "tool_outputs": {
+                "context.resolve": {"context_title": "微电网"},
+                "evidence.build": {"chunks": [{"source_index": 1, "chunk_index": 1, "title": "微电网说明", "snippet": "微电网是一种局部能源系统。"}], "sources": [{"source_index": 1, "title": "微电网说明"}]},
+                "external.research": {"search_plan": {"should_search": False, "locality_hint": "global", "language_hint": "zh", "reason": "planner_default"}},
+            },
+        },
+    )
+
+    joined = "\n".join(message["content"] for message in messages)
+    assert "TASK_INTENT:\nexplain_deeper" in joined
+    assert "SEARCH_PLAN:" in joined
+    assert "3-5 coherent points" in joined
+
+
+def test_heuristic_planner_routes_logic_relationship_questions_to_explain_deeper() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    plan = agent._heuristic_plan("详细分析储能和光伏场景的逻辑关系", {}, {})
+
+    assert plan["intent"] == "explain_deeper"
+    assert plan["retrieval_mode"] == "model_knowledge"
+    assert plan["should_search"] is False
+
+
+def test_qa_search_plan_prefers_chinese_context_for_policy_questions() -> None:
+    plan = build_qa_search_plan(
+        "请联网查一下最近虚拟电厂政策有什么变化",
+        planner={"should_search": True, "intent": "current_info"},
+        context={"items": [{"title": "工商业光储+微电网+虚拟电厂协同增效方案"}]},
+    )
+
+    assert plan.should_search is True
+    assert plan.locality_hint == "china"
+    assert plan.language_hint == "zh"
+    assert "中国" in plan.plan.original_query
+
+
+def test_qa_search_plan_does_not_force_search_for_concept_questions() -> None:
+    plan = build_qa_search_plan(
+        "什么是微电网",
+        planner={"should_search": False, "intent": "concept_clarify"},
+        context={"items": [{"title": "工商业光储+微电网+虚拟电厂协同增效方案"}]},
+    )
+
+    assert plan.should_search is False
+    assert plan.plan is None
+    assert plan.reason == "planner_default"
+
+
+def test_qa_search_plan_keeps_english_version_lookup_global() -> None:
+    plan = build_qa_search_plan(
+        "What is the latest MCP version today?",
+        planner={"should_search": True, "intent": "current_info"},
+        context={"items": [{"title": "MCP Security"}]},
+    )
+
+    assert plan.should_search is True
+    assert plan.language_hint == "en"
+    assert plan.locality_hint == "global"
+    assert "中文" not in plan.plan.original_query
+    assert "中国" not in plan.plan.original_query
+
+
+def test_knowledge_qa_verifier_rejects_mechanical_answer() -> None:
+    verifier = KnowledgeQAVerifier()
+
+    result = verifier.verify(
+        AgentRequest(content="总结"),
+        AgentPlan(task_type="qa"),
+        (
+            ToolResult(tool_id="evidence.build", status="completed", output={"chunks": [{"snippet": "x"}], "sources": [{"title": "A"}]}),
+        ),
+        "笔记提到这里有很多内容。",
+        {},
+    )
+
+    assert result.passed is False
+    assert result.retryable is True
+    assert result.reason == "mechanical_answer"
+
+
+def test_knowledge_qa_verifier_rejects_invalid_citation_number() -> None:
+    verifier = KnowledgeQAVerifier()
+
+    result = verifier.verify(
+        AgentRequest(content="总结"),
+        AgentPlan(task_type="qa"),
+        (
+            ToolResult(
+                tool_id="evidence.build",
+                status="completed",
+                output={
+                    "chunks": [{"chunk_id": "chunk-1", "snippet": "x", "source_index": 1}],
+                    "sources": [{"source_index": 1, "title": "A"}],
+                    "citation_map": {"chunk-1": 1},
+                },
+            ),
+        ),
+        "答案引用了不存在的来源 [2]。",
+        {},
+    )
+
+    assert result.passed is False
+    assert result.retryable is True
+    assert result.reason == "invalid_citation"
+
+
+def test_knowledge_qa_verifier_ignores_bracket_numbers_inside_urls() -> None:
+    verifier = KnowledgeQAVerifier()
+
+    result = verifier.verify(
+        AgentRequest(content="联网搜索"),
+        AgentPlan(task_type="qa"),
+        (
+            ToolResult(
+                tool_id="evidence.build",
+                status="completed",
+                output={
+                    "chunks": [{"chunk_id": "chunk-1", "snippet": "x", "source_index": 1}],
+                    "sources": [{"source_index": 1, "title": "A"}],
+                    "citation_map": {"chunk-1": 1},
+                },
+            ),
+        ),
+        "来源 URL https://example.test/search?q=issue[2852]，答案引用来源 [1]。",
+        {},
+    )
+
+    assert result.passed is True
+    assert result.checks["invalid_citations"] == []
+
+
+def test_knowledge_qa_verifier_rejects_inconsistent_evidence_pack() -> None:
+    verifier = KnowledgeQAVerifier()
+
+    result = verifier.verify(
+        AgentRequest(content="总结"),
+        AgentPlan(task_type="qa"),
+        (
+            ToolResult(
+                tool_id="evidence.build",
+                status="completed",
+                output={
+                    "chunks": [{"chunk_id": "bad-chunk", "snippet": "x", "source_index": 2}],
+                    "sources": [{"source_index": 1, "title": "A"}],
+                    "citation_map": {"bad-chunk": 2},
+                },
+            ),
+        ),
+        "这是一个回答。\n\n来源：[1] A",
+        {},
+    )
+
+    assert result.passed is False
+    assert result.retryable is True
+    assert result.reason == "evidence_inconsistent"
+    assert result.checks["evidence_consistency"]["valid"] is False
+
+
+def test_qa_runtime_comparison_can_run_agent_side_without_legacy(tmp_path) -> None:
+    service = item_service(tmp_path)
+    settings = service.settings
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    conversation_store = InMemoryEvalConversationStore(service, max_context_items=5)
+
+    report = compare_qa_runtimes(
+        question="总结这篇笔记",
+        context={"item_id": "a.html"},
+        item_service=service,
+        conversation_store=conversation_store,
+        model_client=model_client,
+        settings=settings,
+        run_legacy=False,
+        run_agent=True,
+        agent_uses_model=False,
+    )
+
+    assert report["kind"] == "qa_runtime_comparison"
+    assert set(report["results"]) == {"agent"}
+    assert report["results"]["agent"]["engine"] == "AgentRuntime.qa.v1"
+    assert report["results"]["agent"]["status"] == "completed"
+    assert report["results"]["agent"]["source_count"] == 1
+    assert report["results"]["agent"]["sources"][0]["title"] == "Alpha MCP"
+    assert report["metrics"]["agent"]["status"] == "ok"
+
+
+def test_qa_eval_metrics_flag_duplicate_sources_and_mechanical_phrasing() -> None:
+    metrics = evaluate_qa_result(
+        {
+            "status": "completed",
+            "answer": "笔记提到这里有内容。",
+            "sources": [
+                {"kind": "local", "item_id": "a.html", "title": "Alpha"},
+                {"kind": "local", "item_id": "a.html", "title": "Alpha"},
+            ],
+            "citation": {"status": "valid"},
+        },
+    )
+
+    assert metrics["status"] == "needs_attention"
+    assert metrics["requires_attention"] is True
+    assert "mechanical_phrasing" in metrics["flags"]
+    assert "duplicate_sources" in metrics["flags"]
+    assert metrics["duplicate_sources"]["duplicate_count"] == 1
+
+
+def test_qa_eval_metrics_flag_weak_source_relevance() -> None:
+    metrics = evaluate_qa_result(
+        {
+            "status": "completed",
+            "answer": "这里给出一个弱相关回答。",
+            "sources": [{"kind": "local", "item_id": "docker.html", "title": "Docker Network Quick Notes"}],
+            "citation": {"status": "valid"},
+        },
+        question="Write a travel plan for Kyoto.",
+    )
+
+    assert metrics["status"] == "needs_attention"
+    assert "weak_relevance" in metrics["flags"]
+    assert metrics["source_relevance"]["status"] == "weak"
+
+
+def test_qa_eval_metrics_accept_related_source_title_overlap() -> None:
+    metrics = evaluate_qa_result(
+        {
+            "status": "completed",
+            "answer": "Docker networking uses bridge networks.",
+            "sources": [{"kind": "local", "item_id": "docker.html", "title": "Docker Network Quick Notes"}],
+            "citation": {"status": "valid"},
+        },
+        question="Explain Docker networking.",
+    )
+
+    assert metrics["status"] == "ok"
+    assert "weak_relevance" not in metrics["flags"]
+    assert metrics["source_relevance"]["overlap"] == ["docker"]
+
+
+def test_qa_eval_metrics_skip_generic_summary_relevance() -> None:
+    metrics = evaluate_qa_result(
+        {
+            "status": "completed",
+            "answer": "这是摘要。",
+            "sources": [{"kind": "local", "item_id": "a.html", "title": "Alpha MCP"}],
+            "citation": {"status": "valid"},
+        },
+        question="总结这篇笔记",
+    )
+
+    assert metrics["status"] == "ok"
+    assert metrics["source_relevance"]["evaluated"] is False
+
+
+def test_qa_eval_metrics_skip_global_overview_relevance() -> None:
+    metrics = evaluate_qa_result(
+        {
+            "status": "completed",
+            "answer": "This is a global overview.",
+            "sources": [{"kind": "local", "item_id": "workspace.html", "title": "Knowledge Workspace Design Notes"}],
+            "citation": {"status": "valid"},
+        },
+        question="Summarize the current knowledge base and group the answer by topic.",
+    )
+
+    assert metrics["status"] == "ok"
+    assert metrics["source_relevance"]["status"] == "overview"

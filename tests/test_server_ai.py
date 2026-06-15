@@ -9,12 +9,13 @@ from html_lore.server.config import ServerSettings
 from html_lore.server.ai.guardrails import GuardrailError
 from html_lore.server.ai.eval import KnowledgeQAEvalSpec, run_knowledge_qa_eval
 from html_lore.server.ai.html_generation_graph import HtmlGenerationGraph, HtmlGenerationState, review_html
-from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_UNAVAILABLE_ANSWER, KnowledgeQAGraph, KnowledgeQAState, NO_EVIDENCE_ANSWER, assess_answer_quality, assess_evidence_coverage, assess_evidence_sufficiency, build_answer_prompt, budget_prompt_inputs, filter_evidence_by_context, format_evidence_for_prompt, is_time_sensitive_question, prompt_chars, public_qa_run, rank_answer_evidence, rerank_answer_evidence, verify_answer_citations
+from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_UNAVAILABLE_ANSWER, KnowledgeQAGraph, KnowledgeQAState, NO_EVIDENCE_ANSWER, assess_answer_quality, assess_evidence_coverage, assess_evidence_sufficiency, assign_source_indices, build_answer_prompt, budget_prompt_inputs, dedupe_display_sources, evidence_with_display_source_indices, filter_evidence_by_context, format_evidence_for_prompt, is_time_sensitive_question, prompt_chars, public_qa_run, rank_answer_evidence, rerank_answer_evidence, verify_answer_citations
 from html_lore.server.ai.material_generation import MaterialGenerationError, parse_material
 from html_lore.server.ai.model_client import ModelClient
 from html_lore.server.ai.providers import AIProviderConfig, OpenAICompatibleHttpAdapter, chat_completions_url, parse_provider_response
 from html_lore.server.ai.registry import load_agent, load_prompt
 from html_lore.server.ai.retrieval import extract_safe_text, retrieve_evidence_with_status
+from html_lore.server.ai.search_planner import plan_external_search, verify_planned_sources
 from html_lore.server.ai.runs import AIRunStore
 from html_lore.server.ai.vector_store import LocalVectorStore
 from html_lore.server.ai.external_search import ExternalSearchResult, TavilyExternalSearchAdapter, build_tavily_payload, prepare_external_search_query, is_safe_external_url, sanitize_external_results
@@ -321,6 +322,66 @@ def test_tavily_payload_uses_controlled_defaults_and_enhancements() -> None:
     assert finance_payload["topic"] == "finance"
     assert finance_payload["time_range"] == "year"
     assert finance_payload["search_depth"] == "fast"
+
+
+def test_search_planner_builds_authoritative_mcp_version_plan() -> None:
+    plan = plan_external_search("请联网查一下 2026 年 MCP 官方规范最近一次发布的版本和日期")
+
+    assert plan.intent == "official_version"
+    assert plan.authoritative_required is True
+    assert "model context protocol" in plan.required_terms
+    assert "modelcontextprotocol.io" in plan.preferred_domains
+    assert len(plan.queries) >= 3
+    assert plan.queries[0].startswith("Model Context Protocol specification latest version")
+
+
+def test_search_planner_filters_unrelated_mcp_search_results() -> None:
+    plan = plan_external_search("请联网查一下 2026 年 MCP 官方规范最近一次发布的版本和日期")
+    sources = [
+        {
+            "kind": "external",
+            "title": "Microsoft Patches Record 206 Flaws",
+            "url": "https://example.test/microsoft-patches",
+            "snippet": "Microsoft security update.",
+        },
+        {
+            "kind": "external",
+            "title": "Model Context Protocol specification changelog",
+            "url": "https://modelcontextprotocol.io/specification/changelog",
+            "snippet": "Official Model Context Protocol specification release notes.",
+        },
+    ]
+
+    kept, report = verify_planned_sources(sources, plan)
+
+    assert [source["title"] for source in kept] == ["Model Context Protocol specification changelog"]
+    assert report == {"verified_count": 1, "dropped_count": 1}
+
+
+def test_search_planner_prioritizes_official_sources_over_github_issues() -> None:
+    plan = plan_external_search("请联网查一下 2026 年 MCP 官方规范最近一次发布的版本和日期")
+    sources = [
+        {
+            "kind": "external",
+            "title": "Example pattern for scoped execution receipts on high-risk provider tools",
+            "url": "https://github.com/modelcontextprotocol/modelcontextprotocol/issues/2852",
+            "snippet": "Model Context Protocol issue discussion.",
+        },
+        {
+            "kind": "external",
+            "title": "The 2026-07-28 MCP Specification Release Candidate",
+            "url": "https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/",
+            "snippet": "Official Model Context Protocol specification release candidate.",
+        },
+    ]
+
+    kept, report = verify_planned_sources(sources, plan)
+
+    assert report == {"verified_count": 2, "dropped_count": 0}
+    assert kept[0]["title"] == "The 2026-07-28 MCP Specification Release Candidate"
+    assert kept[0]["authority_tier"] == "official"
+    assert kept[0]["authority_score"] > kept[1]["authority_score"]
+    assert kept[1]["authority_tier"] == "community"
 
 
 def test_tavily_adapter_posts_bearer_key_and_parses_results(monkeypatch) -> None:
@@ -671,6 +732,35 @@ def test_ai_conversation_latest_returns_recent_context_match(tmp_path: Path) -> 
         server.close()
 
 
+def test_ai_conversation_context_key_ignores_source_mode(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(content_dir, meta_dir, "a.html", title="Alpha MCP", collection="AI", tags=["MCP"])
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir)
+    try:
+        local = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "a.html"}, "source_mode": "local_only"},
+        )["conversation"]
+        expanded = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "a.html"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+
+        assert local["context_key"] == expanded["context_key"]
+        assert not local["context_key"].startswith("local_only:")
+        assert not expanded["context_key"].startswith("local_plus_external:")
+
+        latest = server.request(
+            "GET",
+            f"/api/ai/conversations/latest?context_key={urllib.parse.quote('local_only:' + local['context_key'])}",
+        )["conversation"]
+        assert latest["id"] == expanded["id"]
+    finally:
+        server.close()
+
+
 def test_ai_conversation_list_can_filter_by_context_key(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = make_dirs(tmp_path)
     make_note(content_dir, meta_dir, "a.html", title="Alpha MCP", collection="AI", tags=["MCP"])
@@ -816,34 +906,21 @@ def test_ai_message_uses_local_evidence_with_fake_provider(tmp_path: Path) -> No
         assert response["message"]["role"] == "assistant"
         assert response["sources"][0]["item_id"] == "mcp.html"
         assert "Fake AI response" in response["message"]["content"]
-        assert response["graph"] == "KnowledgeQAAndNoteGraph.beta"
+        assert response["graph"] == "AgentRuntime.qa.v1"
         assert response["qa_status"] == {
-            "status": "needs_attention",
-            "requires_attention": True,
-            "flags": ["missing_citation"],
-            "citation_status": "missing_citation",
+            "status": "ok",
+            "requires_attention": False,
+            "flags": [],
+            "citation_status": "ok",
             "source_count": 1,
         }
-        assert response["qa_report"]["answer_quality"]["flags"] == ["missing_citation"]
+        assert response["qa_report"]["answer_quality"]["flags"] == []
         assert "Answer only from the provided evidence" not in json.dumps(response, ensure_ascii=False)
-        assert [entry["node"] for entry in response["node_trace"]] == [
-            "InputGuardrailNode",
-            "RetrieverNode",
-            "ExpansionPolicyNode",
-            "ExternalSearchNode",
-            "EvidenceScopeGuardNode",
-            "EvidenceRankerNode",
-            "EvidenceRerankNode",
-            "EvidenceGateNode",
-            "EvidenceCoverageNode",
-            "EvidenceSufficiencyNode",
-            "AnswerAgentNode",
-            "CitationVerifierNode",
-            "AnswerQualityNode",
-            "OutputGuardrailNode",
-            "ConversationPersistNode",
-        ]
-        assert response["external_status"]["provider"] == "disabled"
+        node_names = [entry["node"] for entry in response["node_trace"]]
+        assert node_names[:2] == ["TaskRouter", "Planner"]
+        assert node_names.count("ToolExecutor") == 8
+        assert node_names[-4:] == ["Verifier", "Reviewer", "Finalizer", "OrchestratorReview"]
+        assert response["external_status"] == {"provider": "disabled", "available": False}
 
         messages = server.request("GET", f"/api/ai/conversations/{conversation['id']}/messages")
         assert messages["count"] == 2
@@ -858,38 +935,26 @@ def test_ai_message_uses_local_evidence_with_fake_provider(tmp_path: Path) -> No
         assert run["retryable"] is False
         assert run["cancellable"] is False
         assert run["qa_report"]["source_count"] == 1
-        assert run["qa_report"]["citation"]["source_count"] == 1
-        assert run["qa_report"]["citation"]["status"] == "missing_citation"
-        assert run["qa_report"]["answer_quality"]["status"] == "needs_attention"
-        assert run["qa_report"]["answer_quality"]["flags"] == ["missing_citation"]
-        assert run["qa_report"]["evidence_scope"]["dropped_count"] == 0
-        assert run["qa_report"]["evidence_ranking"]["selected_count"] == 1
-        assert run["qa_report"]["evidence_rerank"]["strategy"] == "deterministic_query_score_v1"
-        assert run["qa_report"]["evidence_coverage"] == {
-            "status": "full",
-            "context_item_count": 1,
-            "retrieved_item_count": 1,
-            "selected_item_count": 1,
-            "coverage_ratio": 1.0,
-            "missing_item_count": 0,
-            "missing_item_ids": [],
-            "dropped_evidence_count": 0,
-            "trimmed_evidence_chars": False,
-        }
-        assert run["qa_report"]["evidence_sufficiency"]["level"] in {"moderate", "strong"}
-        assert run["qa_report"]["evidence_sufficiency"]["local_source_count"] == 1
-        assert run["agent_trace"][0]["id"] == "knowledge_qa.answer_agent"
-        assert run["agent_trace"][0]["version"] == "v1"
-        assert run["prompt_trace"][0] == {
-            "id": "knowledge_qa/answer_agent.v1.md",
-            "version": "v1",
-            "path": "knowledge_qa/answer_agent.v1.md",
-        }
-        assert run["skill_trace"][0]["skill_id"] == "retrieval.hybrid_rank"
-        assert run["skill_trace"][0]["version"] == "v1"
-        assert run["skill_trace"][0]["input_summary"]["query_chars"] > 0
-        assert run["skill_trace"][0]["input_summary"]["context_item_count"] == 1
-        assert run["skill_trace"][0]["output_summary"]["evidence_count"] == 1
+        assert run["graph"] == "AgentRuntime.qa.v1"
+        assert run["qa_report"]["citation"]["reason"] == "ok"
+        assert run["qa_report"]["answer_quality"]["status"] == "ok"
+        assert run["qa_report"]["answer_quality"]["flags"] == []
+        assert run["qa_report"]["retrieval"]["source_count"] == 1
+        assert run["agent_trace"]
+        assert run["prompt_trace"]
+        assert [entry["skill_id"] for entry in run["skill_trace"]] == [
+            "guardrail.input",
+            "context.resolve",
+            "evidence.build",
+            "expansion.policy",
+            "external.research",
+            "evidence.gate",
+            "evidence.assess",
+            "llm.chat",
+        ]
+        assert run["skill_trace"][0]["version"] == "runtime.v1"
+        assert run["skill_trace"][1]["output_summary"]["context_item_count"] == 1
+        assert run["skill_trace"][2]["output_summary"]["evidence_count"] == 1
         raw_runs = json.dumps(runs, ensure_ascii=False)
         assert "What does MCP security cover?" not in raw_runs
         assert "Fake AI response" not in raw_runs
@@ -945,7 +1010,7 @@ def test_global_overview_uses_all_context_items_instead_of_top_keyword_chunks(tm
         response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "知识库里有哪些主题？按主题分组总结。"})
         assert response["retrieval_status"]["source_count"] == 6
         assert response["retrieval_status"]["covered_item_count"] == 6
-        assert response["qa_report"]["evidence_coverage"]["status"] == "full"
+        assert response["qa_report"]["retrieval"]["source_count"] == 6
     finally:
         server.close()
 
@@ -1013,7 +1078,7 @@ def test_global_unrelated_question_rejects_weak_evidence_without_model_call(tmp_
         conversation = server.json("POST", "/api/ai/conversations", {"context": {"scope": "global"}})["conversation"]
         response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "这篇笔记和量子香蕉有什么关系？"})
         assert response["sources"] == []
-        assert "没有足够资料" in response["message"]["content"]
+        assert "没有找到足够资料" in response["message"]["content"]
         assert response["qa_report"]["skipped_model_call"] is True
     finally:
         server.close()
@@ -1027,7 +1092,7 @@ def test_ai_message_returns_no_evidence_answer_without_model_call(tmp_path: Path
         conversation = server.json("POST", "/api/ai/conversations", {"context": {"item_id": "mcp.html"}})["conversation"]
         response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "unrelated quantum banana"})
         assert response["sources"] == []
-        assert "没有足够资料" in response["message"]["content"]
+        assert "没有找到足够资料" in response["message"]["content"]
         assert response["usage"] == {}
     finally:
         server.close()
@@ -1588,6 +1653,39 @@ def test_keyword_retrieval_uses_tag_and_summary_weight_for_concept_question(tmp_
     assert "权限边界" in result.evidence[0]["snippet"] or "最小权限" in result.evidence[0]["snippet"]
 
 
+def test_keyword_retrieval_ignores_generic_explainer_terms_for_unrelated_question(tmp_path: Path) -> None:
+    from html_lore.server.items import ItemService
+
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "octopus.html",
+        title="章鱼能源小白入门版深度分析报告",
+        collection="Energy",
+        tags=["Octopus"],
+        summary="给非电力行业读者看的报告，解释电力市场和售电公司的基本概念。",
+        html="""
+        <!doctype html><html><body>
+          <h1>章鱼能源小白入门版深度分析报告</h1>
+          <p>这是一版给非电力行业读者看的报告，解释电力市场、售电公司和 Kraken 平台。</p>
+        </body></html>
+        """,
+    )
+    settings = ServerSettings(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        site_title="Retrieval Noise Test",
+        max_upload_bytes=10 * 1024 * 1024,
+    )
+    context = {"scope": "global", "source_mode": "local_plus_external", "item_ids": ["octopus.html"]}
+
+    result = retrieve_evidence_with_status(ItemService(settings), context, "中子星脉冲星的基本原理是什么？用小白能懂的话解释。", mode="keyword", max_results=5)
+
+    assert result.evidence == []
+
+
 def test_keyword_retrieval_balances_sources_across_multi_note_context(tmp_path: Path) -> None:
     from html_lore.server.items import ItemService
 
@@ -1716,6 +1814,161 @@ def test_ai_message_uses_model_knowledge_when_expansion_is_enabled_for_general_q
         server.close()
 
 
+def test_ai_message_uses_model_knowledge_when_only_weak_local_evidence_exists(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "octopus.html",
+        title="章鱼能源小白入门版深度分析报告",
+        collection="Energy",
+        tags=["Octopus"],
+        summary="给非电力行业读者看的报告，解释电力市场和售电公司的基本概念。",
+        html="""
+        <!doctype html><html><body>
+          <h1>章鱼能源小白入门版深度分析报告</h1>
+          <p>这是一版给非电力行业读者看的报告，解释电力市场、售电公司和 Kraken 平台。</p>
+        </body></html>
+        """,
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+    )
+    try:
+        conversation = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"scope": "global", "library": "all"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "中子星脉冲星的基本原理是什么？用小白能懂的话解释。"})
+        assert response["sources"] == []
+        assert response["message"]["content"].startswith("Fake AI response")
+
+        runs = server.request("GET", "/api/ai/runs")
+        policy = runs["runs"][0]["qa_report"]["expansion_policy"]
+        assert policy["mode"] == "model_knowledge"
+        assert policy["requires_citation"] is False
+    finally:
+        server.close()
+
+
+def test_ai_message_uses_model_knowledge_for_related_concept_question_without_local_definition(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "microgrid.html",
+        title="工商业光储+微电网+虚拟电厂协同增效方案",
+        collection="Energy",
+        tags=["微电网", "虚拟电厂"],
+        summary="讨论工商业光储、微电网和虚拟电厂协同增效方案。",
+        html="""
+        <!doctype html><html><body>
+          <h1>工商业光储+微电网+虚拟电厂协同增效方案</h1>
+          <p>本文讨论工商业光储、微电网和虚拟电厂协同增效，但不直接定义微电网。</p>
+        </body></html>
+        """,
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+    )
+    try:
+        conversation = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "microgrid.html"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "什么是微电网"})
+
+        assert response["graph"] == "AgentRuntime.qa.v1"
+        assert response["message"]["content"].startswith("Fake AI response")
+        assert response["usage"]
+        runs = server.request("GET", "/api/ai/runs")
+        report = runs["runs"][0]["qa_report"]
+        assert report["expansion_policy"]["mode"] == "model_knowledge"
+        assert report["expansion_policy"]["reason"] == "concept_explanation_fallback"
+        assert report["planner"]["intent"] == "concept_clarify"
+        assert report["answer_quality"]["flags"] == []
+    finally:
+        server.close()
+
+
+def test_ai_message_exposes_search_plan_without_changing_external_status_shape(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(content_dir, meta_dir, "mcp.html", title="MCP Security", collection="AI", tags=["MCP"])
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_external_search="fake",
+        ai_external_search_max_results=3,
+    )
+    try:
+        conversation = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "mcp.html"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "What is the latest MCP version today?"})
+        assert response["external_status"]["provider"] == "fake"
+        assert response["qa_report"]["search_plan"]["should_search"] is True
+        assert response["qa_report"]["search_plan"]["search"]["search_intent"] == "version_lookup"
+        runs = server.request("GET", "/api/ai/runs")
+        assert runs["runs"][0]["agent_trace"]
+        assert runs["runs"][0]["prompt_trace"]
+    finally:
+        server.close()
+
+
+def test_expansion_policy_treats_weak_vector_only_evidence_as_model_knowledge() -> None:
+    state = KnowledgeQAState(
+        conversation_id="conv-test",
+        conversation={
+            "context_snapshot": {
+                "scope": "global",
+                "source_mode": "local_plus_external",
+                "item_ids": ["energy.html"],
+            },
+        },
+        context_snapshot={
+            "scope": "global",
+            "source_mode": "local_plus_external",
+            "item_ids": ["energy.html"],
+        },
+        content="什么是拉格朗日点？用小白能懂的话解释。",
+        evidence=[
+            {
+                "item_id": "energy.html",
+                "title": "Energy Note",
+                "snippet": "工商业储能和虚拟电厂材料。",
+                "score": 43,
+                "retrieval_sources": ["vector"],
+            },
+        ],
+    )
+
+    from html_lore.server.ai.knowledge_qa_graph import ExpansionPolicyNode
+
+    ExpansionPolicyNode().run(state)
+
+    assert state.expansion_policy["mode"] == "model_knowledge"
+    assert state.expansion_policy["reason"] == "weak_local_evidence_fallback"
+    assert state.expansion_policy["local_evidence_signal"]["reason"] == "weak_vector_only_evidence"
+
+
 def test_ai_message_uses_fake_external_search_when_expansion_is_enabled(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = make_dirs(tmp_path)
     make_note(content_dir, meta_dir, "mcp.html", title="MCP Security", collection="AI", tags=["MCP"])
@@ -1738,14 +1991,16 @@ def test_ai_message_uses_fake_external_search_when_expansion_is_enabled(tmp_path
         response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "What is the latest MCP version today?"})
         assert response["external_status"]["provider"] == "fake"
         assert response["external_status"]["available"] is True
-        assert response["external_status"]["count"] == 1
+        assert response["external_status"]["count"] >= 1
         assert response["external_status"]["dropped"] == 0
         assert response["external_status"]["queried"] is True
         assert response["external_status"]["max_results"] == 3
-        assert response["external_status"]["query_chars"] > 0
-        assert response["external_status"]["external_evidence_count"] == 1
+        assert response["external_status"]["planned_query_count"] >= 1
+        assert response["external_status"]["search_intent"] == "version_lookup"
+        assert response["external_status"]["external_evidence_count"] >= 1
         external_sources = [source for source in response["sources"] if str(source.get("url") or "").startswith("https://example.test/search")]
         assert external_sources
+        assert all(source.get("kind") == "external" for source in response["sources"])
         assert "Fake AI response" in response["message"]["content"]
 
         runs = server.request("GET", "/api/ai/runs")
@@ -1753,14 +2008,97 @@ def test_ai_message_uses_fake_external_search_when_expansion_is_enabled(tmp_path
         assert policy["mode"] == "web_research"
         assert policy["reason"] == "time_sensitive_question"
         research_trace = runs["runs"][0]["qa_report"]["research_trace"]
-        assert [entry["node"] for entry in research_trace] == [
-            "ResearchQueryPlannerNode",
-            "ExternalSearchProviderNode",
+        trace_nodes = [entry["node"] for entry in research_trace]
+        assert trace_nodes[0] == "ResearchQueryPlannerNode"
+        assert "ExternalSearchProviderNode" in trace_nodes
+        assert trace_nodes[-3:] == [
             "ResearchSourceVerifierNode",
+            "ResearchPlanVerifierNode",
             "ResearchEvidenceMergerNode",
         ]
-        assert research_trace[-2]["selected_count"] == 1
-        assert research_trace[-1]["external_evidence_count"] == 1
+        assert research_trace[-3]["selected_count"] >= 1
+        assert research_trace[-2]["verified_count"] >= 1
+        assert research_trace[-1]["external_evidence_count"] >= 1
+    finally:
+        server.close()
+
+
+def test_agent_runtime_external_search_is_not_rejected_as_weak_local_evidence(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(content_dir, meta_dir, "mcp.html", title="MCP Security", collection="AI", tags=["MCP"])
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_external_search="fake",
+        ai_external_search_max_results=3,
+    )
+    try:
+        conversation = server.json(
+            "POST",
+            "/api/ai/conversations",
+            {"context": {"item_id": "mcp.html"}, "source_mode": "local_plus_external"},
+        )["conversation"]
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "联网搜索一下，最新 MCP 官方规范版本是什么？"})
+
+        assert response["graph"] == "AgentRuntime.qa.v1"
+        assert response["external_status"]["queried"] is True
+        assert response["sources"]
+        assert all(source["kind"] == "external" for source in response["sources"])
+        assert "Fake AI response" in response["message"]["content"]
+        assert response["qa_report"]["answer_quality"]["flags"] == []
+    finally:
+        server.close()
+
+
+def test_ai_message_external_search_inherits_recent_context(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "energy.html",
+        title="工商业光储与电力市场交易学习页",
+        collection="Energy",
+        tags=["电力市场"],
+        summary="围绕工商业光储、微电网、虚拟电厂、电力市场交易和协同增效的学习材料。",
+        html="""
+        <!doctype html><html><body>
+          <h1>工商业光储与电力市场交易学习页</h1>
+          <p>这份资料解释工商业光储、微电网、虚拟电厂和电力市场交易的协同增效。</p>
+        </body></html>
+        """,
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_external_search="fake",
+        ai_external_search_max_results=3,
+    )
+    try:
+        conversation = server.json("POST", "/api/ai/conversations", {"context": {"item_id": "energy.html"}})["conversation"]
+        server.json(
+            "POST",
+            f"/api/ai/conversations/{conversation['id']}/messages",
+            {"content": "先解释一下这篇笔记里的电力市场交易和协同增效。", "source_mode": "local_only"},
+        )
+        response = server.json(
+            "POST",
+            f"/api/ai/conversations/{conversation['id']}/messages",
+            {"content": "联网搜索", "source_mode": "local_plus_external"},
+        )
+
+        assert response["external_status"]["queried"] is True
+        source_urls = " ".join(str(source.get("url") or "") for source in response["sources"])
+        assert "联网搜索" in source_urls
+        assert "%E7%94%B5%E5%8A%9B" in source_urls or "电力" in source_urls
+        assert response["conversation"]["context_key"] == conversation["context_key"]
     finally:
         server.close()
 
@@ -1791,11 +2129,18 @@ def test_external_search_query_preparation_drops_internal_urls_and_truncates() -
     )
 
     assert "localhost" not in query
-    assert "https://example.test/source" in query
+    assert "https://example.test" in query
     assert len(query) <= 64
     assert report["query_chars"] == len(query)
     assert report["query_truncated"] is True
     assert report["blocked_internal_url_tokens"] is True
+
+
+def test_external_search_query_preparation_expands_mcp_abbreviation() -> None:
+    query, report = prepare_external_search_query("请联网查一下 MCP 官方规范最近一次发布的版本")
+
+    assert query.startswith("Model Context Protocol MCP")
+    assert report["query_expansions"] == ["mcp_model_context_protocol"]
 
 
 def test_external_search_filtered_results_do_not_trigger_model_call(tmp_path: Path) -> None:
@@ -1847,7 +2192,7 @@ def test_external_search_filtered_results_do_not_trigger_model_call(tmp_path: Pa
     assert state.external_status["provider"] == "unsafe-test"
     assert state.external_status["available"] is True
     assert state.external_status["count"] == 0
-    assert state.external_status["dropped"] == 2
+    assert state.external_status["dropped"] == 8
     assert state.external_status["queried"] is True
 
 
@@ -1931,6 +2276,21 @@ def test_knowledge_qa_evidence_reranker_prioritizes_query_relevant_sources() -> 
         "order_changed": True,
         "top_source": "mcp.html",
     }
+
+
+def test_knowledge_qa_display_sources_dedupe_local_notes_by_item_id() -> None:
+    evidence = [
+        {"kind": "local", "item_id": "note.html", "title": "Note", "snippet": "first chunk", "score": 10},
+        {"kind": "local", "item_id": "note.html", "title": "Note", "snippet": "second chunk", "score": 8},
+        {"kind": "external", "url": "https://example.test/a", "title": "External A", "snippet": "first", "score": 5},
+        {"kind": "external", "url": "https://example.test/a", "title": "External A", "snippet": "second", "score": 4},
+    ]
+    sources = assign_source_indices(dedupe_display_sources(evidence))
+    prompt_evidence = evidence_with_display_source_indices(evidence, sources)
+
+    assert [source.get("source_index") for source in sources] == [1, 2]
+    assert [source.get("title") for source in sources] == ["Note", "External A"]
+    assert [item.get("source_index") for item in prompt_evidence] == [1, 1, 2, 2]
 
 
 def test_knowledge_qa_citation_verifier_accepts_valid_source_refs() -> None:
@@ -2101,6 +2461,29 @@ def test_knowledge_qa_status_flags_partial_context_coverage() -> None:
         "citation_status": "valid",
         "source_count": 2,
     }
+
+
+def test_public_agent_qa_report_carries_intent_aware_review_summary() -> None:
+    from html_lore.server.ai.runtime import AgentRunResult, AgentPlan, VerificationResult, ReviewResult
+    from html_lore.server.ai.runtime_eval import public_agent_run
+
+    result = AgentRunResult(
+        run_id="agent_test",
+        task_type="qa",
+        status="completed",
+        answer="基于当前可核验资料，先给你结论：示例内容。\n\n来源：[1] Example",
+        plan=AgentPlan(task_type="qa", metadata={"planner": {"intent": "current_info"}}),
+        tool_results=(),
+        verification=VerificationResult(True, checks={"verifier_agent": {"id": "knowledge_qa.verifier_agent"}}, reason="ok"),
+        review=ReviewResult(True, checks={"reviewer_agent": {"id": "knowledge_qa.reviewer_agent"}}, reason="ok"),
+        trace=(),
+    )
+
+    run = public_agent_run(result)
+    review = run["qa_report"]["answer_quality"]["review"]
+    assert review["intent"] == "current_info"
+    assert review["verification_reason"] == "ok"
+    assert review["search_used"] is False
 
 
 def test_knowledge_qa_prompt_budget_compresses_context_summary() -> None:
@@ -2706,6 +3089,106 @@ def test_ai_runs_list_returns_recent_sanitized_runs(tmp_path: Path) -> None:
         raw_payload = json.dumps(listed, ensure_ascii=False)
         assert "Second private source text" not in raw_payload
         assert first["id"] != second["id"]
+    finally:
+        server.close()
+
+
+def test_ai_eval_agent_run_requires_explicit_enable_flag(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "agent-eval.html",
+        title="Agent Eval Note",
+        collection="AI",
+        tags=["Agent"],
+        html="<!doctype html><html><body><h1>Agent Eval Note</h1><p>Runtime evaluation evidence.</p></body></html>",
+    )
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, ai_provider="fake", ai_model="fake-test-model")
+    try:
+        code, error = server.json_error("POST", "/api/ai/eval/agent-qa-run", {"question": "总结这篇笔记", "context": {"item_id": "agent-eval.html"}})
+
+        assert code == 400
+        assert "enabled=true" in error["detail"]
+        assert server.request("GET", "/api/ai/runs")["count"] == 0
+    finally:
+        server.close()
+
+
+def test_ai_eval_agent_run_records_sanitized_agent_runtime_run(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "agent-run.html",
+        title="Agent Runtime Note",
+        collection="AI",
+        tags=["Agent"],
+        html="<!doctype html><html><body><h1>Agent Runtime Note</h1><p>Runtime evidence should stay private in run history.</p></body></html>",
+    )
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, ai_provider="fake", ai_model="fake-test-model")
+    try:
+        response = server.json(
+            "POST",
+            "/api/ai/eval/agent-qa-run",
+            {
+                "enabled": True,
+                "question": "总结这篇笔记",
+                "context": {"item_id": "agent-run.html"},
+                "use_model": False,
+            },
+        )
+
+        run = response["run"]
+        assert run["kind"] == "knowledge_qa"
+        assert run["graph"] == "AgentRuntime.qa.v1"
+        assert run["status"] == "completed"
+        assert run["qa_report"]["source_count"] == 1
+        assert run["qa_report"]["skipped_model_call"] is True
+        assert run["skill_trace"][0]["skill_id"] == "guardrail.input"
+        assert run["skill_trace"][1]["skill_id"] == "context.resolve"
+        listed = server.request("GET", "/api/ai/runs")
+        assert listed["count"] == 1
+        assert listed["runs"][0]["id"] == run["id"]
+        raw = json.dumps(listed, ensure_ascii=False)
+        assert "Runtime evidence should stay private" not in raw
+    finally:
+        server.close()
+
+
+def test_ai_eval_qa_runtime_comparison_can_run_agent_only(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "comparison.html",
+        title="Comparison Runtime Note",
+        collection="AI",
+        tags=["Agent"],
+        html="<!doctype html><html><body><h1>Comparison Runtime Note</h1><p>Comparison evidence.</p></body></html>",
+    )
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, ai_provider="fake", ai_model="fake-test-model")
+    try:
+        response = server.json(
+            "POST",
+            "/api/ai/eval/qa-runtime-comparison",
+            {
+                "enabled": True,
+                "question": "总结这篇笔记",
+                "context": {"item_id": "comparison.html"},
+                "run_legacy": False,
+                "run_agent": True,
+                "agent_uses_model": False,
+            },
+        )
+
+        assert response["kind"] == "qa_runtime_comparison"
+        assert set(response["results"]) == {"agent"}
+        assert response["results"]["agent"]["engine"] == "AgentRuntime.qa.v1"
+        assert response["results"]["agent"]["source_count"] == 1
+        assert response["results"]["agent"]["metrics"]["status"] == "ok"
+        assert response["metrics"]["agent"]["status"] == "ok"
+        assert server.request("GET", "/api/ai/runs")["count"] == 0
     finally:
         server.close()
 

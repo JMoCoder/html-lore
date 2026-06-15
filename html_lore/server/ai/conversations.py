@@ -8,7 +8,7 @@ from typing import Any
 from html_lore.server.config import ServerSettings
 from html_lore.server.items import ItemService
 
-from .context import ContextResolver, context_key, utc_now
+from .context import ContextResolver, canonical_context_key, context_key, utc_now
 
 
 class ConversationError(ValueError):
@@ -23,18 +23,18 @@ class ConversationStore:
 
     def list(self, *, context_key: str = "", limit: int = 100) -> list[dict[str, Any]]:
         conversations = [normalize_conversation(item) for item in self._read().get("conversations", [])]
-        normalized_key = str(context_key or "").strip()
+        normalized_key = canonical_context_key(context_key)
         if normalized_key:
-            conversations = [item for item in conversations if item.get("context_key") == normalized_key]
+            conversations = [item for item in conversations if canonical_context_key(item.get("context_key")) == normalized_key]
         safe_limit = max(1, min(int(limit or 100), 500))
         return sorted(conversations, key=lambda item: str(item.get("updated_at") or ""), reverse=True)[:safe_limit]
 
     def latest_for_context(self, key: str) -> dict[str, Any] | None:
-        normalized_key = str(key or "").strip()
+        normalized_key = canonical_context_key(key)
         if not normalized_key:
             return None
         for conversation in self.list(context_key=normalized_key, limit=1):
-            if conversation.get("context_key") == normalized_key:
+            if canonical_context_key(conversation.get("context_key")) == normalized_key:
                 return conversation
         return None
 
@@ -102,7 +102,7 @@ class ConversationStore:
             conversation["message_count"] = len(stored_messages)
             conversation["updated_at"] = now
             self._write(data)
-            return conversation
+            return normalize_conversation(conversation)
         raise ConversationError("Conversation not found.")
 
     def _read(self) -> dict[str, Any]:
@@ -154,6 +154,12 @@ def normalize_conversation(conversation: dict[str, Any]) -> dict[str, Any]:
     snapshot = normalized.get("context_snapshot") if isinstance(normalized.get("context_snapshot"), dict) else {}
     if not normalized.get("context_key") and snapshot:
         normalized["context_key"] = context_key(snapshot)
+    else:
+        normalized["context_key"] = canonical_context_key(normalized.get("context_key"))
+    if snapshot:
+        snapshot = dict(snapshot)
+        snapshot["context_key"] = context_key(snapshot)
+        normalized["context_snapshot"] = snapshot
     if "messages" in normalized and isinstance(normalized["messages"], list):
         normalized["message_count"] = len(normalized["messages"])
     return normalized

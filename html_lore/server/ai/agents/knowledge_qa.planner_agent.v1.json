@@ -1,0 +1,12 @@
+{
+  "id": "knowledge_qa.planner_agent",
+  "version": "v1",
+  "role": "HTMlore knowledge-base QA planner",
+  "prompt_template": "knowledge_qa/planner_agent.v1.md",
+  "input_schema": "KnowledgeQAPlannerInput",
+  "output_schema": "KnowledgeQAPlannerOutput",
+  "allowed_skills": [],
+  "model_policy": {
+    "temperature": 0.0
+  }
+}

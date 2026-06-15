@@ -4,6 +4,24 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-06-15
+
+### Added
+
+- ナレッジベース Q&A ランタイムに段階的な契約を追加し、planner、
+  search planner、answer agent、verifier、reviewer、agent trace、
+  prompt trace metadata を分離しました。現在のノートワークフローを壊さずに、
+  将来の統一マルチエージェント AI アーキテクチャへ発展できるようにします。
+
+### Changed
+
+- `联网搜索` のような短い追問は、直近のユーザー質問だけを継承して検索するように改善し、
+  以前の assistant 回答を検索クエリへ混ぜないようにしました。
+- fake provider の Q&A 実行を新しい verifier/reviewer 契約に合わせ、開発環境と
+  CI でランタイム構造を検証しても、本番向け品質チェックに誤って弾かれないようにしました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `0.9.6` に更新しました。
+
 ## [0.9.5] - 2026-06-11
 
 ### Added

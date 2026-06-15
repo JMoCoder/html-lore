@@ -14,6 +14,7 @@ class VectorStoreUnavailable(RuntimeError):
 
 class LocalVectorStore:
     version = 1
+    min_similarity = 0.28
 
     def __init__(self, settings: ServerSettings) -> None:
         if settings.meta_dir is None:
@@ -37,6 +38,8 @@ class LocalVectorStore:
         ranked = sorted(scored, key=lambda pair: (-pair[0], str(pair[1].get("title") or ""), str(pair[1].get("chunk_id") or "")))
         evidence: list[dict[str, Any]] = []
         for score, row in ranked[: max(1, int(limit or 5))]:
+            if score < self.min_similarity:
+                continue
             evidence.append(
                 {
                     "item_id": str(row.get("item_id") or ""),

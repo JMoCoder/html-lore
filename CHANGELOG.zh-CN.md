@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-06-15
+
+### 新增
+
+- 知识库问答运行时新增分阶段契约，拆分为 planner、search planner、
+  answer agent、verifier、reviewer，以及 agent trace / prompt trace
+  元数据，为后续统一多智能体 AI 架构演进保留稳定接口，同时不打断当前笔记工作流。
+
+### 变更
+
+- 优化追问检索逻辑，像“联网搜索”这类短跟进问题现在只继承最近的用户问题，
+  不再把上一轮 AI 回答混入检索 query。
+- 让 fake provider 的问答结果与新版 verifier/reviewer 契约对齐，使开发环境和
+  CI 可以验证运行时结构，而不会被面向正式模型的质量门槛误判。
+- 包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为 `0.9.6`。
+
 ## [0.9.5] - 2026-06-11
 
 ### 新增

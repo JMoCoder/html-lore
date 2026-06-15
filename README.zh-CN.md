@@ -48,6 +48,7 @@ HTMlore 是一个自托管 HTML 知识库工作台，用于保存、浏览、阅
 - 全局 AI 侧栏，支持工作区、集合、标签、阅读页和用户手动选择笔记等上下文。
 - 服务端 AI 服务商配置，支持 OpenAI-compatible 接口。API key 只从后端环境变量读取，不允许通过浏览器设置接口提交或读取。
 - 知识库问答 beta：支持上下文检索、当前上下文摘要、基于近期对话的追问理解、Markdown 回复渲染、来源引用、会话持久化、按当前上下文恢复最近会话和会话历史。
+- 知识库问答运行时已拆分为 planner、search planner、answer、verifier、reviewer 等阶段，并暴露 agent/prompt trace，便于后续统一多智能体后端架构演进与排障。
 - AI 回复支持严格模式与内容拓展模式。严格模式只基于当前资料库上下文回答；内容拓展模式预留外部来源检索，启用时必须返回明确来源。
 - AI 运行记录、轻量异步生成历史、失败的对话生成任务重试，以及设置页中的全局 AI 会话管理。
 - 从 AI 对话生成 HTML 笔记的 beta 能力，采用 PM/UX/Coder/QA/Reviewer 分阶段图结构。
@@ -291,6 +292,7 @@ HTML_LORE_AI_EXTERNAL_SEARCH_AUTO_PARAMETERS=false
 ```
 
 HTMlore 默认不使用 Tavily 生成的 answer，而是把 Tavily 作为外部证据检索工具，再由知识库问答 workflow 统一组织最终回答。搜索默认从低成本 `basic` 模式开始；遇到强时效或金融问题时自动切换 topic / time range；可以从用户问题中识别国家提示；只有用户明确要求深度研究、多来源对比，或部署者显式配置时，才会升级到 `advanced`。
+像“联网搜索”这样的短追问，在进入搜索规划前会先继承最近一条用户问题，不再把上一轮 AI 回复正文拼进检索 query。
 
 vector / hybrid 检索会在当前用户的 metadata 目录下保存轻量本地索引，例如 `meta/ai/vector_index.json`；多用户部署时则位于对应的 `users/{data_id}/meta/ai/vector_index.json`。这样可以在同一个应用进程中复用能力，同时保持用户工作台的逻辑隔离。
 

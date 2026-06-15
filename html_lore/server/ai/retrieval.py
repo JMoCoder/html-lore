@@ -204,10 +204,11 @@ def retrieve_keyword_evidence(item_service: ItemService, context_snapshot: dict[
         text = evidence_text(item, html)
         blocks = extract_safe_blocks(html)
         chunks = chunk_blocks(blocks) or [text]
-        item_score = score_item_metadata(query, item)
+        aggressive_stopwords = scope not in {"reader", "manual"}
+        item_score = score_item_metadata(query, item, aggressive_stopwords=aggressive_stopwords)
         chunk_evidences: list[Evidence] = []
         if overview_scope:
-            score = score_text(query, text) + item_score
+            score = score_text(query, text, aggressive_stopwords=aggressive_stopwords) + item_score
             fallback_candidates.append(
                 Evidence(
                     item_id=item_id,
@@ -218,14 +219,14 @@ def retrieve_keyword_evidence(item_service: ItemService, context_snapshot: dict[
             )
             continue
         for chunk_index, chunk in enumerate(chunks):
-            score = score_text(query, chunk) + item_score
+            score = score_text(query, chunk, aggressive_stopwords=aggressive_stopwords) + item_score
             if score <= 0:
                 continue
             chunk_evidences.append(
                 Evidence(
                     item_id=item_id,
                     title=str(item.get("title") or item_id),
-                    snippet=snippet_for_query(chunk, query),
+                    snippet=snippet_for_query(chunk, query, aggressive_stopwords=aggressive_stopwords),
                     score=score,
                 ),
             )
@@ -469,8 +470,8 @@ def evidence_text(item: dict[str, Any], html: str) -> str:
     return normalize_space(" ".join(fields))[:MAX_EVIDENCE_CHARS]
 
 
-def score_item_metadata(query: str, item: dict[str, Any]) -> int:
-    tokens = query_tokens(normalize_space(query).lower())
+def score_item_metadata(query: str, item: dict[str, Any], *, aggressive_stopwords: bool = True) -> int:
+    tokens = query_tokens(normalize_space(query).lower(), aggressive_stopwords=aggressive_stopwords)
     if not tokens:
         return 0
     title = str(item.get("title") or "").lower()
@@ -495,7 +496,7 @@ def score_item_metadata(query: str, item: dict[str, Any]) -> int:
     return score
 
 
-def score_text(query: str, text: str) -> int:
+def score_text(query: str, text: str, *, aggressive_stopwords: bool = True) -> int:
     normalized_query = normalize_space(query).lower()
     normalized_text = text.lower()
     if not normalized_query:
@@ -503,16 +504,16 @@ def score_text(query: str, text: str) -> int:
     score = 0
     if normalized_query in normalized_text:
         score += 30
-    for token in query_tokens(normalized_query):
+    for token in query_tokens(normalized_query, aggressive_stopwords=aggressive_stopwords):
         if token in normalized_text:
             score += max(2, min(len(token), 20))
     return score
 
 
-def snippet_for_query(text: str, query: str) -> str:
+def snippet_for_query(text: str, query: str, *, aggressive_stopwords: bool = True) -> str:
     normalized = normalize_space(text)
     lowered = normalized.lower()
-    positions = [lowered.find(token) for token in query_tokens(query.lower()) if token and lowered.find(token) >= 0]
+    positions = [lowered.find(token) for token in query_tokens(query.lower(), aggressive_stopwords=aggressive_stopwords) if token and lowered.find(token) >= 0]
     start = max(min(positions) - 180, 0) if positions else 0
     snippet = normalized[start : start + MAX_CHUNK_CHARS]
     return snippet.strip()
@@ -536,11 +537,11 @@ def reader_summary_snippet(item: dict[str, Any], text: str) -> str:
     return safe_text[:MAX_CHUNK_CHARS]
 
 
-def query_tokens(query: str) -> list[str]:
+def query_tokens(query: str, *, aggressive_stopwords: bool = True) -> list[str]:
     ascii_tokens = re.findall(r"[a-z0-9][a-z0-9._-]{1,}", query.lower())
     cjk_tokens: list[str] = []
     for segment in re.findall(r"[\u4e00-\u9fff]{2,}", query):
-        stripped = strip_cjk_stopwords(segment)
+        stripped = strip_cjk_stopwords(segment, aggressive=aggressive_stopwords)
         if len(stripped) >= 2:
             cjk_tokens.append(stripped)
         cjk_tokens.extend(re.findall(r"(?=([\u4e00-\u9fff]{2}))", stripped))
@@ -593,9 +594,44 @@ def is_context_overview_question(query: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in overview_patterns)
 
 
-def strip_cjk_stopwords(value: str) -> str:
+def strip_cjk_stopwords(value: str, *, aggressive: bool = True) -> str:
     stripped = value
-    for word in ("这个", "这篇", "这份", "文章", "文档", "笔记", "文件", "什么", "一下", "一下子", "请问", "可以", "帮我", "关于", "的是", "了吗"):
+    base_words = (
+        "这个",
+        "这篇",
+        "这份",
+        "文章",
+        "文档",
+        "笔记",
+        "文件",
+        "什么",
+        "一下",
+        "一下子",
+        "请问",
+        "可以",
+        "帮我",
+        "关于",
+        "的是",
+        "了吗",
+    )
+    aggressive_words = (
+        "解释",
+        "说明",
+        "总结",
+        "概括",
+        "小白",
+        "入门",
+        "基础",
+        "基本",
+        "原理",
+        "概念",
+        "通俗",
+        "简单",
+        "容易懂",
+        "能懂",
+    )
+    words = (*base_words, *aggressive_words) if aggressive else base_words
+    for word in words:
         stripped = stripped.replace(word, "")
     return stripped
 

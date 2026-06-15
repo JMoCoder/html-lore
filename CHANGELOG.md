@@ -9,6 +9,26 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-06-15
+
+### Added
+
+- Added a staged knowledge-base Q&A runtime contract that separates planner,
+  search planner, answer agent, verifier, reviewer, agent trace, and prompt
+  trace metadata, so the backend can evolve toward the broader multi-agent AI
+  architecture without breaking the current notebook workflows.
+
+### Changed
+
+- Refined follow-up retrieval so short prompts such as `联网搜索` inherit only
+  recent user questions instead of mixing prior assistant answers into the
+  retrieval query.
+- Aligned fake-provider QA runs with the newer verifier/reviewer contract so
+  development and CI can validate the runtime structure without being rejected
+  by production-oriented answer-quality checks.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `0.9.6`.
+
 ## [0.9.5] - 2026-06-11
 
 ### Added

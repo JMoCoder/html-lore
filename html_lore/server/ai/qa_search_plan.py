@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from .search_planner import SearchPlan, plan_external_search
+
+
+@dataclass(frozen=True)
+class QASearchPlan:
+    should_search: bool
+    plan: SearchPlan | None
+    locality_hint: str
+    language_hint: str
+    reason: str
+
+    def public_report(self) -> dict[str, Any]:
+        payload = {
+            "should_search": self.should_search,
+            "locality_hint": self.locality_hint,
+            "language_hint": self.language_hint,
+            "reason": self.reason,
+        }
+        if self.plan is not None:
+            payload["search"] = self.plan.public_report()
+            payload["queries"] = list(self.plan.queries)
+        else:
+            payload["search"] = {}
+            payload["queries"] = []
+        return payload
+
+
+def build_qa_search_plan(question: str, *, planner: dict[str, Any] | None = None, context: dict[str, Any] | None = None) -> QASearchPlan:
+    planner = dict(planner or {})
+    context = dict(context or {})
+    text = str(question or "").strip()
+    lowered = text.lower()
+    language_hint = detect_language_hint(text, context)
+    locality_hint = detect_locality_hint(text, context, language_hint=language_hint)
+    should_search = bool(planner.get("should_search"))
+    reason = str(planner.get("reason") or "planner_default")
+
+    if not should_search:
+        return QASearchPlan(
+            should_search=False,
+            plan=None,
+            locality_hint=locality_hint,
+            language_hint=language_hint,
+            reason=reason,
+        )
+
+    query = text
+    if locality_hint == "china" and not has_country_hint(text):
+        query = f"{query} 中国"
+    if language_hint == "zh" and not has_language_anchor(query):
+        query = f"{query} 中文"
+    if any(marker in lowered for marker in ("政策", "法规", "新规", "监管", "政策变化", "policy", "regulation")):
+        query = f"{query} policy regulation"
+    if any(marker in lowered for marker in ("官方", "官网", "official")):
+        query = f"{query} official"
+
+    plan = plan_external_search(query)
+    return QASearchPlan(
+        should_search=True,
+        plan=plan,
+        locality_hint=locality_hint,
+        language_hint=language_hint,
+        reason=reason,
+    )
+
+
+def detect_language_hint(question: str, context: dict[str, Any], *, default: str = "en") -> str:
+    text = str(question or "")
+    if any("\u4e00" <= char <= "\u9fff" for char in text):
+        return "zh"
+    title = ""
+    items = context.get("items") if isinstance(context.get("items"), list) else []
+    if items:
+        title = str(items[0].get("title") or "")
+    if any("\u4e00" <= char <= "\u9fff" for char in title):
+        return "zh"
+    return default
+
+
+def detect_locality_hint(question: str, context: dict[str, Any], *, language_hint: str) -> str:
+    question_text = str(question or "").lower()
+    context_text = " ".join(str(item.get("title") or "") for item in (context.get("items") or []) if isinstance(item, dict)).lower()
+    text = f"{question_text} {context_text}"
+    if any(marker in text for marker in ("中国", "china", "国内", "发改", "电力现货", "工商业")):
+        return "china"
+    if any(marker in text for marker in ("日本", "japan", "日语", "japanese")):
+        return "japan"
+    if any(marker in text for marker in ("美国", "united states", "usa", "us ")) and language_hint != "zh":
+        return "us"
+    if language_hint == "zh" and any(marker in question_text for marker in ("政策", "法规", "中国", "国内", "工商业", "电力")):
+        return "china"
+    return "global"
+
+
+def has_country_hint(question: str) -> bool:
+    lowered = str(question or "").lower()
+    return any(marker in lowered for marker in ("中国", "china", "美国", "usa", "united states", "日本", "japan", "英国", "uk"))
+
+
+def has_language_anchor(question: str) -> bool:
+    lowered = str(question or "").lower()
+    return any(marker in lowered for marker in ("中文", "english", "英文", "japanese", "日文"))

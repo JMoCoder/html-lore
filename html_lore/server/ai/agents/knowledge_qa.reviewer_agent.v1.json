@@ -1,0 +1,12 @@
+{
+  "id": "knowledge_qa.reviewer_agent",
+  "version": "v1",
+  "role": "HTMlore knowledge-base QA reviewer",
+  "prompt_template": "knowledge_qa/reviewer_agent.v1.md",
+  "input_schema": "KnowledgeQAReviewerInput",
+  "output_schema": "KnowledgeQAReviewerOutput",
+  "allowed_skills": [],
+  "model_policy": {
+    "temperature": 0.0
+  }
+}

@@ -49,6 +49,7 @@ HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書�
 - ワークスペース、コレクション、タグ、リーダー、手動選択ノートを扱うグローバル AI サイドバー。
 - OpenAI-compatible エンドポイント向けのサーバー側 AI プロバイダー設定。API key はバックエンド環境変数からのみ読み取り、ブラウザー設定 API では送信も取得もできません。
 - ナレッジベース Q&A beta。コンテキスト検索、現在コンテキストの概要、直近会話に基づく追問理解、Markdown 回答表示、ソース表示、会話永続化、現在コンテキストの最新会話復元、コンテキスト別履歴を備えます。
+- ナレッジベース Q&A ランタイムは planner、search planner、answer、verifier、reviewer の段階に分割され、agent/prompt trace も公開されます。今後の統一マルチエージェント backend への拡張とデバッグのためです。
 - AI 回答の strict / content expansion モード。strict は選択中のノートブックコンテキストだけで回答し、expansion は外部検索アダプター設定時に明示的な外部ソースを扱います。
 - AI 実行履歴、軽量非同期の生成履歴、失敗した会話生成ジョブの再試行、Settings 内のグローバル会話管理。
 - AI 会話から HTML ノートを生成する beta 機能。PM/UX/Coder/QA/Reviewer の段階的グラフを使います。
@@ -292,6 +293,7 @@ HTML_LORE_AI_EXTERNAL_SEARCH_AUTO_PARAMETERS=false
 ```
 
 HTMlore は既定では Tavily の生成 answer を使いません。Tavily は外部証拠検索として扱い、最終回答はナレッジ Q&A workflow が組み立てます。検索は低コストの `basic` から開始し、時事性の高い質問や金融質問では topic / time range を切り替えます。ユーザーの質問から country ヒントを推定でき、ユーザーが深い調査や複数ソース比較を明示した場合、または運用者が明示設定した場合のみ `advanced` に昇格します。
+`联网搜索` のような短い追問は、検索計画の前に直近のユーザー質問を継承し、以前の assistant 回答本文をそのまま検索クエリへ混ぜないようにしています。
 
 vector / hybrid 検索は、現在のユーザー metadata ディレクトリに軽量ローカル index を保存します。例: `meta/ai/vector_index.json`。マルチユーザーデプロイでは、対応する `users/{data_id}/meta/ai/vector_index.json` に保存されます。これにより、同じアプリケーションプロセスを共有しつつ、各ユーザーのワークスペースを論理的に分離できます。
 

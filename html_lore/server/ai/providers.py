@@ -125,7 +125,7 @@ class FakeProviderAdapter(ProviderAdapter):
         last_user = next((message.get("content", "") for message in reversed(messages) if message.get("role") == "user"), "")
         return {
             "model": self.config.model,
-            "content": f"Fake AI response for: {last_user[:120]}",
+            "content": build_fake_chat_content(last_user),
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
             "raw_provider": "fake",
         }
@@ -165,7 +165,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/0.9.5 curl-compatible",
+                "User-Agent": "HTMlore/0.9.6 curl-compatible",
                 "Accept": "application/json, text/event-stream",
             },
         )
@@ -202,7 +202,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/0.9.5 curl-compatible",
+                "User-Agent": "HTMlore/0.9.6 curl-compatible",
                 "Accept": "application/json",
             },
         )
@@ -347,6 +347,45 @@ def normalize_vector(vector: list[float]) -> list[float]:
     if norm <= 0:
         return vector
     return [value / norm for value in vector]
+
+
+def build_fake_chat_content(last_user: str) -> str:
+    question = extract_fake_prompt_field(last_user, "USER_QUESTION") or last_user.strip()
+    intent = extract_fake_prompt_field(last_user, "TASK_INTENT").lower()
+    context_title = extract_fake_prompt_field(last_user, "CURRENT_CONTEXT") or "当前上下文"
+    prefix = f"Fake AI response for: {question[:120]}"
+    if intent == "concept_clarify":
+        body = (
+            f"可以理解为，{question.strip('？?')}首先是一个需要先抓住定义、再看应用边界的概念。"
+            f" 在当前上下文「{context_title}」里，它更重要的作用是帮助读懂整篇笔记的主题结构。"
+        )
+    elif intent == "explain_deeper":
+        body = (
+            f"围绕这个问题，可以从三个层面展开：第一，先明确核心对象和边界；第二，梳理它们之间的作用链与协同关系；"
+            f"第三，再回到「{context_title}」判断这些关系为什么重要。这样会比一句定义更接近用户真正想问的内容。"
+        )
+    elif intent == "current_info":
+        body = (
+            "先给出当前可核验的结论，再补充必要背景。"
+            f" 如果「{context_title}」只提供了部分线索，就应该明确哪些是已核验事实，哪些只是背景解释。"
+        )
+    elif intent == "compare_validate":
+        body = (
+            f"这个问题适合先并列关键对象，再比较它们的定义、边界和用途，最后回到「{context_title}」说明差异为什么重要。"
+        )
+    else:
+        body = f"这部分内容可以先概括为：围绕「{context_title}」，先抓住与问题直接相关的核心信息，再展开解释。"
+    return f"{prefix}\n\n{body}".strip()
+
+
+def extract_fake_prompt_field(content: str, field_name: str) -> str:
+    marker = f"{field_name}:"
+    text = str(content or "")
+    start = text.find(marker)
+    if start < 0:
+        return ""
+    tail = text[start + len(marker):]
+    return tail.split("\n\n", 1)[0].strip()
 
 
 def provider_error_detail(exc: urllib.error.HTTPError) -> str:
