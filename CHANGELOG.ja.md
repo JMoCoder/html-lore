@@ -4,6 +4,22 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [0.9.8] - 2026-06-16
+
+### Removed
+
+- 旧プロジェクト名向けの rename migration guide と、現在のドキュメントからの
+  旧名称移行リンクを削除しました。
+- 旧 localStorage prefix からのブラウザ設定移行処理と、旧 backup payload
+  type の import 対応を削除しました。
+
+### Changed
+
+- 環境変数テストは現在の `HTML_LORE_*` prefix と、汎用的な未知 prefix
+  拒否の検証に絞り、旧名称互換を保守対象から外しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `0.9.8` に更新しました。
+
 ## [0.9.7] - 2026-06-15
 
 ### Added

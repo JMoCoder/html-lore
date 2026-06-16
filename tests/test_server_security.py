@@ -100,11 +100,11 @@ def test_html_lore_env_names_configure_server(monkeypatch, tmp_path: Path) -> No
     assert settings.session_secret == "secret"
 
 
-def test_legacy_env_names_are_ignored_after_rename_cleanup(monkeypatch, tmp_path: Path) -> None:
-    content = tmp_path / "legacy-content"
-    monkeypatch.setenv("HTML_VAULT_CONTENT", str(content))
-    monkeypatch.setenv("HTML_VAULT_TITLE", "Legacy Title")
-    monkeypatch.setenv("HTML_VAULT_SESSION_SECRET", "legacy-secret")
+def test_unknown_env_prefixes_do_not_configure_server(monkeypatch, tmp_path: Path) -> None:
+    content = tmp_path / "unknown-content"
+    monkeypatch.setenv("HTML_OTHER_CONTENT", str(content))
+    monkeypatch.setenv("HTML_OTHER_TITLE", "Unknown Title")
+    monkeypatch.setenv("HTML_OTHER_SESSION_SECRET", "unknown-secret")
 
     settings = load_settings()
 

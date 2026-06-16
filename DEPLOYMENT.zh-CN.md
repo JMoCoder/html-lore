@@ -12,15 +12,6 @@
 - 自托管 Docker 主机：可以是本地电脑、NAS、局域网服务器或 VPS，用于运行长期笔记本服务。本地电脑部署不要求 24 小时在线，除非你需要持续远程访问。
 - `data/`：私有笔记本数据，不提交到 Git。
 
-## 更名兼容
-
-HTMlore 原名 HTML Vault。当前版本仅使用新的 `HTML_LORE_*` 环境变量和
-`html-lore` CLI。部署当前代码前，请先迁移旧的 `HTML_VAULT_*` 变量和
-`html-vault` 命令。公网 Caddy 示例已使用新的 `HTML_LORE_*` 变量名，刷新
-`.env` 时应同步更新。
-
-逐步升级说明见 [MIGRATION.md](MIGRATION.md)。
-
 ## 最低生产安全要求
 
 不要在没有认证边界的情况下，把后端 API 直接暴露到公网。

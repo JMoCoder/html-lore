@@ -9,6 +9,22 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [0.9.8] - 2026-06-16
+
+### Removed
+
+- Removed the former rename migration guide and active documentation links to
+  the old project name.
+- Removed browser preference migration from the old localStorage prefix and
+  dropped imports of the old backup payload type.
+
+### Changed
+
+- Kept environment configuration tests focused on the current `HTML_LORE_*`
+  prefix and generic unknown-prefix rejection instead of old-name compatibility.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `0.9.8`.
+
 ## [0.9.7] - 2026-06-15
 
 ### Added

@@ -141,7 +141,7 @@ class TavilyExternalSearchAdapter:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/0.9.7 tavily-search",
+                "User-Agent": "HTMlore/0.9.8 tavily-search",
                 "Accept": "application/json",
             },
         )

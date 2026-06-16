@@ -17,16 +17,6 @@ hardening.
   online 24/7 unless you want continuous remote access.
 - `data/`: private notebook data, not committed to Git.
 
-## Rename Compatibility
-
-HTMlore was formerly named HTML Vault. Current releases use the new
-`HTML_LORE_*` environment variables and the `html-lore` CLI only. Rename old
-`HTML_VAULT_*` variables and old `html-vault` commands before deploying the
-current code. Public Caddy examples use the new `HTML_LORE_*` names and should
-be updated when you refresh `.env`.
-
-For step-by-step upgrade details, see [MIGRATION.md](MIGRATION.md).
-
 ## Minimal Production Security
 
 Do not expose the backend API directly to the public internet without an

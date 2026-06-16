@@ -1302,7 +1302,6 @@ const libraryFilterDefinitions = [
 ];
 
 const STORAGE_PREFIX = "html-lore-";
-const LEGACY_STORAGE_PREFIX = "html-vault-";
 
 function getRuntimeConfig(name) {
   return window[`HTML_LORE_${name}`];
@@ -1316,17 +1315,8 @@ function storageKey(name) {
   return `${STORAGE_PREFIX}${name}`;
 }
 
-function legacyStorageKey(name) {
-  return `${LEGACY_STORAGE_PREFIX}${name}`;
-}
-
 function getStored(name) {
-  const key = storageKey(name);
-  const current = localStorage.getItem(key);
-  if (current !== null) return current;
-  const legacy = localStorage.getItem(legacyStorageKey(name));
-  if (legacy !== null) localStorage.setItem(key, legacy);
-  return legacy;
+  return localStorage.getItem(storageKey(name));
 }
 
 function setStored(name, value) {
@@ -1369,7 +1359,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "0.9.7",
+  currentVersion: "0.9.8",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -6090,7 +6080,7 @@ function restoreBackupFile(file) {
   reader.addEventListener("load", () => {
     try {
       const backup = JSON.parse(String(reader.result || "{}"));
-      const validTypes = new Set(["html-lore-backup", "html-vault-backup"]);
+      const validTypes = new Set(["html-lore-backup"]);
       if (!validTypes.has(backup.type) || !backup.preferences) {
         throw new Error("Invalid backup file");
       }
@@ -6387,7 +6377,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=0.9.7-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=0.9.8-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

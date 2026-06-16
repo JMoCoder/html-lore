@@ -1,4 +1,4 @@
-const CACHE_NAME = "html-lore-v0.9.7";
+const CACHE_NAME = "html-lore-v0.9.8";
 const APP_SHELL = [
   "./",
   "index.html",

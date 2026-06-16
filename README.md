@@ -2,13 +2,7 @@
 
 Languages: [English](README.md) | [中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-Deployment: [Self-hosted Docker and security baseline](DEPLOYMENT.md) |
-[Migration guide](MIGRATION.md)
-
-Formerly named HTML Vault. Current releases use `HTMlore`, `html-lore`,
-`html_lore`, and `HTML_LORE_*`. If you are upgrading from the former name,
-rename old CLI commands, environment variables, and Python imports before
-deploying the current code.
+Deployment: [Self-hosted Docker and security baseline](DEPLOYMENT.md)
 
 HTMlore is a self-hosted knowledge workspace for saving, browsing, reading,
 and eventually discussing HTML-based knowledge files with AI. It is designed

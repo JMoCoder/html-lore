@@ -2,13 +2,7 @@
 
 Languages: [English](README.md) | [中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-Deployment: [Self-hosted Docker and security baseline](DEPLOYMENT.md) |
-[Migration guide](MIGRATION.md)
-
-旧名称は HTML Vault です。現在のリリースでは `HTMlore`、`html-lore`、
-`html_lore`、`HTML_LORE_*` を使用します。旧名称からアップグレードする場合は、
-現在のコードをデプロイする前に旧 CLI コマンド、環境変数、Python import を
-移行してください。
+Deployment: [Self-hosted Docker and security baseline](DEPLOYMENT.md)
 
 HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書し、将来的には AI と対話するためのセルフホスト型ナレッジワークスペースです。内容をデータベース中心のノートアプリに閉じ込めず、移植可能なファイルとして保持したいユーザー向けに設計されています。
 
