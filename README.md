@@ -70,8 +70,8 @@ Implemented today:
   browser settings endpoint.
 - Knowledge-base Q&A beta with context-aware retrieval, current-context
   summaries, recent-conversation grounding for follow-up questions,
-  Markdown-rendered answers, source pills, conversation persistence,
-  latest-conversation restore, and per-context history.
+  Markdown-rendered answers, clickable external source pills, conversation
+  persistence, latest-conversation restore, and per-context history.
 - The Q&A runtime now exposes staged planner, search-planner, answer,
   verifier, and reviewer contracts together with agent/prompt traces for
   backend evolution and debugging.
@@ -224,7 +224,8 @@ Open `http://localhost:8080`.
 
 Static mode is useful for read-only publishing, GitHub Pages-like hosting, or
 checking the generated app. Real upload and metadata persistence require the
-backend API or the default Docker deployment.
+backend API or the default Docker deployment. The hosted demo follows the live
+workspace styling but keeps backend and AI actions disabled as a static preview.
 
 ## Data Model
 

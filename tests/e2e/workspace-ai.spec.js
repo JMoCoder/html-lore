@@ -616,7 +616,7 @@ test("workspace AI content expansion controls conversation source mode", async (
   await page.goto("/workspace/", { waitUntil: "domcontentloaded" });
   await page.locator("#ai-panel-open").click();
   await expect(page.locator("#ai-deep-research")).toBeDisabled();
-  await expect(page.locator(".ai-source-toggle-disabled")).toContainText("Deep research");
+  await expect(page.locator(".ai-source-toggle-disabled")).toContainText("Research");
   await page.locator("#ai-content-expansion").check();
   await page.locator("#ai-chat-input").fill("Expand this note.");
   await page.locator("#ai-chat-form button[type='submit']").click();
@@ -627,6 +627,7 @@ test("workspace AI content expansion controls conversation source mode", async (
   await expect(page.locator(".ai-message-sources")).toContainText("Local");
   await expect(page.locator(".ai-message-sources")).toContainText("External");
   await expect(page.locator(".ai-message-sources")).toContainText("example.test");
+  await expect(page.locator(".ai-message-sources a.external")).toHaveAttribute("href", "https://example.test/search?q=mcp");
 
   await page.locator("#ai-content-expansion").uncheck();
   await page.locator("#ai-chat-input").fill("Answer only from local notes.");

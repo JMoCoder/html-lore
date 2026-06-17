@@ -87,6 +87,11 @@ test("sidebar footer stays inside a narrow resized sidebar", async ({ page }) =>
 
 test("AI panel sends with Enter and keeps Shift Enter for new lines", async ({ page }) => {
   await page.locator("#ai-panel-open").click();
+  await expect(page.locator("#ai-content-expansion")).toBeDisabled();
+  await expect(page.locator("#ai-deep-research")).toBeDisabled();
+  await expect(page.locator("#ai-generate-note")).toBeDisabled();
+  await expect(page.locator(".ai-source-options")).toContainText("Expand");
+  await expect(page.locator(".ai-source-options")).toContainText("Research");
   await page.locator("#ai-more-toggle").click();
   await expect(page.locator("#ai-more-menu")).toBeVisible();
   const menuMetrics = await page.locator("#ai-more-menu .ai-more-menu-item").evaluateAll((items) => items.map((item) => {

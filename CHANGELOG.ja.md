@@ -4,6 +4,23 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [0.9.10] - 2026-06-17
+
+### Changed
+
+- AI sidebar の source control label を短い `Expand` / `Research`
+  表記に変更しました。
+- 静的 demo の AI 挙動を簡素化し、live workspace と同じ見た目を保ちながら、
+  backend / AI 操作は preview-only の disabled control として扱うようにしました。
+- クリック可能な外部 Q&A source と静的 demo の境界について README を更新しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `0.9.10` に更新しました。
+
+### Fixed
+
+- 検索結果に URL が含まれる場合、Q&A の外部 source pill から source URL
+  を直接開けるようにしました。
+
 ## [0.9.9] - 2026-06-17
 
 ### Added

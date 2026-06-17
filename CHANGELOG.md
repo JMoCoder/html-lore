@@ -9,6 +9,24 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [0.9.10] - 2026-06-17
+
+### Changed
+
+- Renamed the AI sidebar source controls to shorter `Expand` and `Research`
+  labels.
+- Simplified static demo AI behavior so it mirrors the live workspace styling
+  while keeping backend and AI actions disabled as preview-only controls.
+- Updated README notes for clickable external Q&A sources and static demo
+  boundaries.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `0.9.10`.
+
+### Fixed
+
+- External Q&A source pills now open their source URL when a search result
+  includes a link.
+
 ## [0.9.9] - 2026-06-17
 
 ### Added

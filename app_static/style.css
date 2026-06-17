@@ -1401,7 +1401,8 @@ textarea {
   white-space: nowrap;
 }
 
-.ai-message-sources em {
+.ai-message-sources em,
+.ai-message-sources a {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1416,19 +1417,28 @@ textarea {
   font-style: normal;
   color: var(--text);
   background: var(--panel);
+  text-decoration: none;
 }
 
-.ai-message-sources em span {
+.ai-message-sources a:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.ai-message-sources em span,
+.ai-message-sources a span {
   color: var(--accent);
   font-weight: 650;
   white-space: nowrap;
 }
 
-.ai-message-sources em.external span {
+.ai-message-sources em.external span,
+.ai-message-sources a.external span {
   color: #0369a1;
 }
 
-.ai-message-sources em b {
+.ai-message-sources em b,
+.ai-message-sources a b {
   min-width: 0;
   overflow: hidden;
   display: block;

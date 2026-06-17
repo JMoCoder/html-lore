@@ -51,9 +51,10 @@ const i18n = {
     aiUserPlaceholder: "User question",
     aiAssistantPlaceholder: "AI response placeholder. No request was sent.",
     aiReplying: "Replying...",
-    aiContentExpansion: "Expand with external sources",
-    aiDeepResearch: "Deep research",
-    aiDeepResearchSoon: "Deep research is planned for the AI generation workflow.",
+    aiContentExpansion: "Expand",
+    aiDeepResearch: "Research",
+    aiDeepResearchSoon: "Research is planned for the AI generation workflow.",
+    staticDemoUnavailable: "Demo mode only previews the interface. This action is unavailable.",
     aiPanelComingSoon: "Conversation and note generation are in development.",
     aiMoreActions: "More AI actions",
     aiNewConversation: "New conversation",
@@ -481,9 +482,10 @@ const i18n = {
     aiUserPlaceholder: "用户问题",
     aiAssistantPlaceholder: "AI 回复占位。当前未发送任何请求。",
     aiReplying: "回复中...",
-    aiContentExpansion: "内容拓展",
-    aiDeepResearch: "深度研究",
-    aiDeepResearchSoon: "深度研究将随 AI 生成工作流后续开放。",
+    aiContentExpansion: "拓展",
+    aiDeepResearch: "研究",
+    aiDeepResearchSoon: "研究功能将随 AI 生成工作流后续开放。",
+    staticDemoUnavailable: "Demo 模式仅用于界面预览，当前操作不可用。",
     aiPanelComingSoon: "对话与生成 HTML 笔记功能开发中。",
     aiMoreActions: "更多 AI 功能",
     aiNewConversation: "新建对话",
@@ -911,9 +913,10 @@ const i18n = {
     aiUserPlaceholder: "ユーザーの質問",
     aiAssistantPlaceholder: "AI 応答のプレースホルダーです。リクエストは送信されていません。",
     aiReplying: "返信中...",
-    aiContentExpansion: "外部情報で拡張",
-    aiDeepResearch: "深い調査",
-    aiDeepResearchSoon: "深い調査は AI 生成ワークフローで後日提供予定です。",
+    aiContentExpansion: "拡張",
+    aiDeepResearch: "調査",
+    aiDeepResearchSoon: "調査機能は AI 生成ワークフローで後日提供予定です。",
+    staticDemoUnavailable: "Demo mode はインターフェースのプレビュー専用です。この操作は利用できません。",
     aiPanelComingSoon: "会話と HTML ノート生成は開発中です。",
     aiMoreActions: "その他の AI 操作",
     aiNewConversation: "新規会話",
@@ -1359,7 +1362,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "0.9.9",
+  currentVersion: "0.9.10",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1661,6 +1664,7 @@ async function boot() {
     state.manifest = await loadManifest();
     state.items = Array.isArray(state.manifest.items) ? state.manifest.items : [];
     renderApp();
+    applyStaticDemoMode();
     refreshAiStatus();
     checkVersionStatus();
     openFromHash();
@@ -2636,6 +2640,12 @@ function updateAgentStatus() {
 }
 
 async function refreshAiStatus() {
+  if (hasRuntimeConfig("STATIC_DEMO")) {
+    state.aiStatus = null;
+    renderAiConfig();
+    updateAgentStatus();
+    return;
+  }
   try {
     const response = await apiFetch("/api/ai/status", { cache: "no-store" });
     if (!response.ok) throw new Error(`Agent returned ${response.status}`);
@@ -4444,7 +4454,11 @@ function renderAiSourcePill(source) {
   const external = source?.kind === "external";
   const label = t(external ? "aiSourceExternal" : "aiSourceLocal");
   const title = sourceDisplayTitle(source);
-  return `<em class="${external ? "external" : "local"}" title="${escapeHtml(title)}"><span>${escapeHtml(label)}</span><b>${escapeHtml(title)}</b></em>`;
+  const content = `<span>${escapeHtml(label)}</span><b>${escapeHtml(title)}</b>`;
+  if (external && source?.url) {
+    return `<a class="external" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(title)}">${content}</a>`;
+  }
+  return `<em class="${external ? "external" : "local"}" title="${escapeHtml(title)}">${content}</em>`;
 }
 
 function sourceDisplayTitle(source) {
@@ -4800,7 +4814,33 @@ function startNewAiConversation() {
 }
 
 function setAiContentExpansion(enabled) {
+  if (hasRuntimeConfig("STATIC_DEMO")) {
+    state.aiContentExpansion = false;
+    if (elements.aiContentExpansion) elements.aiContentExpansion.checked = false;
+    return;
+  }
   state.aiContentExpansion = Boolean(enabled);
+}
+
+function applyStaticDemoMode() {
+  if (!hasRuntimeConfig("STATIC_DEMO")) return;
+  const disabledTitle = t("staticDemoUnavailable");
+  state.aiContentExpansion = false;
+  if (elements.aiContentExpansion) {
+    elements.aiContentExpansion.checked = false;
+    elements.aiContentExpansion.disabled = true;
+    elements.aiContentExpansion.closest(".ai-source-toggle")?.classList.add("ai-source-toggle-disabled");
+    elements.aiContentExpansion.closest(".ai-source-toggle")?.setAttribute("title", disabledTitle);
+  }
+  const deepResearch = document.querySelector("#ai-deep-research");
+  if (deepResearch) {
+    deepResearch.disabled = true;
+    deepResearch.closest(".ai-source-toggle")?.classList.add("ai-source-toggle-disabled");
+  }
+  if (elements.aiGenerateNote) {
+    elements.aiGenerateNote.disabled = true;
+    elements.aiGenerateNote.title = disabledTitle;
+  }
 }
 
 function openGenerateNoteDialog() {
@@ -6377,7 +6417,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=0.9.9-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=0.9.10-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
