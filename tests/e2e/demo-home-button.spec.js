@@ -116,7 +116,7 @@ test("AI panel sends with Enter and keeps Shift Enter for new lines", async ({ p
 
   await page.keyboard.press("Enter");
   await expect(page.locator(".ai-message.user")).toContainText("First line");
-  await expect(page.locator(".ai-message.pending")).toContainText("Replying...");
+  await expect(page.locator(".ai-message.pending")).toContainText("Replying");
   await expect(page.locator("#ai-chat-input")).toHaveValue("");
   await expect(page.locator(".ai-message.pending")).toHaveCount(0);
   await expect(page.locator(".ai-message.assistant").last()).toContainText("AI response placeholder");

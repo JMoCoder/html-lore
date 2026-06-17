@@ -141,6 +141,9 @@ def classify_search_intent(query: str) -> str:
     official = any(marker in lowered for marker in ("official", "官网", "官方", "公式"))
     versionish = any(marker in lowered for marker in ("version", "release", "changelog", "发布", "版本", "リリース", "バージョン"))
     docish = any(marker in lowered for marker in ("spec", "specification", "docs", "documentation", "规范", "文档", "ドキュメント"))
+    policyish = any(marker in lowered for marker in ("policy", "regulation", "政策", "法规", "监管", "发改", "能源局", "电力市场"))
+    if is_case_search_question(query):
+        return "case_search"
     entity_attribute = classify_entity_question_attribute(query)
     if entity_attribute == "ownership":
         return "entity_ownership"
@@ -156,6 +159,8 @@ def classify_search_intent(query: str) -> str:
         return "official_docs"
     if versionish:
         return "version_lookup"
+    if policyish:
+        return "policy_lookup"
     if any(marker in lowered for marker in ("deep research", "深入研究", "深度研究", "多来源", "compare sources")):
         return "research"
     return "general"
@@ -163,6 +168,8 @@ def classify_search_intent(query: str) -> str:
 
 def required_entity_terms(query: str) -> list[str]:
     lowered = str(query or "").lower()
+    if is_case_search_question(query):
+        return []
     extracted = extract_entity_terms(query)
     if extracted:
         return extracted
@@ -185,6 +192,16 @@ def planned_queries(query: str, intent: str, preferred_domains: list[str], *, ma
     candidates = [base]
     required_terms = required_entity_terms(base)
     primary_entity = required_terms[0] if required_terms else ""
+    if intent == "case_search":
+        case_terms = extract_case_search_terms(base)
+        if case_terms:
+            joined = " ".join(case_terms)
+            candidates = [
+                f"{joined} 案例",
+                f"{joined} case study",
+                f"{joined} 投资案例 交易结构",
+                base,
+            ]
     if intent == "entity_background" and primary_entity:
         if any("\u4e00" <= char <= "\u9fff" for char in primary_entity):
             candidates = [
@@ -245,6 +262,22 @@ def planned_queries(query: str, intent: str, preferred_domains: list[str], *, ma
                 f"{primary_entity} legal representative registered address",
                 base,
             ]
+    if intent == "policy_lookup":
+        policy_terms = extract_policy_search_terms(base)
+        joined = " ".join(policy_terms) if policy_terms else base
+        if any("\u4e00" <= char <= "\u9fff" for char in joined):
+            candidates = [
+                f"{joined} 政策 监管 最新",
+                f"{joined} 国家能源局 发改委 政策",
+                f"{joined} site:gov.cn",
+                base,
+            ]
+        else:
+            candidates = [
+                f"{joined} policy regulation latest",
+                f"{joined} official government policy",
+                base,
+            ]
     if preferred_domains and intent in {"official_version", "official_docs", "version_lookup"}:
         candidates = [
             "Model Context Protocol specification latest version release date site:modelcontextprotocol.io",
@@ -281,6 +314,8 @@ def verify_planned_sources(sources: list[dict[str, Any]], plan: SearchPlan) -> t
 
 
 def source_matches_plan(source: dict[str, Any], plan: SearchPlan) -> bool:
+    if plan.intent in {"case_search", "research", "general"} and not plan.authoritative_required:
+        return True
     if not plan.required_terms and not plan.authoritative_required:
         return True
     text = " ".join(
@@ -431,13 +466,90 @@ def classify_entity_question_attribute(query: Any) -> str | None:
 
 
 def search_evidence_terms(intent: str) -> list[str]:
+    if intent == "case_search":
+        return []
     if intent == "entity_ownership":
         return ["股东", "持股", "股权", "实控", "ownership", "shareholder", "equity"]
     if intent == "entity_team":
         return ["团队", "高管", "创始人", "董事", "ceo", "founder", "management", "leadership", "executive"]
     if intent == "entity_registry":
         return ["工商", "注册", "登记", "备案", "统一社会信用代码", "registry", "registration", "incorporation", "legal representative"]
+    if intent == "policy_lookup":
+        return ["政策", "监管", "法规", "通知", "意见", "发改委", "能源局", "policy", "regulation"]
     return []
+
+
+def is_case_search_question(query: Any) -> bool:
+    lowered = str(query or "").lower()
+    return any(marker in lowered for marker in ("案例", "例子", "样本", "类似", "更多利用", "case", "cases", "case study", "examples", "similar"))
+
+
+def extract_case_search_terms(query: Any) -> list[str]:
+    text = " ".join(str(query or "").split())
+    if not text:
+        return []
+    terms: list[str] = []
+    candidates = (
+        "两层结构",
+        "基金/SPV",
+        "基金",
+        "SPV",
+        "项目公司",
+        "优先劣后",
+        "优先/劣后",
+        "优先级",
+        "劣后级",
+        "股权分层",
+        "风险分层",
+        "交易结构",
+        "project company",
+        "preferred equity",
+        "subordinated equity",
+        "waterfall",
+    )
+    lowered = text.lower()
+    for candidate in candidates:
+        if candidate.lower() in lowered and candidate not in terms:
+            terms.append(candidate)
+    if not terms:
+        for token in re.findall(r"[\u4e00-\u9fffA-Za-z0-9+/.-]{2,30}", text):
+            if token in {"联网搜索", "更多利用", "这种结构", "这个结构", "案例", "中文", "中国"}:
+                continue
+            terms.append(token)
+            if len(terms) >= 6:
+                break
+    return terms[:8]
+
+
+def extract_policy_search_terms(query: Any) -> list[str]:
+    text = " ".join(str(query or "").split())
+    if not text:
+        return []
+    terms: list[str] = []
+    candidates = (
+        "虚拟电厂",
+        "电力市场",
+        "电力现货",
+        "需求响应",
+        "分布式资源",
+        "储能",
+        "virtual power plant",
+        "electricity market",
+        "demand response",
+        "distributed energy resource",
+    )
+    lowered = text.lower()
+    for candidate in candidates:
+        if candidate.lower() in lowered and candidate not in terms:
+            terms.append(candidate)
+    if not terms:
+        for token in re.findall(r"[\u4e00-\u9fffA-Za-z0-9+/.-]{2,30}", text):
+            if token in {"最近", "国内", "政策", "变化", "哪些", "中国", "中文", "policy", "regulation", "latest"}:
+                continue
+            terms.append(token)
+            if len(terms) >= 5:
+                break
+    return terms[:6]
 
 
 def extract_entity_terms(query: Any) -> list[str]:

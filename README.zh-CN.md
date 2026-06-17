@@ -273,6 +273,10 @@ HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 
 - `HTML_LORE_AI_API_KEY` 只供服务端调用 chat 和 embedding，不要写入前端配置文件。
 - `HTML_LORE_AI_EMBEDDING_MODEL` 用于启用 vector / hybrid 检索；embedding 模型或索引不可用时，HTMlore 会回退到关键词检索。
+- `HTML_LORE_AI_QA_ENGINE=auto` 是默认问答引擎模式：优先使用 LangGraph
+  工作流；如果 LangGraph 不可用，则回退到 `agent_runtime`。开发排查时可用
+  `HTML_LORE_AI_QA_ENGINE=langgraph` 强制启用 LangGraph；需要稳定回退时可用
+  `HTML_LORE_AI_QA_ENGINE=agent_runtime`。
 - 启用 Tavily 外部搜索时使用独立的服务端 key。
 - smoke-test 命令会产生真实 provider 调用，只有确认当前环境模型和 key 都正确后再运行。
 

@@ -21,6 +21,9 @@ class ResearchWorkflow:
         self.external_search = external_search
 
     def run(self, query: str) -> ResearchResult:
+        return self.run_plan(plan_research_query(query))
+
+    def run_plan(self, plan: SearchPlan) -> ResearchResult:
         status: dict[str, Any] = {"provider": self.external_search.name, "available": self.external_search.available}
         trace: list[dict[str, Any]] = []
         if not self.external_search.available:
@@ -28,7 +31,6 @@ class ResearchWorkflow:
             trace.append({"node": "ExternalSearchAvailabilityNode", "status": "unavailable"})
             return ResearchResult(sources=[], status=status, trace=trace)
 
-        plan = plan_research_query(query)
         status.update(plan.public_report())
         trace.append({"node": "ResearchQueryPlannerNode", "status": "completed", "query_count": len(plan.queries), "intent": plan.intent})
         if not plan.queries:

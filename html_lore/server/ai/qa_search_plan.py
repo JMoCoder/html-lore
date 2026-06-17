@@ -69,6 +69,25 @@ def build_qa_search_plan(question: str, *, planner: dict[str, Any] | None = None
     )
 
 
+def search_plan_from_public_report(report: dict[str, Any]) -> SearchPlan | None:
+    if not isinstance(report, dict):
+        return None
+    search = report.get("search") if isinstance(report.get("search"), dict) else {}
+    queries = [str(query).strip() for query in report.get("queries") or [] if str(query).strip()]
+    if not search or not queries:
+        return None
+    return SearchPlan(
+        original_query=queries[0],
+        intent=str(search.get("search_intent") or "general"),
+        queries=queries,
+        required_terms=[str(term) for term in search.get("required_terms") or [] if str(term).strip()],
+        preferred_domains=[str(domain) for domain in search.get("preferred_domains") or [] if str(domain).strip()],
+        authoritative_required=bool(search.get("authoritative_required")),
+        query_expansions=[str(term) for term in search.get("query_expansions") or [] if str(term).strip()],
+        evidence_terms=[str(term) for term in search.get("evidence_terms") or [] if str(term).strip()],
+    )
+
+
 def detect_language_hint(question: str, context: dict[str, Any], *, default: str = "en") -> str:
     text = str(question or "")
     if any("\u4e00" <= char <= "\u9fff" for char in text):

@@ -8,6 +8,7 @@ from typing import Sequence
 
 from .builder import build_site
 from .server.ai.eval import KnowledgeQAEvalSpec, load_eval_questions, run_knowledge_qa_eval
+from .server.ai.runtime import AgentRuntimeError
 from .server.ai.providers import AIProviderConfigStore
 from .server.ai.runtime_eval import QARuntimeEvalSpec, load_runtime_eval_cases, run_qa_runtime_eval
 from .server.ai.vector_maintenance import VectorMaintenanceError, vector_maintenance_for_config
@@ -51,7 +52,7 @@ def main(argv: Sequence[str] | None = None, *, prog: str = "html-lore") -> None:
     qa_eval_parser.add_argument("--source-mode", default="local_only", choices=["local_only", "local_plus_external"], help="QA source mode.")
     qa_eval_parser.add_argument("--out", default="", help="Optional JSON output path. Defaults to stdout.")
 
-    qa_runtime_eval_parser = subparsers.add_parser("ai-eval-qa-runtime", help="Compare legacy QA graph and the new AgentRuntime QA agent.")
+    qa_runtime_eval_parser = subparsers.add_parser("ai-eval-qa-runtime", help="Compare legacy QA graph, AgentRuntime QA, and LangGraph QA.")
     qa_runtime_eval_parser.add_argument("--content", default="examples/content", help="Directory containing source HTML files.")
     qa_runtime_eval_parser.add_argument("--meta", default="examples/meta", help="Directory containing sidecar metadata.")
     qa_runtime_eval_parser.add_argument("--public", default="examples/public", help="Public output directory used for settings.")
@@ -64,6 +65,7 @@ def main(argv: Sequence[str] | None = None, *, prog: str = "html-lore") -> None:
     qa_runtime_eval_parser.add_argument("--agent-no-model", action="store_true", help="Run the new QA agent without calling the model.")
     qa_runtime_eval_parser.add_argument("--agent-only", action="store_true", help="Only run the new QA agent.")
     qa_runtime_eval_parser.add_argument("--legacy-only", action="store_true", help="Only run the legacy QA graph.")
+    qa_runtime_eval_parser.add_argument("--langgraph-only", action="store_true", help="Only run the LangGraph QA workflow.")
     qa_runtime_eval_parser.add_argument("--out", default="", help="Optional JSON output path. Defaults to stdout.")
 
     vector_parser = subparsers.add_parser("ai-vector-index", help="Maintain the local AI vector index.")
@@ -128,25 +130,30 @@ def main(argv: Sequence[str] | None = None, *, prog: str = "html-lore") -> None:
         else:
             print(payload)
     elif args.command == "ai-eval-qa-runtime":
-        if args.agent_only and args.legacy_only:
-            raise SystemExit("--agent-only and --legacy-only cannot be used together.")
+        selected_engines = [args.agent_only, args.legacy_only, args.langgraph_only]
+        if len([value for value in selected_engines if value]) > 1:
+            raise SystemExit("--agent-only, --legacy-only, and --langgraph-only cannot be combined.")
         api_key = os.getenv(args.api_key_env, "") if args.provider != "fake" else ""
-        report = run_qa_runtime_eval(
-            QARuntimeEvalSpec(
-                content_dir=Path(args.content),
-                meta_dir=Path(args.meta) if args.meta else None,
-                public_dir=Path(args.public),
-                cases=load_runtime_eval_cases(Path(args.cases) if args.cases else None),
-                provider=args.provider,
-                base_url=args.base_url,
-                api_key=api_key,
-                model=args.model,
-                retrieval_mode=args.retrieval_mode,
-                run_legacy=not args.agent_only,
-                run_agent=not args.legacy_only,
-                agent_uses_model=not args.agent_no_model,
-            ),
-        )
+        try:
+            report = run_qa_runtime_eval(
+                QARuntimeEvalSpec(
+                    content_dir=Path(args.content),
+                    meta_dir=Path(args.meta) if args.meta else None,
+                    public_dir=Path(args.public),
+                    cases=load_runtime_eval_cases(Path(args.cases) if args.cases else None),
+                    provider=args.provider,
+                    base_url=args.base_url,
+                    api_key=api_key,
+                    model=args.model,
+                    retrieval_mode=args.retrieval_mode,
+                    run_legacy=args.legacy_only or not (args.agent_only or args.langgraph_only),
+                    run_agent=args.agent_only or not (args.legacy_only or args.langgraph_only),
+                    run_langgraph=args.langgraph_only,
+                    agent_uses_model=not args.agent_no_model,
+                ),
+            )
+        except AgentRuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
         payload = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
         if args.out:
             Path(args.out).parent.mkdir(parents=True, exist_ok=True)

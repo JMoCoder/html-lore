@@ -138,6 +138,9 @@ def resolve_recent_alias_focus(question: str, recent_messages: list[dict[str, st
     question_text = " ".join(str(question or "").split())
     if not question_text:
         return None
+    structure_focus = resolve_recent_structure_focus(question_text, recent_messages)
+    if structure_focus is not None:
+        return structure_focus
     focus = resolve_recent_conversation_focus(recent_messages)
     if focus is None:
         return None
@@ -151,6 +154,19 @@ def resolve_recent_alias_focus(question: str, recent_messages: list[dict[str, st
             continue
         if alias_normalized in normalized_question and alias_normalized != normalized_question:
             return dict(focus)
+    return None
+
+
+def resolve_recent_structure_focus(question: str, recent_messages: list[dict[str, str]]) -> dict[str, Any] | None:
+    normalized_question = str(question or "").strip().lower()
+    if not any(marker in normalized_question for marker in ("这种结构", "这个结构", "该结构", "这种模式", "这个模式", "类似案例", "similar cases", "this structure", "this model")):
+        return None
+    for message in reversed(recent_messages):
+        if str(message.get("role") or "").strip().lower() != "assistant":
+            continue
+        focus = extract_structure_focus(message.get("content") or "")
+        if focus:
+            return {"text": focus, "type": "structure", "confidence": 0.78}
     return None
 
 
@@ -175,6 +191,45 @@ def extract_explicit_focus(content: str) -> dict[str, Any] | None:
     for phrase in extract_question_focus_phrases(text):
         return {"text": phrase, "type": "topic", "confidence": 0.72}
     return None
+
+
+def extract_structure_focus(content: str) -> str:
+    text = " ".join(str(content or "").split())
+    if not text:
+        return ""
+    terms = extract_structure_terms(text)
+    if len(terms) >= 2:
+        return " ".join(terms[:8])
+    for phrase in extract_question_focus_phrases(text):
+        if any(marker in phrase for marker in ("结构", "模式", "framework", "structure", "model")):
+            return phrase
+    return ""
+
+
+def extract_structure_terms(text: str) -> list[str]:
+    candidates = (
+        "两层结构",
+        "基金/SPV",
+        "基金",
+        "SPV",
+        "项目公司",
+        "优先/劣后",
+        "优先",
+        "劣后",
+        "股权分层",
+        "风险分层",
+        "waterfall",
+        "preferred",
+        "subordinated",
+        "project company",
+    )
+    normalized = str(text or "").lower()
+    result: list[str] = []
+    for term in candidates:
+        key = term.lower()
+        if key in normalized and term not in result:
+            result.append(term)
+    return result
 
 
 def focus_aliases(text: str) -> list[str]:

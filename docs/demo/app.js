@@ -1359,7 +1359,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "0.9.8",
+  currentVersion: "0.9.9",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -4374,7 +4374,7 @@ function renderInitialAiMessage() {
 function appendAiMessage(role, text, sources = [], options = {}) {
   const message = document.createElement("article");
   message.className = `ai-message ${role}${options.pending ? " pending" : ""}`;
-  message.innerHTML = aiMessageMarkup(role, text, sources);
+  message.innerHTML = options.pending ? aiPendingMessageMarkup() : aiMessageMarkup(role, text, sources);
   elements.aiChatLog.append(message);
   updateAiPanelConversationState();
   scrollAiChatToBottom();
@@ -4389,17 +4389,49 @@ function updateAiMessage(message, role, text, sources = []) {
 }
 
 function aiMessageMarkup(role, text, sources = []) {
-  const sourceMarkup = role === "assistant" && sources.length > 0
-    ? `<div class="ai-message-sources"><span>${escapeHtml(t("aiSources"))}</span>${sources.slice(0, 4).map(renderAiSourcePill).join("")}</div>`
+  const displaySources = dedupeAiSources(sources);
+  const sourceMarkup = role === "assistant" && displaySources.length > 0
+    ? `<div class="ai-message-sources"><span>${escapeHtml(t("aiSources"))}</span>${displaySources.slice(0, 4).map(renderAiSourcePill).join("")}</div>`
     : "";
   const bodyMarkup = role === "assistant"
-    ? renderMarkdown(text)
+    ? renderMarkdown(stripAssistantSourceFooter(text, displaySources))
     : `<p>${escapeHtml(text)}</p>`;
   return `
     <strong>${escapeHtml(role === "user" ? t("aiUserPlaceholder") : t("aiConversation"))}</strong>
     <div class="ai-message-body">${bodyMarkup}</div>
     ${sourceMarkup}
   `;
+}
+
+function dedupeAiSources(sources = []) {
+  const result = [];
+  const seen = new Set();
+  sources.forEach((source) => {
+    const key = source?.kind === "external"
+      ? `external:${String(source?.url || source?.title || "").trim().toLowerCase()}`
+      : `local:${String(source?.item_id || source?.title || "").trim().toLowerCase()}`;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(source);
+  });
+  return result;
+}
+
+function aiPendingMessageMarkup() {
+  return `
+    <strong>${escapeHtml(t("aiConversation"))}</strong>
+    <div class="ai-message-body">
+      <p class="ai-typing">${escapeHtml(t("aiReplying").replace(/[.。…]+$/u, ""))}<span class="ai-typing-dots" aria-hidden="true"><span></span><span></span><span></span></span></p>
+    </div>
+  `;
+}
+
+function stripAssistantSourceFooter(text, sources = []) {
+  const value = String(text ?? "").trimEnd();
+  if (!sources.length || !value) return value;
+  return value
+    .replace(/(?:\n|\s)*(?:来源|Sources?|出典)\s*[:：]\s*(?:\[[0-9,\s，]+\][^\n]*(?:[;；]\s*)?)+\s*$/iu, "")
+    .trimEnd();
 }
 
 function updateAiPanelConversationState() {
@@ -4575,7 +4607,10 @@ async function submitAiMessage(event) {
     const response = await apiFetch(`/api/ai/conversations/${encodeURIComponent(conversationId)}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({
+        content: text,
+        source_mode: state.aiContentExpansion ? "local_plus_external" : "local_only",
+      }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || `Agent returned ${response.status}`);
@@ -4657,16 +4692,15 @@ function buildAiContextPayload() {
 
 function getAiContextKey(payload = buildAiContextPayload()) {
   const context = payload.context || {};
-  const sourceMode = payload.source_mode || "local_only";
   const tags = [...new Set(context.tags || [])].map(String).sort();
   if (context.manual_item_ids?.length) {
-    return `${sourceMode}:manual:${compactJson({ item_ids: [...context.manual_item_ids].map(String).sort() })}`;
+    return `manual:${compactJson({ item_ids: [...context.manual_item_ids].map(String).sort() })}`;
   }
   if (context.item_id) {
-    return `${sourceMode}:reader:${compactJson({ item_id: String(context.item_id) })}`;
+    return `reader:${compactJson({ item_id: String(context.item_id) })}`;
   }
   const scope = context.scope || "global";
-  return `${sourceMode}:${scope}:${compactJson({
+  return `${scope}:${compactJson({
     scope,
     q: context.q || "",
     library: context.library || "",
@@ -4767,8 +4801,6 @@ function startNewAiConversation() {
 
 function setAiContentExpansion(enabled) {
   state.aiContentExpansion = Boolean(enabled);
-  resetAiConversationSession();
-  restoreLatestAiConversationForCurrentContext();
 }
 
 function openGenerateNoteDialog() {
@@ -6345,7 +6377,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=0.9.8-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=0.9.9-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

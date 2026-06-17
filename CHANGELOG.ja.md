@@ -4,6 +4,33 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-06-17
+
+### Added
+
+- LangGraph ナレッジベース Q&A engine を既定の `auto` runtime として追加し、
+  従来の agent runtime は fallback として維持しました。
+- Q&A workflow 向けに、再利用可能な conversation resolution、route planning、
+  search planning、evidence assessment、verifier、reviewer、trace metadata
+  を追加しました。
+- content expansion 向けの外部検索 planning を追加し、Tavily status wiring と
+  制御された source-mode 処理に対応しました。
+
+### Changed
+
+- Q&A の source-mode 挙動を改善し、content expansion の切り替えで新しい会話を
+  開始せず、現在の context を保ったまま次の message に反映するようにしました。
+- 静的 demo の AI 挙動と e2e coverage を live workspace の会話フローに合わせました。
+- README の AI provider、LangGraph、embedding、Tavily 設定説明を更新しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `0.9.9` に更新しました。
+
+### Fixed
+
+- demo CI で失敗していた AI source-mode 切り替えと、現在 context の最新会話復元を
+  修正しました。
+- demo の動的な reply indicator に合わせてテスト assertion を修正しました。
+
 ## [0.9.8] - 2026-06-16
 
 ### Removed

@@ -15,8 +15,9 @@ from .material_generation import MaterialGenerationError, generate_note_from_mat
 from .model_client import ModelClient, test_provider
 from .providers import AIProviderConfigError, AIProviderConfigStore, ProviderCallError
 from .runs import AIRunError, AIRunStore
-from .runtime import AgentRequest
-from .runtime_eval import build_qa_agent_runtime, compare_qa_runtimes, public_agent_run
+from .runtime import AgentRequest, AgentRuntimeError
+from .langgraph_qa import LangGraphKnowledgeQARuntime, langgraph_available
+from .runtime_eval import build_selected_qa_runtime, build_qa_agent_runtime, compare_qa_runtimes, public_agent_run
 from .vector_maintenance import VectorMaintenanceError, vector_maintenance_for_config
 
 
@@ -46,6 +47,7 @@ class AIService:
             "available": bool(client_status["available"]),
             "message": client_status["message"],
             "provider": config.public_dict(),
+            "qa_engine": qa_engine_status(self.settings.ai_qa_engine),
             "external_search_available": external_status["available"],
             "external_search": external_status,
         }
@@ -117,8 +119,9 @@ class AIConversationService:
             conversation = dict(conversation)
             conversation["source_mode"] = snapshot["source_mode"]
             conversation["context_snapshot"] = snapshot
+        engine = configured_qa_engine_name(self.settings.ai_qa_engine)
         try:
-            runtime = build_qa_agent_runtime(
+            runtime, engine = build_selected_qa_runtime(
                 item_service=self.item_service,
                 model_client=ModelClient(self.provider_store.get()),
                 settings=self.settings,
@@ -126,12 +129,23 @@ class AIConversationService:
             )
             result = runtime.run(AgentRequest(content=content, context=agent_request_context(conversation), requested_task="qa"))
         except GuardrailError as exc:
-            self.run_store.add(failed_agent_qa_run(conversation_id=conversation_id, code="guardrail_failed", message=str(exc), budget=budget_from_error(str(exc))))
+            self.run_store.add(
+                failed_agent_qa_run(
+                    conversation_id=conversation_id,
+                    code="guardrail_failed",
+                    message=str(exc),
+                    budget=budget_from_error(str(exc)),
+                    engine=engine,
+                ),
+            )
             raise
         except (AIProviderConfigError, ProviderCallError) as exc:
-            self.run_store.add(failed_agent_qa_run(conversation_id=conversation_id, code="provider_failed", message=str(exc)))
+            self.run_store.add(failed_agent_qa_run(conversation_id=conversation_id, code="provider_failed", message=str(exc), engine=engine))
             raise ConversationError(str(exc)) from exc
-        run = public_agent_run(result, conversation_id=conversation_id)
+        except AgentRuntimeError as exc:
+            self.run_store.add(failed_agent_qa_run(conversation_id=conversation_id, code="runtime_failed", message=str(exc), engine=engine))
+            raise ConversationError(str(exc)) from exc
+        run = public_agent_run(result, conversation_id=conversation_id, engine=engine)
         self.run_store.add(run)
         sources = run["qa_report"].get("sources") if isinstance(run["qa_report"].get("sources"), list) else []
         stored_conversation = self.store.append_messages(
@@ -146,7 +160,7 @@ class AIConversationService:
             "message": stored_conversation["messages"][-1],
             "sources": sources,
             "usage": run["usage"],
-            "graph": "AgentRuntime.qa.v1",
+            "graph": engine,
             "node_trace": run["node_trace"],
             "external_status": run["qa_report"].get("external_status") or {},
             "retrieval_status": run["qa_report"].get("retrieval") or {},
@@ -239,6 +253,7 @@ class AIConversationService:
             settings=self.settings,
             run_legacy=bool(values.get("run_legacy", values.get("runLegacy", True))),
             run_agent=bool(values.get("run_agent", values.get("runAgent", True))),
+            run_langgraph=bool(values.get("run_langgraph", values.get("runLanggraph", False))),
             agent_uses_model=bool(values.get("agent_uses_model", values.get("agentUsesModel", True))),
         )
 
@@ -339,6 +354,30 @@ def qa_status_from_report(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def configured_qa_engine_name(value: str) -> str:
+    engine = str(value or "").strip().lower()
+    if engine in {"auto", "langgraph"}:
+        return LangGraphKnowledgeQARuntime.name
+    return "AgentRuntime.qa.v1"
+
+
+def qa_engine_status(value: str) -> dict[str, Any]:
+    configured = str(value or "auto").strip().lower() or "auto"
+    available = langgraph_available()
+    if configured == "agent_runtime":
+        effective = "AgentRuntime.qa.v1"
+    elif configured == "auto" and not available:
+        effective = "AgentRuntime.qa.v1"
+    else:
+        effective = LangGraphKnowledgeQARuntime.name
+    return {
+        "configured": configured,
+        "effective": effective,
+        "langgraph_available": available,
+        "fallback": configured == "auto" and effective == "AgentRuntime.qa.v1",
+    }
+
+
 def agent_request_context(conversation: dict[str, Any]) -> dict[str, Any]:
     snapshot = conversation.get("context_snapshot") if isinstance(conversation.get("context_snapshot"), dict) else {}
     requested = snapshot.get("requested") if isinstance(snapshot.get("requested"), dict) else {}
@@ -360,7 +399,7 @@ def agent_request_context(conversation: dict[str, Any]) -> dict[str, Any]:
     return context
 
 
-def failed_agent_qa_run(*, conversation_id: str, code: str, message: str, budget: dict[str, int] | None = None) -> dict[str, Any]:
+def failed_agent_qa_run(*, conversation_id: str, code: str, message: str, budget: dict[str, int] | None = None, engine: str = "AgentRuntime.qa.v1") -> dict[str, Any]:
     from datetime import datetime, timezone
     import uuid
 
@@ -373,8 +412,8 @@ def failed_agent_qa_run(*, conversation_id: str, code: str, message: str, budget
         "completed_at": now,
         "duration_ms": 0,
         "conversation_id": conversation_id,
-        "spec": {"engine": "AgentRuntime.qa.v1"},
-        "graph": "AgentRuntime.qa.v1",
+        "spec": {"engine": engine},
+        "graph": engine,
         "generation_intent": {},
         "qa_report": {
             "source_count": 0,

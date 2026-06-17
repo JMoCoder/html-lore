@@ -92,12 +92,22 @@ def test_html_lore_env_names_configure_server(monkeypatch, tmp_path: Path) -> No
     monkeypatch.setenv("HTML_LORE_CONTENT", str(lore_content))
     monkeypatch.setenv("HTML_LORE_TITLE", "HTMlore Title")
     monkeypatch.setenv("HTML_LORE_SESSION_SECRET", "secret")
+    monkeypatch.setenv("HTML_LORE_AI_QA_ENGINE", "langgraph")
 
     settings = load_settings()
 
     assert settings.content_dir == lore_content
     assert settings.site_title == "HTMlore Title"
     assert settings.session_secret == "secret"
+    assert settings.ai_qa_engine == "langgraph"
+
+
+def test_default_ai_qa_engine_is_auto(monkeypatch) -> None:
+    monkeypatch.delenv("HTML_LORE_AI_QA_ENGINE", raising=False)
+
+    settings = load_settings()
+
+    assert settings.ai_qa_engine == "auto"
 
 
 def test_unknown_env_prefixes_do_not_configure_server(monkeypatch, tmp_path: Path) -> None:

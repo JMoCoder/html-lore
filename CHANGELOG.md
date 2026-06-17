@@ -9,6 +9,36 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-06-17
+
+### Added
+
+- Added the LangGraph knowledge-base Q&A engine as the default `auto` runtime,
+  with the previous agent runtime kept as a fallback.
+- Added reusable conversation resolution, route planning, search planning,
+  evidence assessment, verifier, reviewer, and trace metadata for the Q&A
+  workflow.
+- Added external-search planning support for content expansion, including
+  Tavily status wiring and controlled source-mode handling.
+
+### Changed
+
+- Improved Q&A source-mode behavior so content expansion no longer starts a new
+  conversation; it now affects the next message while preserving the current
+  context.
+- Updated static demo AI behavior and e2e coverage to match the live workspace
+  conversation flow.
+- Updated README deployment notes for AI provider, LangGraph, embedding, and
+  Tavily configuration.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `0.9.9`.
+
+### Fixed
+
+- Fixed demo CI failures around AI source-mode switching and restoring the
+  latest conversation for the current context.
+- Fixed the demo pending-reply assertion to match the animated reply indicator.
+
 ## [0.9.8] - 2026-06-16
 
 ### Removed

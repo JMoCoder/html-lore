@@ -529,6 +529,7 @@ test("workspace AI content expansion controls conversation source mode", async (
   await routeWorkspace(page);
 
   const conversationRequests = [];
+  const messageRequests = [];
   const manifest = {
     version: 2,
     title: "HTMlore Workspace",
@@ -589,6 +590,9 @@ test("workspace AI content expansion controls conversation source mode", async (
     });
   });
   await page.route("**/api/ai/conversations/*/messages", async (route) => {
+    if (route.request().method() === "POST") {
+      messageRequests.push(JSON.parse(route.request().postData() || "{}"));
+    }
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -618,6 +622,8 @@ test("workspace AI content expansion controls conversation source mode", async (
   await page.locator("#ai-chat-form button[type='submit']").click();
   await expect.poll(() => conversationRequests.length).toBe(1);
   expect(conversationRequests[0].source_mode).toBe("local_plus_external");
+  await expect.poll(() => messageRequests.length).toBe(1);
+  expect(messageRequests[0].source_mode).toBe("local_plus_external");
   await expect(page.locator(".ai-message-sources")).toContainText("Local");
   await expect(page.locator(".ai-message-sources")).toContainText("External");
   await expect(page.locator(".ai-message-sources")).toContainText("example.test");
@@ -625,8 +631,9 @@ test("workspace AI content expansion controls conversation source mode", async (
   await page.locator("#ai-content-expansion").uncheck();
   await page.locator("#ai-chat-input").fill("Answer only from local notes.");
   await page.locator("#ai-chat-form button[type='submit']").click();
-  await expect.poll(() => conversationRequests.length).toBe(2);
-  expect(conversationRequests[1].source_mode).toBe("local_only");
+  await expect.poll(() => messageRequests.length).toBe(2);
+  expect(conversationRequests.length).toBe(1);
+  expect(messageRequests[1].source_mode).toBe("local_only");
 });
 
 test("workspace AI restores latest context conversation and can start a fresh one", async ({ page }) => {
@@ -664,7 +671,7 @@ test("workspace AI restores latest context conversation and can start a fresh on
   const oldConversation = {
     id: "conversation-old",
     title: "MCP Security",
-    context_key: 'local_only:reader:{"item_id":"notes/mcp.html"}',
+    context_key: 'reader:{"item_id":"notes/mcp.html"}',
     context_snapshot: {
       scope: "reader",
       item_ids: ["notes/mcp.html"],
@@ -678,7 +685,7 @@ test("workspace AI restores latest context conversation and can start a fresh on
   const historyConversation = {
     id: "conversation-history",
     title: "Docker Notes",
-    context_key: 'local_only:reader:{"item_id":"notes/docker.html"}',
+    context_key: 'reader:{"item_id":"notes/docker.html"}',
     context_snapshot: {
       scope: "reader",
       item_ids: ["notes/docker.html"],

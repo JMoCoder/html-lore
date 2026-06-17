@@ -26,6 +26,7 @@ from .skills import RetrievalSkill
 
 NO_EVIDENCE_ANSWER = "当前上下文没有足够资料回答这个问题。请调整上下文、选择相关笔记，或开启内容拓展后再试。"
 EXTERNAL_UNAVAILABLE_ANSWER = "内容拓展尚未配置外部检索服务。当前上下文也没有足够资料回答这个问题。"
+EXTERNAL_NO_RESULTS_ANSWER = "外部检索已执行，但没有找到可用的外部资料。当前上下文也没有足够资料回答这个问题。"
 ANSWER_AGENT_ID = "knowledge_qa.answer_agent.v1"
 
 
@@ -261,7 +262,7 @@ class EvidenceGateNode:
             state.retrieval_status["source_count_before_weak_reject"] = len(state.evidence)
             state.evidence = []
         if requires_web_research and not has_external_evidence:
-            state.answer = EXTERNAL_UNAVAILABLE_ANSWER
+            state.answer = EXTERNAL_UNAVAILABLE_ANSWER if external_search_unavailable(state.external_status) else EXTERNAL_NO_RESULTS_ANSWER
             state.sources = []
             state.skipped_model_call = True
             return
@@ -299,7 +300,7 @@ class EvidenceGateNode:
             return
         if str(state.context_snapshot.get("source_mode") or "local_only") == "local_plus_external":
             if state.expansion_policy.get("mode") == "web_research":
-                state.answer = EXTERNAL_UNAVAILABLE_ANSWER
+                state.answer = EXTERNAL_UNAVAILABLE_ANSWER if external_search_unavailable(state.external_status) else EXTERNAL_NO_RESULTS_ANSWER
             else:
                 state.answer = NO_EVIDENCE_ANSWER
         else:
@@ -1227,6 +1228,22 @@ def asks_for_external_search(content: str) -> bool:
         "リンク",
     ]
     return any(marker in normalized for marker in markers)
+
+
+def external_search_unavailable(status: dict[str, Any]) -> bool:
+    if status.get("available") is False:
+        return True
+    message = str(status.get("message") or "").strip().lower()
+    if not message:
+        return False
+    unavailable_markers = (
+        "not configured",
+        "api key is not configured",
+        "unavailable",
+        "未配置",
+        "不可用",
+    )
+    return any(marker in message for marker in unavailable_markers)
 
 
 def is_time_sensitive_question(content: str) -> bool:

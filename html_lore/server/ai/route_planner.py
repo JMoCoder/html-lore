@@ -36,12 +36,19 @@ def plan_qa_route(question: str, *, context: dict[str, Any] | None = None, state
     lowered = routing_text.lower()
 
     if asks_for_external_search(routing_text) or is_time_sensitive_question(routing_text):
+        search_intent = "general"
+        if any(marker in lowered for marker in ("政策", "法规", "监管", "policy", "regulation", "发改", "能源局")):
+            search_intent = "policy_lookup"
+        elif any(marker in lowered for marker in ("version", "release", "changelog", "版本", "发布")):
+            search_intent = "version_lookup"
+        elif any(marker in lowered for marker in ("official", "官网", "官方")):
+            search_intent = "official_lookup"
         return route_payload(
             intent="current_info",
             retrieval_mode="web_research",
             should_expand=True,
             should_search=True,
-            search_intent="official_lookup" if any(marker in lowered for marker in ("official", "官网", "官方")) else "general",
+            search_intent=search_intent,
             locality="local_context_first",
             reason="time_sensitive_or_search_requested",
             conversation_resolution=resolution,

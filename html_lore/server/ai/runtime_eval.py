@@ -16,8 +16,9 @@ from .knowledge_qa_graph import KnowledgeQAGraph, KnowledgeQAState, public_qa_ru
 from .metrics import evaluate_qa_result
 from .model_client import ModelClient
 from .prompts import build_qa_answer_messages
-from .runtime import AgentRequest, AgentRunResult, AgentRuntime, ToolRegistry
-from .tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool
+from .langgraph_qa import LangGraphKnowledgeQARuntime, LangGraphQAError, build_langgraph_qa_runtime
+from .runtime import AgentRequest, AgentRunResult, AgentRuntime, BasicFinalizer, ToolRegistry
+from .tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, SearchPlanTool
 
 
 DEFAULT_RUNTIME_EVAL_CASES = [
@@ -43,16 +44,17 @@ class QARuntimeEvalSpec:
     max_response_tokens: int = 1024
     run_legacy: bool = True
     run_agent: bool = True
+    run_langgraph: bool = False
     agent_uses_model: bool = True
 
 
-def build_qa_agent_runtime(
+def build_qa_tools(
     *,
     item_service: ItemService,
     model_client: ModelClient,
     settings: ServerSettings,
     use_model: bool = True,
-) -> AgentRuntime:
+) -> ToolRegistry:
     tools = ToolRegistry()
     tools.register(InputGuardrailTool(max_message_chars=settings.ai_max_message_chars))
     tools.register(ContextTool(item_service, max_context_items=settings.ai_max_context_items))
@@ -65,6 +67,7 @@ def build_qa_agent_runtime(
         ),
     )
     tools.register(ExpansionPolicyTool())
+    tools.register(SearchPlanTool())
     tools.register(ExternalResearchTool(build_external_search_adapter(settings)))
     tools.register(EvidenceGateTool(max_prompt_chars=settings.ai_max_prompt_chars))
     tools.register(EvidenceAssessmentTool())
@@ -76,11 +79,70 @@ def build_qa_agent_runtime(
                 default_max_tokens=settings.ai_max_response_tokens,
             ),
         )
+    return tools
+
+
+def build_qa_agent_runtime(
+    *,
+    item_service: ItemService,
+    model_client: ModelClient,
+    settings: ServerSettings,
+    use_model: bool = True,
+) -> AgentRuntime:
     return AgentRuntime(
-        agents=(KnowledgeQATaskAgent(use_model=use_model, max_response_tokens=settings.ai_max_response_tokens),),
-        tools=tools,
-        verifier=KnowledgeQAVerifier(),
-        reviewer=KnowledgeQAReviewer(),
+        agents=(KnowledgeQATaskAgent(use_model=use_model, max_response_tokens=settings.ai_max_response_tokens, model_client=model_client),),
+        tools=build_qa_tools(item_service=item_service, model_client=model_client, settings=settings, use_model=use_model),
+        verifier=KnowledgeQAVerifier(use_model=use_model, model_client=model_client),
+        reviewer=KnowledgeQAReviewer(use_model=use_model, model_client=model_client),
+    )
+
+
+def build_qa_langgraph_runtime(
+    *,
+    item_service: ItemService,
+    model_client: ModelClient,
+    settings: ServerSettings,
+    use_model: bool = True,
+) -> LangGraphKnowledgeQARuntime:
+    return build_langgraph_qa_runtime(
+        agent=KnowledgeQATaskAgent(use_model=use_model, max_response_tokens=settings.ai_max_response_tokens, model_client=model_client),
+        tools=build_qa_tools(item_service=item_service, model_client=model_client, settings=settings, use_model=use_model),
+        verifier=KnowledgeQAVerifier(use_model=use_model, model_client=model_client),
+        reviewer=KnowledgeQAReviewer(use_model=use_model, model_client=model_client),
+        finalizer=BasicFinalizer(),
+    )
+
+
+def build_selected_qa_runtime(
+    *,
+    item_service: ItemService,
+    model_client: ModelClient,
+    settings: ServerSettings,
+    use_model: bool = True,
+) -> tuple[AgentRuntime | LangGraphKnowledgeQARuntime, str]:
+    engine = str(settings.ai_qa_engine or "auto").strip().lower()
+    if engine in {"auto", "langgraph"}:
+        try:
+            return (
+                build_qa_langgraph_runtime(
+                    item_service=item_service,
+                    model_client=model_client,
+                    settings=settings,
+                    use_model=use_model,
+                ),
+                LangGraphKnowledgeQARuntime.name,
+            )
+        except LangGraphQAError:
+            if engine == "langgraph":
+                raise
+    return (
+        build_qa_agent_runtime(
+            item_service=item_service,
+            model_client=model_client,
+            settings=settings,
+            use_model=use_model,
+        ),
+        "AgentRuntime.qa.v1",
     )
 
 
@@ -122,6 +184,7 @@ def run_qa_runtime_eval(spec: QARuntimeEvalSpec) -> dict[str, Any]:
             settings=settings,
             run_legacy=spec.run_legacy,
             run_agent=spec.run_agent,
+            run_langgraph=spec.run_langgraph,
             agent_uses_model=spec.agent_uses_model,
         )
         results.append({"id": case["id"], **comparison})
@@ -133,7 +196,7 @@ def run_qa_runtime_eval(spec: QARuntimeEvalSpec) -> dict[str, Any]:
         "persistent": False,
         "item_count": len(item_service.manifest().get("items", [])),
         "case_count": len(results),
-        "engines": [name for name, enabled in (("legacy", spec.run_legacy), ("agent", spec.run_agent)) if enabled],
+        "engines": [name for name, enabled in (("legacy", spec.run_legacy), ("agent", spec.run_agent), ("langgraph", spec.run_langgraph)) if enabled],
         "summary": summarize_runtime_eval(results),
         "results": results,
     }
@@ -203,6 +266,7 @@ def compare_qa_runtimes(
     settings: ServerSettings,
     run_legacy: bool = True,
     run_agent: bool = True,
+    run_langgraph: bool = False,
     agent_uses_model: bool = True,
 ) -> dict[str, Any]:
     results: dict[str, Any] = {}
@@ -217,6 +281,15 @@ def compare_qa_runtimes(
         )
     if run_agent:
         results["agent"] = run_agent_qa(
+            question=question,
+            context=context,
+            item_service=item_service,
+            model_client=model_client,
+            settings=settings,
+            use_model=agent_uses_model,
+        )
+    if run_langgraph:
+        results["langgraph"] = run_langgraph_qa(
             question=question,
             context=context,
             item_service=item_service,
@@ -301,7 +374,26 @@ def run_agent_qa(
     return public_agent_eval_result(result)
 
 
-def public_agent_run(result: AgentRunResult, *, conversation_id: str = "") -> dict[str, Any]:
+def run_langgraph_qa(
+    *,
+    question: str,
+    context: dict[str, Any],
+    item_service: ItemService,
+    model_client: ModelClient,
+    settings: ServerSettings,
+    use_model: bool,
+) -> dict[str, Any]:
+    runtime = build_qa_langgraph_runtime(
+        item_service=item_service,
+        model_client=model_client,
+        settings=settings,
+        use_model=use_model,
+    )
+    result = runtime.run(AgentRequest(content=question, context=context, requested_task="qa"))
+    return public_agent_eval_result(result, engine=LangGraphKnowledgeQARuntime.name)
+
+
+def public_agent_run(result: AgentRunResult, *, conversation_id: str = "", engine: str = "AgentRuntime.qa.v1") -> dict[str, Any]:
     evidence = tool_output(result, "evidence.gate") or tool_output(result, "evidence.build")
     llm = tool_output(result, "llm.chat")
     guardrail = tool_output(result, "guardrail.input")
@@ -317,8 +409,8 @@ def public_agent_run(result: AgentRunResult, *, conversation_id: str = "") -> di
         "completed_at": trace_time(result, first=False),
         "duration_ms": 0,
         "conversation_id": conversation_id,
-        "spec": {"engine": "AgentRuntime.qa.v1"},
-        "graph": "AgentRuntime.qa.v1",
+        "spec": {"engine": engine},
+        "graph": engine,
         "generation_intent": {},
         "qa_report": public_agent_qa_report(result, evidence),
         "review_decision": result.review.checks if result.review else {},
@@ -340,10 +432,10 @@ def public_agent_run(result: AgentRunResult, *, conversation_id: str = "") -> di
     }
 
 
-def public_agent_eval_result(result: AgentRunResult) -> dict[str, Any]:
-    run = public_agent_run(result)
+def public_agent_eval_result(result: AgentRunResult, *, engine: str = "AgentRuntime.qa.v1") -> dict[str, Any]:
+    run = public_agent_run(result, engine=engine)
     payload = {
-        "engine": "AgentRuntime.qa.v1",
+        "engine": engine,
         "status": result.status,
         "answer": result.answer,
         "answer_preview": result.answer[:240],
@@ -376,11 +468,13 @@ def public_agent_qa_report(result: AgentRunResult, evidence: dict[str, Any]) -> 
     research = tool_output(result, "external.research")
     external_status = research.get("status") if isinstance(research.get("status"), dict) else {}
     research_trace = research.get("trace") if isinstance(research.get("trace"), list) else []
-    search_plan = research.get("search_plan") if isinstance(research.get("search_plan"), dict) else {}
+    planned_search = tool_output(result, "search.plan")
+    search_plan = planned_search if planned_search else (research.get("search_plan") if isinstance(research.get("search_plan"), dict) else {})
     evidence_budget = evidence.get("evidence_budget") if isinstance(evidence.get("evidence_budget"), dict) else {}
     evidence_coverage = evidence.get("evidence_coverage") if isinstance(evidence.get("evidence_coverage"), dict) else {}
     evidence_sufficiency = evidence.get("evidence_sufficiency") if isinstance(evidence.get("evidence_sufficiency"), dict) else {}
     assessment = tool_output(result, "evidence.assess")
+    assessment_decision = assessment.get("decision") if isinstance(assessment.get("decision"), dict) else {}
     llm = tool_output(result, "llm.chat")
     has_llm_tool = any(tool.tool_id == "llm.chat" for tool in result.tool_results)
     skipped_model_call = bool(evidence.get("skipped_model_call")) or bool(llm.get("skipped")) or not has_llm_tool
@@ -427,6 +521,10 @@ def public_agent_qa_report(result: AgentRunResult, evidence: dict[str, Any]) -> 
         "evidence_budget": evidence_budget,
         "evidence_coverage": evidence_coverage,
         "evidence_sufficiency": evidence_sufficiency,
+        "evidence_assessment": {
+            "status": str(assessment.get("status") or ""),
+            "decision": assessment_decision,
+        },
         "citation": verification,
         "answer_quality": {
             "status": status,

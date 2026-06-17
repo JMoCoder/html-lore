@@ -273,6 +273,11 @@ HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 
 - `HTML_LORE_AI_API_KEY` はサーバー側の chat / embedding 呼び出しだけに使います。フロントエンド設定ファイルに書かないでください。
 - `HTML_LORE_AI_EMBEDDING_MODEL` は vector / hybrid 検索を有効にします。embedding model または index が利用できない場合、HTMlore はキーワード検索へフォールバックします。
+- `HTML_LORE_AI_QA_ENGINE=auto` がデフォルトの Q&A engine mode です。
+  LangGraph ワークフローを優先し、LangGraph が利用できない場合は
+  `agent_runtime` へフォールバックします。開発時に LangGraph を強制する場合は
+  `HTML_LORE_AI_QA_ENGINE=langgraph`、安定した runtime fallback を使う場合は
+  `HTML_LORE_AI_QA_ENGINE=agent_runtime` を設定します。
 - Tavily 外部検索を有効にする場合は、別のサーバー側 key を使います。
 - smoke-test コマンドは実際の provider 呼び出しを行います。その環境の model と key が正しいことを確認してから実行してください。
 

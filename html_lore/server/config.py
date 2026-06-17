@@ -43,6 +43,7 @@ class ServerSettings:
     ai_rate_limit_requests: int = 20
     ai_rate_limit_window_seconds: int = 60
     ai_retrieval_mode: str = "keyword"
+    ai_qa_engine: str = "auto"
 
     @property
     def auth_enabled(self) -> bool:
@@ -104,6 +105,7 @@ def load_settings() -> ServerSettings:
     ai_rate_limit_requests = parse_positive_int(get_env("AI_RATE_LIMIT_REQUESTS", "20"), 20)
     ai_rate_limit_window_seconds = parse_positive_int(get_env("AI_RATE_LIMIT_WINDOW_SECONDS", "60"), 60)
     ai_retrieval_mode = parse_choice(get_env("AI_RETRIEVAL_MODE", "keyword"), {"keyword", "vector", "hybrid"}, "keyword")
+    ai_qa_engine = parse_choice(get_env("AI_QA_ENGINE", "auto"), {"auto", "agent_runtime", "langgraph"}, "auto")
     return ServerSettings(
         content_dir=content_dir,
         meta_dir=meta_dir,
@@ -141,6 +143,7 @@ def load_settings() -> ServerSettings:
         ai_rate_limit_requests=ai_rate_limit_requests,
         ai_rate_limit_window_seconds=ai_rate_limit_window_seconds,
         ai_retrieval_mode=ai_retrieval_mode,
+        ai_qa_engine=ai_qa_engine,
     )
 
 

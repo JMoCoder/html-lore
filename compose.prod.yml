@@ -19,6 +19,7 @@ services:
       HTML_LORE_SESSION_SECRET: ${HTML_LORE_SESSION_SECRET:-}
       HTML_LORE_SESSION_SECURE: ${HTML_LORE_SESSION_SECURE:-true}
       HTML_LORE_CORS_ORIGINS: ${HTML_LORE_CORS_ORIGINS:-http://localhost,http://127.0.0.1}
+      HTML_LORE_AI_QA_ENGINE: ${HTML_LORE_AI_QA_ENGINE:-auto}
     volumes:
       - ./data:/data
       - ./public:/public

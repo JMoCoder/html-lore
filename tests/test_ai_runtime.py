@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from html_lore.server.ai.agents import KnowledgeQATaskAgent, KnowledgeQAVerifier, KnowledgeQAReviewer
@@ -23,11 +25,13 @@ from html_lore.server.ai.runtime import (
     ReviewResult,
     VerificationResult,
 )
-from html_lore.server.ai.runtime_eval import compare_qa_runtimes, evaluate_qa_result
-from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, build_evidence_pack, evidence_chunks_overlap_query, external_evidence_assessment
+from html_lore.server.ai.langgraph_qa import LangGraphKnowledgeQARuntime, langgraph_available
+from html_lore.server.ai.runtime_eval import build_selected_qa_runtime, compare_qa_runtimes, evaluate_qa_result
+from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, SearchPlanTool, build_evidence_pack, evidence_chunks_overlap_query, external_evidence_assessment
 from html_lore.server.ai.qa_search_plan import build_qa_search_plan
 from html_lore.server.ai.eval import InMemoryEvalConversationStore
-from html_lore.server.ai.knowledge_qa_graph import build_retrieval_query
+from html_lore.server.ai.external_search import ExternalSearchResult
+from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_NO_RESULTS_ANSWER, EXTERNAL_UNAVAILABLE_ANSWER, build_retrieval_query
 from html_lore.server.config import ServerSettings
 from html_lore.server.items import ItemService
 
@@ -120,6 +124,60 @@ def item_service(tmp_path) -> ItemService:
     )
 
 
+def test_selected_qa_runtime_auto_prefers_langgraph_when_available(tmp_path) -> None:
+    service = item_service(tmp_path)
+    settings = service.settings
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+
+    runtime, engine = build_selected_qa_runtime(
+        item_service=service,
+        model_client=model_client,
+        settings=settings,
+        use_model=False,
+    )
+
+    if langgraph_available():
+        assert isinstance(runtime, LangGraphKnowledgeQARuntime)
+        assert engine == "LangGraphKnowledgeQA.v1"
+    else:
+        assert isinstance(runtime, AgentRuntime)
+        assert engine == "AgentRuntime.qa.v1"
+
+
+def test_selected_qa_runtime_auto_falls_back_when_langgraph_unavailable(monkeypatch, tmp_path) -> None:
+    import html_lore.server.ai.langgraph_qa as langgraph_qa
+
+    monkeypatch.setattr(langgraph_qa, "StateGraph", None)
+    service = item_service(tmp_path)
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+
+    runtime, engine = build_selected_qa_runtime(
+        item_service=service,
+        model_client=model_client,
+        settings=service.settings,
+        use_model=False,
+    )
+
+    assert isinstance(runtime, AgentRuntime)
+    assert engine == "AgentRuntime.qa.v1"
+
+    explicit_langgraph_settings = ServerSettings(
+        content_dir=service.settings.content_dir,
+        meta_dir=service.settings.meta_dir,
+        public_dir=service.settings.public_dir,
+        site_title="Runtime Test",
+        max_upload_bytes=10 * 1024 * 1024,
+        ai_qa_engine="langgraph",
+    )
+    with pytest.raises(Exception, match="LangGraph is not installed"):
+        build_selected_qa_runtime(
+            item_service=service,
+            model_client=model_client,
+            settings=explicit_langgraph_settings,
+            use_model=False,
+        )
+
+
 class EchoAgent:
     id = "agent.qa"
     task_type = "qa"
@@ -199,6 +257,7 @@ def qa_tools(service: ItemService, *, model_client: ModelClient | None = None, u
     tools.register(ContextTool(service, max_context_items=5))
     tools.register(EvidenceTool(service, model_client=model_client, retrieval_mode="keyword", max_results=5))
     tools.register(ExpansionPolicyTool())
+    tools.register(SearchPlanTool())
     tools.register(ExternalResearchTool())
     tools.register(EvidenceGateTool(max_prompt_chars=12000))
     tools.register(EvidenceAssessmentTool())
@@ -546,6 +605,7 @@ def test_knowledge_qa_agent_happy_path_uses_context_and_evidence_tools(tmp_path)
         "context.resolve",
         "evidence.build",
         "expansion.policy",
+        "search.plan",
         "external.research",
         "evidence.gate",
         "evidence.assess",
@@ -613,6 +673,13 @@ def test_knowledge_qa_agent_declines_weak_relevance_before_model_call(tmp_path) 
     llm_result = next(tool for tool in result.tool_results if tool.tool_id == "llm.chat")
     assert llm_result.output["skipped"] is True
     assert llm_result.output["skip_reason"] == "weak_relevance"
+    assessment = next(tool.output for tool in result.tool_results if tool.tool_id == "evidence.assess")
+    assert assessment["decision"] == {
+        "action": "decline",
+        "reason": "weak_relevance",
+        "confidence": 0.86,
+        "requires_attention": True,
+    }
     assert result.review is not None
     assert result.review.checks["declined"] == "weak_relevance"
 
@@ -654,6 +721,7 @@ def test_knowledge_qa_agent_accepts_reader_question_when_chunk_matches_query(tmp
     assert result.answer.startswith("Fake AI response")
     assessment = next(tool.output for tool in result.tool_results if tool.tool_id == "evidence.assess")
     assert assessment["weak_relevance"] is False
+    assert assessment["decision"]["action"] == "answer"
 
 
 def test_knowledge_qa_agent_declines_insufficient_evidence_before_model_call(tmp_path) -> None:
@@ -673,6 +741,8 @@ def test_knowledge_qa_agent_declines_insufficient_evidence_before_model_call(tmp
     llm_result = next(tool for tool in result.tool_results if tool.tool_id == "llm.chat")
     assert llm_result.output["skipped"] is True
     assert llm_result.output["skip_reason"] == "insufficient_evidence"
+    assessment = next(tool.output for tool in result.tool_results if tool.tool_id == "evidence.assess")
+    assert assessment["decision"]["reason"] == "insufficient_evidence"
     assert result.review is not None
     assert result.review.checks["declined"] == "insufficient_evidence"
 
@@ -698,6 +768,8 @@ def test_external_evidence_assessment_rejects_results_without_attribute_terms() 
 
     assert assessment["weak_relevance"] is True
     assert assessment["insufficient_evidence"] is False
+    assert assessment["decision"]["action"] == "decline"
+    assert assessment["decision"]["reason"] == "weak_external_evidence"
     assert assessment["matched_evidence_terms"] == []
 
 
@@ -722,6 +794,7 @@ def test_external_evidence_assessment_accepts_results_with_attribute_terms() -> 
 
     assert assessment["weak_relevance"] is False
     assert assessment["insufficient_evidence"] is False
+    assert assessment["decision"]["action"] == "answer"
     assert "股东" in assessment["matched_evidence_terms"]
 
 
@@ -897,6 +970,102 @@ def test_knowledge_qa_reviewer_accepts_concept_answer_with_explanatory_markers()
     assert result.checks["intent"] == "concept_clarify"
 
 
+def test_knowledge_qa_verifier_can_use_model_decision() -> None:
+    class VerifierModel:
+        last_messages = None
+
+        def chat(self, *, messages, temperature=0.0, max_tokens=256):
+            self.last_messages = messages
+            return {"content": '{"passed":false,"reason":"answer_not_grounded","retryable":true,"checks":{"grounded":false}}'}
+
+    model = VerifierModel()
+    verifier = KnowledgeQAVerifier(use_model=True, model_client=model)
+    result = verifier.verify(
+        AgentRequest(content="总结"),
+        AgentPlan(task_type="qa"),
+        (
+            ToolResult(
+                tool_id="evidence.build",
+                status="completed",
+                output={
+                    "chunks": [{"chunk_id": "chunk-1", "snippet": "x", "source_index": 1}],
+                    "sources": [{"source_index": 1, "title": "A"}],
+                    "citation_map": {"chunk-1": 1},
+                },
+            ),
+        ),
+        "这是一个回答。\n\n来源：[1] A",
+        {},
+    )
+
+    assert result.passed is False
+    assert result.reason == "answer_not_grounded"
+    assert result.retryable is True
+    assert result.checks["verifier_mode"] == "llm"
+    assert result.checks["grounded"] is False
+    payload = json.loads(model.last_messages[-1]["content"])
+    assert payload["evidence_review_context"]["source_count"] == 1
+    assert "tool_results" not in payload
+
+
+def test_knowledge_qa_verifier_falls_back_when_model_decision_is_invalid() -> None:
+    class BrokenVerifierModel:
+        def chat(self, *, messages, temperature=0.0, max_tokens=256):
+            return {"content": "not json"}
+
+    verifier = KnowledgeQAVerifier(use_model=True, model_client=BrokenVerifierModel())
+    result = verifier.verify(
+        AgentRequest(content="总结"),
+        AgentPlan(task_type="qa"),
+        (
+            ToolResult(
+                tool_id="evidence.build",
+                status="completed",
+                output={
+                    "chunks": [{"chunk_id": "chunk-1", "snippet": "x", "source_index": 1}],
+                    "sources": [{"source_index": 1, "title": "A"}],
+                    "citation_map": {"chunk-1": 1},
+                },
+            ),
+        ),
+        "这是一个回答。\n\n来源：[1] A",
+        {},
+    )
+
+    assert result.passed is True
+    assert result.reason == "ok"
+    assert "verifier_mode" not in result.checks
+
+
+def test_knowledge_qa_reviewer_can_use_model_decision() -> None:
+    class ReviewerModel:
+        last_messages = None
+
+        def chat(self, *, messages, temperature=0.0, max_tokens=256):
+            self.last_messages = messages
+            return {"content": '{"passed":false,"reason":"too_fragmented","retryable":true,"checks":{"readability":"poor"}}'}
+
+    model = ReviewerModel()
+    reviewer = KnowledgeQAReviewer(use_model=True, model_client=model)
+    result = reviewer.review(
+        AgentRequest(content="详细解释"),
+        AgentPlan(task_type="qa", metadata={"planner": {"intent": "explain_deeper"}}),
+        (),
+        AgentDraft("这是一个回答。\n\n来源：[1] A", metadata={"chunk_count": 1}),
+        VerificationResult(True, checks={}, reason="ok"),
+        {},
+    )
+
+    assert result.passed is False
+    assert result.reason == "too_fragmented"
+    assert result.retryable is True
+    assert result.checks["reviewer_mode"] == "llm"
+    assert result.checks["readability"] == "poor"
+    payload = json.loads(model.last_messages[-1]["content"])
+    assert "evidence_review_context" in payload
+    assert "tool_results" not in payload
+
+
 def test_build_qa_answer_messages_includes_task_intent_and_search_plan() -> None:
     messages = build_qa_answer_messages(
         {"question": "详细介绍下微电网"},
@@ -915,6 +1084,88 @@ def test_build_qa_answer_messages_includes_task_intent_and_search_plan() -> None
     assert "TASK_INTENT:\nexplain_deeper" in joined
     assert "SEARCH_PLAN:" in joined
     assert "3-5 coherent points" in joined
+
+
+def test_evidence_gate_distinguishes_external_no_results_from_unavailable() -> None:
+    tool = EvidenceGateTool(max_prompt_chars=12000)
+    base_state = {
+        "tool_outputs": {
+            "context.resolve": {"context": {"scope": "reader", "source_mode": "local_plus_external"}},
+            "evidence.build": {"query": "联网搜索基金案例", "chunks": [], "sources": []},
+            "expansion.policy": {"mode": "web_research"},
+        },
+    }
+
+    no_results = tool.run(
+        {"query": "联网搜索基金案例"},
+        {
+            **base_state,
+            "tool_outputs": {
+                **base_state["tool_outputs"],
+                "external.research": {"sources": [], "status": {"provider": "tavily", "available": True, "queried": True, "count": 0}},
+            },
+        },
+    )
+    unavailable = tool.run(
+        {"query": "联网搜索基金案例"},
+        {
+            **base_state,
+            "tool_outputs": {
+                **base_state["tool_outputs"],
+                "external.research": {"sources": [], "status": {"provider": "tavily", "available": False, "message": "External content expansion is not configured."}},
+            },
+        },
+    )
+
+    assert no_results["answer"] == EXTERNAL_NO_RESULTS_ANSWER
+    assert unavailable["answer"] == EXTERNAL_UNAVAILABLE_ANSWER
+
+
+def test_external_research_uses_independent_search_plan_query() -> None:
+    class RecordingSearch:
+        name = "recording"
+        max_results = 5
+
+        def __init__(self) -> None:
+            self.queries: list[str] = []
+
+        @property
+        def available(self) -> bool:
+            return True
+
+        def search(self, query: str, *, max_results: int = 5):
+            self.queries.append(query)
+            return [
+                ExternalSearchResult(
+                    title="基金案例",
+                    url="https://example.test/fund-case",
+                    snippet="基金/SPV 项目公司 优先 劣后 案例",
+                    accessed_at="2026-06-16T00:00:00+00:00",
+                ),
+            ]
+
+    search = RecordingSearch()
+    tool = ExternalResearchTool(search)
+    state = {
+        "query": "联网搜索更多利用这种结构的基金案例",
+        "retrieval_query": "基金/SPV下面再设项目公司，并在项目公司层面做优先/劣后股权分层安排。联网搜索更多基金案例",
+        "tool_outputs": {
+            "context.resolve": {"context": {"scope": "reader", "source_mode": "local_plus_external", "items": [{"title": "储能基金结构方案"}]}},
+            "expansion.policy": {"mode": "web_research"},
+            "search.plan": {
+                "should_search": True,
+                "effective_should_search": True,
+                "queries": ["基金 SPV 项目公司 优先 劣后 案例 中国 中文"],
+                "search": {"search_intent": "case_search"},
+            },
+        },
+    }
+
+    result = tool.run({"query": "联网搜索更多利用这种结构的基金案例", "planner": {"should_search": True}}, state)
+
+    assert search.queries == ["基金 SPV 项目公司 优先 劣后 案例 中国 中文"]
+    assert result["queried"] is True
+    assert result["search_plan"]["search"]["search_intent"] == "case_search"
 
 
 def test_build_qa_answer_messages_prefers_gated_evidence_over_raw_evidence() -> None:
@@ -953,6 +1204,37 @@ def test_heuristic_planner_routes_logic_relationship_questions_to_explain_deeper
     assert plan["should_search"] is False
 
 
+def test_heuristic_planner_routes_detailed_domain_explanation_to_model_knowledge_not_web() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    plan = agent._heuristic_plan("详细介绍一下虚拟电厂为什么能参与电力市场交易", {}, {})
+
+    assert plan["intent"] == "explain_deeper"
+    assert plan["retrieval_mode"] == "model_knowledge"
+    assert plan["should_expand"] is True
+    assert plan["should_search"] is False
+    assert plan["locality"] == "local_context_first"
+
+
+def test_heuristic_planner_routes_latest_policy_to_web_research() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    plan = agent._heuristic_plan("最近国内虚拟电厂政策有哪些变化", {}, {})
+
+    assert plan["intent"] == "current_info"
+    assert plan["retrieval_mode"] == "web_research"
+    assert plan["should_search"] is True
+    assert plan["search_intent"] == "policy_lookup"
+
+
+def test_heuristic_planner_routes_official_version_to_web_research() -> None:
+    agent = KnowledgeQATaskAgent(use_model=False)
+    plan = agent._heuristic_plan("MCP 官方规范最新版本是什么", {}, {})
+
+    assert plan["intent"] == "current_info"
+    assert plan["retrieval_mode"] == "web_research"
+    assert plan["should_search"] is True
+    assert plan["search_intent"] == "version_lookup"
+
+
 def test_heuristic_planner_routes_entity_background_questions_to_web_research() -> None:
     agent = KnowledgeQATaskAgent(use_model=False)
     plan = agent._heuristic_plan("风泉资本是什么背景", {}, {})
@@ -962,6 +1244,43 @@ def test_heuristic_planner_routes_entity_background_questions_to_web_research() 
     assert plan["should_search"] is True
     assert plan["search_intent"] == "entity_lookup"
     assert plan["reason"] == "entity_background_lookup"
+
+
+def test_qa_planner_agent_uses_model_json_when_valid() -> None:
+    class PlannerModel:
+        def chat(self, *, messages, temperature=0.0, max_tokens=320):
+            return {
+                "content": '{"intent":"current_info","retrieval_mode":"web_research","should_expand":true,"should_search":true,"search_intent":"general","locality":"local_context_first","reason":"model_planned_case_search"}',
+                "model": "planner-test",
+                "usage": {},
+            }
+
+    agent = KnowledgeQATaskAgent(use_model=True, model_client=PlannerModel())
+    plan = agent.plan(
+        AgentRequest(content="联网搜索更多利用这种结构的基金案例", context={"source_mode": "local_plus_external"}),
+        {},
+        attempt=1,
+    )
+
+    assert plan.metadata["planner"]["planner_mode"] == "llm"
+    assert plan.metadata["planner"]["retrieval_mode"] == "web_research"
+    assert plan.metadata["planner"]["reason"] == "model_planned_case_search"
+
+
+def test_qa_planner_agent_falls_back_when_model_json_is_invalid() -> None:
+    class BrokenPlannerModel:
+        def chat(self, *, messages, temperature=0.0, max_tokens=320):
+            return {"content": "not json", "model": "planner-test", "usage": {}}
+
+    agent = KnowledgeQATaskAgent(use_model=True, model_client=BrokenPlannerModel())
+    plan = agent.plan(
+        AgentRequest(content="风泉资本是什么背景", context={"source_mode": "local_plus_external"}),
+        {},
+        attempt=1,
+    )
+
+    assert plan.metadata["planner"]["planner_mode"] == "heuristic_fallback"
+    assert plan.metadata["planner"]["retrieval_mode"] == "web_research"
 
 
 def test_heuristic_planner_routes_entity_ownership_questions_to_web_research() -> None:
@@ -1055,6 +1374,22 @@ def test_conversation_resolution_infers_alias_based_named_topic_followup() -> No
     assert resolution["is_followup"] is True
     assert resolution["topic_shift"] is False
     assert resolution["resolved_query"].startswith("Ableton Live")
+
+
+def test_conversation_resolution_uses_assistant_structure_summary_for_generic_case_search() -> None:
+    resolution = resolve_conversation_turn(
+        "联网搜索更多利用这种结构的基金案例",
+        [
+            {"role": "user", "content": "什么是两层结构"},
+            {"role": "assistant", "content": "两层结构指基金/SPV下面再设项目公司，并在项目公司层面做优先/劣后股权分层安排。"},
+        ],
+    )
+
+    assert resolution["is_followup"] is True
+    assert resolution["focus_type"] == "structure"
+    assert "基金/SPV" in resolution["resolved_query"]
+    assert "优先/劣后" in resolution["resolved_query"]
+    assert "基金案例" in resolution["resolved_query"]
 
 
 def test_ai_route_planner_returns_unified_workflow_envelope() -> None:
@@ -1256,6 +1591,47 @@ def test_qa_runtime_comparison_can_run_agent_side_without_legacy(tmp_path) -> No
     assert report["results"]["agent"]["source_count"] == 1
     assert report["results"]["agent"]["sources"][0]["title"] == "Alpha MCP"
     assert report["metrics"]["agent"]["status"] == "ok"
+
+
+def test_qa_runtime_comparison_langgraph_engine_is_explicit(tmp_path) -> None:
+    service = item_service(tmp_path)
+    settings = service.settings
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    conversation_store = InMemoryEvalConversationStore(service, max_context_items=5)
+
+    if not langgraph_available():
+        with pytest.raises(Exception, match="LangGraph is not installed"):
+            compare_qa_runtimes(
+                question="总结这篇笔记",
+                context={"item_id": "a.html"},
+                item_service=service,
+                conversation_store=conversation_store,
+                model_client=model_client,
+                settings=settings,
+                run_legacy=False,
+                run_agent=False,
+                run_langgraph=True,
+                agent_uses_model=False,
+            )
+        return
+
+    report = compare_qa_runtimes(
+        question="总结这篇笔记",
+        context={"item_id": "a.html"},
+        item_service=service,
+        conversation_store=conversation_store,
+        model_client=model_client,
+        settings=settings,
+        run_legacy=False,
+        run_agent=False,
+        run_langgraph=True,
+        agent_uses_model=False,
+    )
+
+    assert set(report["results"]) == {"langgraph"}
+    assert report["results"]["langgraph"]["engine"] == "LangGraphKnowledgeQA.v1"
+    assert report["results"]["langgraph"]["status"] == "completed"
+    assert report["results"]["langgraph"]["source_count"] == 1
 
 
 def test_qa_eval_metrics_flag_duplicate_sources_and_mechanical_phrasing() -> None:

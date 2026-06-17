@@ -4,6 +4,31 @@
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-06-17
+
+### 新增
+
+- 将 LangGraph 知识库问答引擎作为默认 `auto` 运行时，同时保留原
+  agent runtime 作为回退模式。
+- 为知识库问答新增可复用的会话解析、路由规划、搜索规划、证据评估、
+  verifier、reviewer 和 trace 元数据。
+- 为内容拓展新增外部搜索规划支持，包括 Tavily 状态接入和受控
+  source-mode 处理。
+
+### 变更
+
+- 优化问答 source-mode 行为：切换内容拓展不再开启新会话，而是在保留当前
+  上下文的前提下影响下一条消息。
+- 静态 demo 的 AI 行为和 e2e 覆盖已与真实工作台会话流程对齐。
+- 更新 README 中 AI provider、LangGraph、embedding 和 Tavily 配置说明。
+- 包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为
+  `0.9.9`。
+
+### 修复
+
+- 修复 demo CI 中 AI source-mode 切换和当前上下文最近会话恢复失败的问题。
+- 修复 demo 对“回复中”动态状态的测试断言。
+
 ## [0.9.8] - 2026-06-16
 
 ### 移除

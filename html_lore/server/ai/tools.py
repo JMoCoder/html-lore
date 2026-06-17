@@ -10,6 +10,7 @@ from .external_search import DisabledExternalSearchAdapter, ExternalSearchAdapte
 from .guardrails import validate_answer, validate_message_budget, validate_prompt_budget, validate_user_message
 from .conversation_resolution import resolve_conversation_turn
 from .knowledge_qa_graph import (
+    EXTERNAL_NO_RESULTS_ANSWER,
     EXTERNAL_UNAVAILABLE_ANSWER,
     assess_evidence_coverage,
     assess_evidence_sufficiency,
@@ -35,7 +36,7 @@ from .providers import ProviderCallError
 from .registry import load_agent, load_prompt
 from .research import ResearchWorkflow
 from .retrieval import retrieve_evidence_with_status
-from .qa_search_plan import build_qa_search_plan
+from .qa_search_plan import build_qa_search_plan, search_plan_from_public_report
 from .metrics import evaluate_qa_result
 
 
@@ -223,6 +224,23 @@ class ExpansionPolicyTool:
         return policy
 
 
+class SearchPlanTool:
+    id = "search.plan"
+
+    def run(self, arguments: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+        values = dict(arguments or {})
+        planner = values.get("planner") if isinstance(values.get("planner"), dict) else {}
+        policy = state.get("tool_outputs", {}).get("expansion.policy", {}) if isinstance(state.get("tool_outputs"), dict) else {}
+        context_output = state.get("tool_outputs", {}).get("context.resolve", {}) if isinstance(state.get("tool_outputs"), dict) else {}
+        context = context_output.get("context") if isinstance(context_output.get("context"), dict) else {}
+        query = str(state.get("retrieval_query") or values.get("query") or state.get("query") or "").strip()
+        qa_search_plan = build_qa_search_plan(query, planner=planner, context=context)
+        report = qa_search_plan.public_report()
+        report["enabled_by_policy"] = str(policy.get("mode") or "") == "web_research"
+        report["effective_should_search"] = bool(qa_search_plan.should_search and report["enabled_by_policy"])
+        return report
+
+
 class ExternalResearchTool:
     id = "external.research"
 
@@ -234,18 +252,25 @@ class ExternalResearchTool:
         planner = (arguments or {}).get("planner") if isinstance((arguments or {}).get("planner"), dict) else {}
         context_output = state.get("tool_outputs", {}).get("context.resolve", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         context = context_output.get("context") if isinstance(context_output.get("context"), dict) else {}
+        planned = state.get("tool_outputs", {}).get("search.plan", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         qa_search_plan = build_qa_search_plan(str(state.get("retrieval_query") or (arguments or {}).get("query") or state.get("query") or "").strip(), planner=planner, context=context)
+        public_plan = dict(planned) if isinstance(planned, dict) and planned else qa_search_plan.public_report()
         default_status = {"provider": self.workflow.external_search.name, "available": self.workflow.external_search.available}
-        if not qa_search_plan.should_search or str(policy.get("mode") or "") != "web_research":
+        if not bool(public_plan.get("effective_should_search", qa_search_plan.should_search)) or str(policy.get("mode") or "") != "web_research":
             return {
                 "sources": [],
                 "status": default_status,
                 "trace": [],
                 "queried": False,
-                "search_plan": qa_search_plan.public_report(),
+                "search_plan": public_plan,
             }
-        research = self.workflow.run(qa_search_plan.plan.original_query if qa_search_plan.plan else str(state.get("retrieval_query") or (arguments or {}).get("query") or state.get("query") or "").strip())
-        return {"sources": research.sources, "status": dict(research.status or {}), "trace": research.trace, "queried": True, "search_plan": qa_search_plan.public_report()}
+        planned_query = search_plan_from_public_report(public_plan)
+        if planned_query is not None:
+            research = self.workflow.run_plan(planned_query)
+        else:
+            search_query = str(qa_search_plan.plan.original_query if qa_search_plan.plan else state.get("retrieval_query") or (arguments or {}).get("query") or state.get("query") or "").strip()
+            research = self.workflow.run(search_query)
+        return {"sources": research.sources, "status": dict(research.status or {}), "trace": research.trace, "queried": True, "search_plan": public_plan}
 
 
 class EvidenceGateTool:
@@ -270,7 +295,8 @@ class EvidenceGateTool:
         skipped_model_call = False
         answer = ""
         if mode == "web_research" and not external_chunks:
-            answer = EXTERNAL_UNAVAILABLE_ANSWER
+            status = research.get("status") if isinstance(research.get("status"), dict) else {}
+            answer = EXTERNAL_UNAVAILABLE_ANSWER if is_external_research_unavailable(status) else EXTERNAL_NO_RESULTS_ANSWER
             evidence = []
             skipped_model_call = True
         if evidence and should_reject_weak_evidence(evidence, context, query) and mode != "model_knowledge":
@@ -380,6 +406,7 @@ class EvidenceAssessmentTool:
                 "requires_attention": False,
                 "insufficient_evidence": False,
                 "weak_relevance": False,
+                "decision": assessment_decision("answer", reason="assessment_exempt", confidence=0.9),
             }
         metrics = evaluate_qa_result(
             {
@@ -403,6 +430,11 @@ class EvidenceAssessmentTool:
             "requires_attention": insufficient or bool(metrics.get("requires_attention")),
             "insufficient_evidence": insufficient,
             "weak_relevance": weak_relevance,
+            "decision": assessment_decision(
+                "decline" if insufficient or weak_relevance else "answer",
+                reason="insufficient_evidence" if insufficient else ("weak_relevance" if weak_relevance else "evidence_ok"),
+                confidence=0.86 if insufficient or weak_relevance else 0.78,
+            ),
         }
 
 
@@ -437,7 +469,10 @@ class LLMChatTool:
             }
         messages = values.get("messages") or gate.get("messages")
         assessment = state.get("tool_outputs", {}).get("evidence.assess", {}) if isinstance(state.get("tool_outputs"), dict) else {}
-        if bool(assessment.get("weak_relevance")) or bool(assessment.get("insufficient_evidence")):
+        decision = assessment.get("decision") if isinstance(assessment.get("decision"), dict) else {}
+        should_decline = str(decision.get("action") or "") == "decline" or bool(assessment.get("weak_relevance")) or bool(assessment.get("insufficient_evidence"))
+        if should_decline:
+            reason = str(decision.get("reason") or ("insufficient_evidence" if bool(assessment.get("insufficient_evidence")) else "weak_relevance"))
             return {
                 "content": "",
                 "model": "",
@@ -445,7 +480,7 @@ class LLMChatTool:
                 "prompt_id": str(values.get("prompt_id") or ""),
                 "message_count": 0,
                 "skipped": True,
-                "skip_reason": "insufficient_evidence" if bool(assessment.get("insufficient_evidence")) else "weak_relevance",
+                "skip_reason": reason,
             }
         if not isinstance(messages, list):
             prompt_id = str(values.get("prompt_id") or "").strip()
@@ -626,6 +661,21 @@ def external_evidence_assessment(*, chunks: list[dict[str, Any]], query: str, se
         "weak_relevance": weak_relevance,
         "matched_evidence_terms": matched_evidence_terms,
         "missing_required_terms": missing_required_terms,
+        "decision": assessment_decision(
+            "decline" if insufficient or weak_relevance else "answer",
+            reason="weak_external_evidence" if insufficient or weak_relevance else "external_evidence_ok",
+            confidence=0.88 if insufficient or weak_relevance else 0.82,
+        ),
+    }
+
+
+def assessment_decision(action: str, *, reason: str, confidence: float) -> dict[str, Any]:
+    normalized_action = "decline" if str(action or "").strip().lower() == "decline" else "answer"
+    return {
+        "action": normalized_action,
+        "reason": str(reason or ("evidence_ok" if normalized_action == "answer" else "insufficient_evidence")),
+        "confidence": max(0.0, min(float(confidence or 0.0), 1.0)),
+        "requires_attention": normalized_action == "decline",
     }
 
 
@@ -633,6 +683,22 @@ def search_requires_attribute_evidence(search_plan: dict[str, Any]) -> bool:
     search = search_plan.get("search") if isinstance(search_plan.get("search"), dict) else {}
     intent = str(search.get("search_intent") or search_plan.get("reason") or "").lower()
     return intent.startswith("entity_")
+
+
+def is_external_research_unavailable(status: dict[str, Any]) -> bool:
+    if status.get("available") is False:
+        return True
+    message = str(status.get("message") or "").strip().lower()
+    if not message:
+        return False
+    unavailable_markers = (
+        "not configured",
+        "api key is not configured",
+        "unavailable",
+        "未配置",
+        "不可用",
+    )
+    return any(marker in message for marker in unavailable_markers)
 
 
 def context_title(context: dict[str, Any]) -> str:

@@ -344,6 +344,11 @@ Deployment notes:
 - `HTML_LORE_AI_EMBEDDING_MODEL` enables vector / hybrid retrieval. If the
   embedding model or index is unavailable, HTMlore falls back to keyword
   retrieval.
+- `HTML_LORE_AI_QA_ENGINE=auto` is the default Q&A engine mode: it prefers the
+  LangGraph workflow and falls back to `agent_runtime` if LangGraph is not
+  available. Use `HTML_LORE_AI_QA_ENGINE=langgraph` to force LangGraph during
+  development, or `HTML_LORE_AI_QA_ENGINE=agent_runtime` for a stable runtime
+  fallback.
 - External search uses a separate server-side key when Tavily is enabled.
 - Smoke-test commands make real provider calls and should only be run after the
   target model and key are confirmed for that environment.

@@ -9,7 +9,8 @@ from html_lore.server.config import ServerSettings
 from html_lore.server.ai.guardrails import GuardrailError
 from html_lore.server.ai.eval import KnowledgeQAEvalSpec, run_knowledge_qa_eval
 from html_lore.server.ai.html_generation_graph import HtmlGenerationGraph, HtmlGenerationState, review_html
-from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_UNAVAILABLE_ANSWER, KnowledgeQAGraph, KnowledgeQAState, NO_EVIDENCE_ANSWER, assess_answer_quality, assess_evidence_coverage, assess_evidence_sufficiency, assign_source_indices, build_answer_prompt, budget_prompt_inputs, dedupe_display_sources, evidence_with_display_source_indices, filter_evidence_by_context, format_evidence_for_prompt, is_time_sensitive_question, prompt_chars, public_qa_run, rank_answer_evidence, rerank_answer_evidence, verify_answer_citations
+from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_NO_RESULTS_ANSWER, EXTERNAL_UNAVAILABLE_ANSWER, KnowledgeQAGraph, KnowledgeQAState, NO_EVIDENCE_ANSWER, assess_answer_quality, assess_evidence_coverage, assess_evidence_sufficiency, assign_source_indices, build_answer_prompt, budget_prompt_inputs, dedupe_display_sources, evidence_with_display_source_indices, filter_evidence_by_context, format_evidence_for_prompt, is_time_sensitive_question, prompt_chars, public_qa_run, rank_answer_evidence, rerank_answer_evidence, verify_answer_citations
+from html_lore.server.ai.langgraph_qa import langgraph_available
 from html_lore.server.ai.material_generation import MaterialGenerationError, parse_material
 from html_lore.server.ai.model_client import ModelClient
 from html_lore.server.ai.providers import AIProviderConfig, OpenAICompatibleHttpAdapter, chat_completions_url, parse_provider_response
@@ -228,14 +229,44 @@ def test_ai_status_reports_external_search_capability(tmp_path: Path) -> None:
         ai_provider="fake",
         ai_model="fake-test-model",
         ai_enabled=True,
+        ai_qa_engine="agent_runtime",
         ai_external_search="fake",
         ai_external_search_max_results=3,
     )
     try:
         status = server.request("GET", "/api/ai/status")
         assert status["available"] is True
+        assert status["qa_engine"] == {
+            "configured": "agent_runtime",
+            "effective": "AgentRuntime.qa.v1",
+            "langgraph_available": langgraph_available(),
+            "fallback": False,
+        }
         assert status["external_search_available"] is True
         assert status["external_search"] == {"provider": "fake", "available": True, "max_results": 3}
+    finally:
+        server.close()
+
+
+def test_ai_status_reports_default_auto_qa_engine(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+    )
+    try:
+        status = server.request("GET", "/api/ai/status")
+        expected_engine = "LangGraphKnowledgeQA.v1" if langgraph_available() else "AgentRuntime.qa.v1"
+        assert status["qa_engine"] == {
+            "configured": "auto",
+            "effective": expected_engine,
+            "langgraph_available": langgraph_available(),
+            "fallback": expected_engine == "AgentRuntime.qa.v1",
+        }
     finally:
         server.close()
 
@@ -351,6 +382,56 @@ def test_search_planner_builds_entity_ownership_plan() -> None:
     assert "风泉资本" in plan.required_terms
     assert "股权" in "".join(plan.evidence_terms)
     assert any("持股比例" in query or "股东" in query for query in plan.queries)
+
+
+def test_search_planner_builds_policy_lookup_queries_with_region_and_policy_terms() -> None:
+    plan = plan_external_search("最近国内虚拟电厂政策有哪些变化 中国 中文 policy regulation")
+
+    assert plan.intent == "policy_lookup"
+    assert "政策" in "".join(plan.evidence_terms)
+    assert any("虚拟电厂" in query and ("政策" in query or "监管" in query) for query in plan.queries)
+    assert any("site:gov.cn" in query or "国家能源局" in query or "发改委" in query for query in plan.queries)
+
+
+def test_search_planner_case_search_queries_keep_structure_terms() -> None:
+    plan = plan_external_search("基金/SPV下面再设项目公司，并在项目公司层面做优先/劣后股权分层安排。联网搜索更多基金案例 中国 中文")
+
+    joined = "\n".join(plan.queries)
+
+    assert plan.intent == "case_search"
+    assert "SPV" in joined or "spv" in joined.lower()
+    assert "项目公司" in joined
+    assert "优先" in joined
+    assert "劣后" in joined
+    assert any("交易结构" in query or "case study" in query for query in plan.queries)
+
+
+def test_search_planner_keeps_generic_case_search_open_for_llm_review() -> None:
+    plan = plan_external_search("两层结构 基金 SPV 项目公司 优先劣后 联网搜索更多利用这种结构的基金案例 中文 中国")
+
+    assert plan.intent == "case_search"
+    assert plan.required_terms == []
+    assert any("案例" in query for query in plan.queries)
+
+    sources = [
+        {
+            "kind": "external",
+            "title": "私募基金通过 SPV 投资项目公司的交易结构案例",
+            "url": "https://example.test/fund-spv-project-company",
+            "snippet": "基金通过 SPV 设立项目公司，并采用优先级、劣后级安排进行风险分层。",
+        },
+        {
+            "kind": "external",
+            "title": "项目公司股权分层与优先劣后安排",
+            "url": "https://example.test/project-company-waterfall",
+            "snippet": "案例讨论项目公司层面的优先收益、劣后出资和回购条款。",
+        },
+    ]
+
+    kept, report = verify_planned_sources(sources, plan)
+
+    assert len(kept) == 2
+    assert report == {"verified_count": 2, "dropped_count": 0}
 
 
 def test_search_planner_filters_generic_background_results_for_entity_ownership() -> None:
@@ -887,6 +968,7 @@ def test_ai_runs_are_partitioned_by_login_user(tmp_path: Path) -> None:
         ai_provider="fake",
         ai_model="fake-test-model",
         ai_enabled=True,
+        ai_qa_engine="agent_runtime",
     )
     try:
         server.json("POST", "/api/auth/login", {"username": "alice", "password": "alice-password"})
@@ -940,6 +1022,7 @@ def test_ai_message_uses_local_evidence_with_fake_provider(tmp_path: Path) -> No
         ai_provider="fake",
         ai_model="fake-test-model",
         ai_enabled=True,
+        ai_qa_engine="agent_runtime",
     )
     try:
         conversation = server.json("POST", "/api/ai/conversations", {"context": {"item_id": "mcp.html"}})["conversation"]
@@ -959,7 +1042,7 @@ def test_ai_message_uses_local_evidence_with_fake_provider(tmp_path: Path) -> No
         assert "Answer only from the provided evidence" not in json.dumps(response, ensure_ascii=False)
         node_names = [entry["node"] for entry in response["node_trace"]]
         assert node_names[:2] == ["TaskRouter", "Planner"]
-        assert node_names.count("ToolExecutor") == 8
+        assert node_names.count("ToolExecutor") == 9
         assert node_names[-4:] == ["Verifier", "Reviewer", "Finalizer", "OrchestratorReview"]
         assert response["external_status"] == {"provider": "disabled", "available": False}
 
@@ -988,6 +1071,7 @@ def test_ai_message_uses_local_evidence_with_fake_provider(tmp_path: Path) -> No
             "context.resolve",
             "evidence.build",
             "expansion.policy",
+            "search.plan",
             "external.research",
             "evidence.gate",
             "evidence.assess",
@@ -1156,6 +1240,61 @@ def test_ai_message_rejects_message_above_budget_and_records_run(tmp_path: Path)
         assert run["error"]["code"] == "guardrail_failed"
         assert run["budget"] == {}
         assert "Summarize this note" not in json.dumps(runs, ensure_ascii=False)
+    finally:
+        server.close()
+
+
+def test_ai_message_langgraph_engine_is_explicit_or_reports_missing_dependency(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(content_dir, meta_dir, "mcp.html", title="MCP Security", collection="AI", tags=["MCP"])
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_qa_engine="langgraph",
+    )
+    try:
+        conversation = server.json("POST", "/api/ai/conversations", {"context": {"item_id": "mcp.html"}})["conversation"]
+        if not langgraph_available():
+            code, error = server.json_error("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "What does MCP security cover?"})
+            assert code == 400
+            assert "LangGraph is not installed" in error["detail"]
+            runs = server.request("GET", "/api/ai/runs")
+            assert runs["runs"][0]["graph"] == "LangGraphKnowledgeQA.v1"
+            assert runs["runs"][0]["error"]["code"] == "runtime_failed"
+            return
+
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "What does MCP security cover?"})
+        assert response["graph"] == "LangGraphKnowledgeQA.v1"
+        assert response["sources"][0]["item_id"] == "mcp.html"
+        assert response["message"]["role"] == "assistant"
+    finally:
+        server.close()
+
+
+def test_ai_message_default_auto_uses_langgraph_or_fallback_runtime(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note(content_dir, meta_dir, "mcp.html", title="MCP Security", collection="AI", tags=["MCP"])
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+    )
+    try:
+        conversation = server.json("POST", "/api/ai/conversations", {"context": {"item_id": "mcp.html"}})["conversation"]
+        response = server.json("POST", f"/api/ai/conversations/{conversation['id']}/messages", {"content": "What does MCP security cover?"})
+        expected_engine = "LangGraphKnowledgeQA.v1" if langgraph_available() else "AgentRuntime.qa.v1"
+
+        assert response["graph"] == expected_engine
+        assert response["message"]["role"] == "assistant"
+        assert response["sources"][0]["item_id"] == "mcp.html"
+        assert response["qa_report"]["source_count"] == 1
     finally:
         server.close()
 
@@ -1987,6 +2126,7 @@ def test_ai_message_uses_model_knowledge_for_related_concept_question_without_lo
         ai_provider="fake",
         ai_model="fake-test-model",
         ai_enabled=True,
+        ai_qa_engine="agent_runtime",
     )
     try:
         conversation = server.json(
@@ -2021,6 +2161,7 @@ def test_ai_message_exposes_search_plan_without_changing_external_status_shape(t
         ai_enabled=True,
         ai_external_search="fake",
         ai_external_search_max_results=3,
+        ai_qa_engine="agent_runtime",
     )
     try:
         conversation = server.json(
@@ -2065,6 +2206,7 @@ def test_ai_message_entity_background_question_triggers_external_search(tmp_path
         ai_enabled=True,
         ai_external_search="fake",
         ai_external_search_max_results=3,
+        ai_qa_engine="agent_runtime",
     )
     try:
         conversation = server.json(
@@ -2277,6 +2419,7 @@ def test_agent_runtime_external_search_is_not_rejected_as_weak_local_evidence(tm
         ai_enabled=True,
         ai_external_search="fake",
         ai_external_search_max_results=3,
+        ai_qa_engine="agent_runtime",
     )
     try:
         conversation = server.json(
@@ -2338,8 +2481,9 @@ def test_ai_message_external_search_inherits_recent_context(tmp_path: Path) -> N
 
         assert response["external_status"]["queried"] is True
         source_urls = " ".join(str(source.get("url") or "") for source in response["sources"])
-        assert "联网搜索" in source_urls
+        assert "联网搜索" not in source_urls
         assert "%E7%94%B5%E5%8A%9B" in source_urls or "电力" in source_urls
+        assert "政策" in source_urls or "监管" in source_urls or "gov.cn" in source_urls
         assert response["conversation"]["context_key"] == conversation["context_key"]
     finally:
         server.close()
@@ -2430,7 +2574,7 @@ def test_external_search_filtered_results_do_not_trigger_model_call(tmp_path: Pa
     assert state.sources == []
     assert state.skipped_model_call is True
     assert state.usage == {}
-    assert state.answer == EXTERNAL_UNAVAILABLE_ANSWER
+    assert state.answer == EXTERNAL_NO_RESULTS_ANSWER
     assert state.external_status["provider"] == "unsafe-test"
     assert state.external_status["available"] is True
     assert state.external_status["count"] == 0
@@ -3346,7 +3490,14 @@ def test_ai_eval_agent_run_requires_explicit_enable_flag(tmp_path: Path) -> None
         tags=["Agent"],
         html="<!doctype html><html><body><h1>Agent Eval Note</h1><p>Runtime evaluation evidence.</p></body></html>",
     )
-    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, ai_provider="fake", ai_model="fake-test-model")
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_qa_engine="agent_runtime",
+    )
     try:
         code, error = server.json_error("POST", "/api/ai/eval/agent-qa-run", {"question": "总结这篇笔记", "context": {"item_id": "agent-eval.html"}})
 
@@ -3368,7 +3519,14 @@ def test_ai_eval_agent_run_records_sanitized_agent_runtime_run(tmp_path: Path) -
         tags=["Agent"],
         html="<!doctype html><html><body><h1>Agent Runtime Note</h1><p>Runtime evidence should stay private in run history.</p></body></html>",
     )
-    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, ai_provider="fake", ai_model="fake-test-model")
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_qa_engine="agent_runtime",
+    )
     try:
         response = server.json(
             "POST",
@@ -3409,7 +3567,14 @@ def test_ai_eval_qa_runtime_comparison_can_run_agent_only(tmp_path: Path) -> Non
         tags=["Agent"],
         html="<!doctype html><html><body><h1>Comparison Runtime Note</h1><p>Comparison evidence.</p></body></html>",
     )
-    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, ai_provider="fake", ai_model="fake-test-model")
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_qa_engine="agent_runtime",
+    )
     try:
         response = server.json(
             "POST",
