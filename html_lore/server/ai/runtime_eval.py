@@ -18,7 +18,7 @@ from .model_client import ModelClient
 from .prompts import build_qa_answer_messages
 from .langgraph_qa import LangGraphKnowledgeQARuntime, LangGraphQAError, build_langgraph_qa_runtime
 from .runtime import AgentRequest, AgentRunResult, AgentRuntime, BasicFinalizer, ToolRegistry
-from .tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, SearchPlanTool
+from .tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, SearchPlanTool, SourceEvaluatorTool
 
 
 DEFAULT_RUNTIME_EVAL_CASES = [
@@ -67,8 +67,9 @@ def build_qa_tools(
         ),
     )
     tools.register(ExpansionPolicyTool())
-    tools.register(SearchPlanTool())
+    tools.register(SearchPlanTool(model_client if use_model else None))
     tools.register(ExternalResearchTool(build_external_search_adapter(settings)))
+    tools.register(SourceEvaluatorTool(model_client if use_model else None))
     tools.register(EvidenceGateTool(max_prompt_chars=settings.ai_max_prompt_chars))
     tools.register(EvidenceAssessmentTool())
     if use_model:
@@ -466,6 +467,7 @@ def public_agent_qa_report(result: AgentRunResult, evidence: dict[str, Any]) -> 
     if resolution is not None:
         planner["conversation_resolution"] = public_conversation_resolution(resolution)
     research = tool_output(result, "external.research")
+    source_evaluation = tool_output(result, "source.evaluate")
     external_status = research.get("status") if isinstance(research.get("status"), dict) else {}
     research_trace = research.get("trace") if isinstance(research.get("trace"), list) else []
     planned_search = tool_output(result, "search.plan")
@@ -511,6 +513,13 @@ def public_agent_qa_report(result: AgentRunResult, evidence: dict[str, Any]) -> 
         "skipped_model_call": skipped_model_call,
         "retrieval": local_evidence.get("status") if isinstance(local_evidence.get("status"), dict) else {},
         "external_status": external_status,
+        "source_evaluation": {
+            "mode": str(source_evaluation.get("mode") or ""),
+            "kept_count": int(source_evaluation.get("kept_count") or 0) if source_evaluation else 0,
+            "dropped_count": int(source_evaluation.get("dropped_count") or 0) if source_evaluation else 0,
+            "decisions": source_evaluation.get("decisions") if isinstance(source_evaluation.get("decisions"), list) else [],
+            "error": source_evaluation.get("error") if isinstance(source_evaluation.get("error"), dict) else {},
+        },
         "search_plan": search_plan,
         "research_trace": research_trace,
         "planner": planner,

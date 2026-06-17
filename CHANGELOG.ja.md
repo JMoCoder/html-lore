@@ -4,6 +4,28 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-17
+
+### Added
+
+- ナレッジベース Q&A を正式な 1.0.0 リリースとして昇格し、LangGraph 優先の
+  orchestration、コンテキスト検索、直近会話の継承、Markdown 表示、クリック可能な
+  source、コンテキスト別履歴を備えました。
+- Tavily -> Brave -> disabled の外部検索 fallback chain を追加し、provider は
+  どちらか一方でも利用できます。
+- 意図に応じて結果上限を増やしつつコスト上限を保つ動的検索 planning を追加しました。
+
+### Changed
+
+- README の 1.0.0 範囲、外部検索設定、demo / static 境界の説明を更新しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.0.0` に更新しました。
+
+### Fixed
+
+- 検索結果に URL が含まれる場合、Q&A の外部 source pill から source URL
+  を直接開けるようにしました。
+
 ## [0.9.10] - 2026-06-17
 
 ### Changed

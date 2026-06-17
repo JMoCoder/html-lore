@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ class ExternalSearchProviderError(ExternalSearchError):
 
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
+BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 TAVILY_DEPTHS = {"basic", "fast", "ultra-fast", "advanced"}
 TAVILY_TOPICS = {"general", "news", "finance"}
 TAVILY_TIME_RANGES = {"day", "week", "month", "year", "d", "w", "m", "y"}
@@ -141,7 +143,7 @@ class TavilyExternalSearchAdapter:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/0.9.10 tavily-search",
+                "User-Agent": "HTMlore/1.0.0 tavily-search",
                 "Accept": "application/json",
             },
         )
@@ -157,21 +159,121 @@ class TavilyExternalSearchAdapter:
         return parse_tavily_results(data)
 
 
+class BraveExternalSearchAdapter:
+    name = "brave"
+
+    def __init__(self, *, api_key: str, max_results: int = 5, search_lang: str = "", country: str = "", freshness: str = "") -> None:
+        self.api_key = str(api_key or "")
+        self.max_results = max(1, min(int(max_results or 5), 20))
+        self.search_lang = normalize_choice(search_lang, {"", "en", "zh", "ja", "de", "fr", "es", "pt", "it", "nl", "ru", "sv", "no", "da", "fi", "pl", "tr", "ko", "cs", "hu", "vi", "th", "id"}, "")
+        self.country = str(country or "").strip().lower()
+        self.freshness = normalize_choice(freshness, {"", "pd", "pw", "pm", "py"}, "")
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def search(self, query: str, *, max_results: int = 5) -> list[ExternalSearchResult]:
+        if not self.available:
+            raise ExternalSearchUnavailable("Brave Search API key is not configured.")
+        safe_limit = max(1, min(int(max_results or self.max_results), self.max_results, 20))
+        prepared, _ = prepare_external_search_query(query)
+        payload = {
+            "q": prepared,
+            "count": safe_limit,
+            "search_lang": self.search_lang or select_brave_search_lang(prepared),
+        }
+        country = self.country or extract_country_hint(prepared)
+        if country:
+            payload["country"] = country
+        freshness = self.freshness or select_brave_freshness(prepared)
+        if freshness:
+            payload["freshness"] = freshness
+        url = f"{BRAVE_SEARCH_URL}?{urllib.parse.urlencode(payload)}"
+        request = urllib.request.Request(
+            url,
+            method="GET",
+            headers={
+                "X-Subscription-Token": self.api_key,
+                "Accept": "application/json",
+                "User-Agent": "HTMlore/1.0.0 brave-search",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise ExternalSearchProviderError(f"Brave returned HTTP {exc.code}.") from exc
+        except urllib.error.URLError as exc:
+            raise ExternalSearchProviderError("Brave external search is unreachable.") from exc
+        except json.JSONDecodeError as exc:
+            raise ExternalSearchProviderError("Brave returned invalid JSON.") from exc
+        return parse_brave_results(data)
+
+
 def build_external_search_adapter(settings: ServerSettings) -> ExternalSearchAdapter:
     provider = settings.ai_external_search.strip().lower()
+    brave_adapter = BraveExternalSearchAdapter(
+        api_key=settings.ai_external_search_brave_api_key,
+        max_results=settings.ai_external_search_max_results,
+        search_lang="",
+        country="",
+        freshness="",
+    )
+    tavily_adapter = TavilyExternalSearchAdapter(
+        api_key=settings.ai_external_search_api_key,
+        max_results=settings.ai_external_search_max_results,
+        search_depth=settings.ai_external_search_depth,
+        auto_parameters=settings.ai_external_search_auto_parameters,
+        topic=settings.ai_external_search_topic,
+        time_range=settings.ai_external_search_time_range,
+        include_raw_content=settings.ai_external_search_include_raw_content,
+    )
     if provider == "fake":
         return FakeExternalSearchAdapter(max_results=settings.ai_external_search_max_results)
     if provider == "tavily":
-        return TavilyExternalSearchAdapter(
-            api_key=settings.ai_external_search_api_key,
-            max_results=settings.ai_external_search_max_results,
-            search_depth=settings.ai_external_search_depth,
-            auto_parameters=settings.ai_external_search_auto_parameters,
-            topic=settings.ai_external_search_topic,
-            time_range=settings.ai_external_search_time_range,
-            include_raw_content=settings.ai_external_search_include_raw_content,
-        )
+        if brave_adapter.available:
+            return ChainedExternalSearchAdapter([tavily_adapter, brave_adapter], max_results=settings.ai_external_search_max_results)
+        return tavily_adapter
+    if provider == "brave":
+        return brave_adapter if brave_adapter.available else DisabledExternalSearchAdapter()
+    if provider == "tavily+brave" or provider == "brave+tavily":
+        return ChainedExternalSearchAdapter([tavily_adapter, brave_adapter], max_results=settings.ai_external_search_max_results)
+    if brave_adapter.available and tavily_adapter.available:
+        return ChainedExternalSearchAdapter([tavily_adapter, brave_adapter], max_results=settings.ai_external_search_max_results)
+    if tavily_adapter.available:
+        return tavily_adapter
+    if brave_adapter.available:
+        return brave_adapter
     return DisabledExternalSearchAdapter()
+
+
+class ChainedExternalSearchAdapter:
+    def __init__(self, adapters: list[ExternalSearchAdapter], *, max_results: int = 5) -> None:
+        self.adapters = [adapter for adapter in adapters if adapter is not None and adapter.available]
+        self.max_results = max(1, int(max_results or 5))
+        self.name = "+".join(adapter.name for adapter in self.adapters) if self.adapters else "disabled"
+
+    @property
+    def available(self) -> bool:
+        return any(adapter.available for adapter in self.adapters)
+
+    def search(self, query: str, *, max_results: int = 5) -> list[ExternalSearchResult]:
+        last_error: Exception | None = None
+        for adapter in self.adapters:
+            if not adapter.available:
+                continue
+            try:
+                return adapter.search(query, max_results=max_results)
+            except ExternalSearchUnavailable as exc:
+                last_error = exc
+                continue
+            except ExternalSearchProviderError as exc:
+                last_error = exc
+                continue
+        if last_error is not None:
+            raise ExternalSearchUnavailable(str(last_error))
+        raise ExternalSearchUnavailable("External content expansion is not configured.")
 
 
 def sanitize_external_results(results: list[ExternalSearchResult]) -> tuple[list[dict[str, Any]], int]:
@@ -360,6 +462,44 @@ def parse_tavily_results(data: dict[str, Any]) -> list[ExternalSearchResult]:
             continue
         results.append(ExternalSearchResult(title=title[:180], url=url, snippet=snippet[:1200], accessed_at=utc_now()))
     return results
+
+
+def parse_brave_results(data: dict[str, Any]) -> list[ExternalSearchResult]:
+    web = data.get("web") if isinstance(data, dict) else {}
+    results = web.get("results") if isinstance(web, dict) else []
+    if not isinstance(results, list):
+        return []
+    parsed: list[ExternalSearchResult] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("url") or "External source").strip()
+        url = str(item.get("url") or "").strip()
+        snippet = str(item.get("description") or item.get("snippet") or "").strip()
+        if not url or not snippet:
+            continue
+        parsed.append(ExternalSearchResult(title=title[:180], url=url, snippet=snippet[:1200], accessed_at=utc_now()))
+    return parsed
+
+
+def select_brave_search_lang(query: str) -> str:
+    text = str(query or "")
+    if any("\u4e00" <= char <= "\u9fff" for char in text):
+        return "zh"
+    if any("\u3040" <= char <= "\u30ff" for char in text):
+        return "ja"
+    return "en"
+
+
+def select_brave_freshness(query: str) -> str:
+    lowered = str(query or "").lower()
+    if any(marker in lowered for marker in ("today", "24h", "今日", "今天")):
+        return "pd"
+    if any(marker in lowered for marker in ("this week", "weekly", "本周", "今週")):
+        return "pw"
+    if is_time_sensitive_search_query(query):
+        return "pm"
+    return ""
 
 
 def normalize_choice(value: str, choices: set[str], default: str) -> str:

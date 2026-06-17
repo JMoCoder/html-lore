@@ -7,9 +7,12 @@ from html_lore.server.ai.context import AIContextError
 from html_lore.server.ai.model_client import ModelClient
 from html_lore.server.ai.prompts import build_qa_answer_messages
 from html_lore.server.ai.providers import AIProviderConfig
+from html_lore.server.ai.research import ResearchWorkflow, research_limits_for_plan
 from html_lore.server.ai.route_planner import plan_ai_route, plan_qa_route
 from html_lore.server.ai.conversation_resolution import resolve_conversation_turn
 from html_lore.server.ai.retrieval import is_low_trust_generated_item, retrieve_keyword_evidence
+from html_lore.server.ai.search_agent import SearchPlannerAgent
+from html_lore.server.ai.search_planner import SearchPlan
 from html_lore.server.ai.runtime import (
     AgentPlan,
     AgentRequest,
@@ -27,7 +30,7 @@ from html_lore.server.ai.runtime import (
 )
 from html_lore.server.ai.langgraph_qa import LangGraphKnowledgeQARuntime, langgraph_available
 from html_lore.server.ai.runtime_eval import build_selected_qa_runtime, compare_qa_runtimes, evaluate_qa_result
-from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, SearchPlanTool, build_evidence_pack, evidence_chunks_overlap_query, external_evidence_assessment
+from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, EvidenceGateTool, EvidenceTool, ExpansionPolicyTool, ExternalResearchTool, InputGuardrailTool, LLMChatTool, SearchPlanTool, SourceEvaluatorTool, build_evidence_pack, evidence_chunks_overlap_query, external_evidence_assessment
 from html_lore.server.ai.qa_search_plan import build_qa_search_plan
 from html_lore.server.ai.eval import InMemoryEvalConversationStore
 from html_lore.server.ai.external_search import ExternalSearchResult
@@ -259,6 +262,7 @@ def qa_tools(service: ItemService, *, model_client: ModelClient | None = None, u
     tools.register(ExpansionPolicyTool())
     tools.register(SearchPlanTool())
     tools.register(ExternalResearchTool())
+    tools.register(SourceEvaluatorTool(model_client if use_model else None))
     tools.register(EvidenceGateTool(max_prompt_chars=12000))
     tools.register(EvidenceAssessmentTool())
     if use_model and model_client is not None:
@@ -607,6 +611,7 @@ def test_knowledge_qa_agent_happy_path_uses_context_and_evidence_tools(tmp_path)
         "expansion.policy",
         "search.plan",
         "external.research",
+        "source.evaluate",
         "evidence.gate",
         "evidence.assess",
     ]
@@ -1121,6 +1126,40 @@ def test_evidence_gate_distinguishes_external_no_results_from_unavailable() -> N
     assert unavailable["answer"] == EXTERNAL_UNAVAILABLE_ANSWER
 
 
+def test_evidence_gate_keeps_local_context_when_external_search_has_no_usable_sources() -> None:
+    tool = EvidenceGateTool(max_prompt_chars=12000)
+    result = tool.run(
+        {"query": "风泉和晶科有什么关系"},
+        {
+            "tool_outputs": {
+                "context.resolve": {"context": {"scope": "reader", "source_mode": "local_plus_external", "item_ids": ["note.html"]}},
+                "evidence.build": {
+                    "query": "风泉和晶科有什么关系",
+                    "chunks": [
+                        {
+                            "kind": "local",
+                            "item_id": "note.html",
+                            "title": "储能基金结构方案",
+                            "snippet": "笔记说明基金方案中涉及风泉资本、晶科以及储能项目公司安排。",
+                            "score": 24,
+                        },
+                    ],
+                    "sources": [],
+                },
+                "expansion.policy": {"mode": "web_research", "requires_citation": True},
+                "external.research": {"sources": [], "status": {"provider": "tavily", "available": True, "queried": True, "count": 0}},
+                "source.evaluate": {"sources": [], "mode": "llm", "kept_count": 0, "dropped_count": 3},
+            },
+        },
+    )
+
+    assert result["answer"] == ""
+    assert result["skipped_model_call"] is False
+    assert result["chunks"][0]["title"] == "储能基金结构方案"
+    assert result["sources"][0]["kind"] == "local"
+    assert "external_evidence_count=0" in "\n".join(message["content"] for message in result["messages"])
+
+
 def test_external_research_uses_independent_search_plan_query() -> None:
     class RecordingSearch:
         name = "recording"
@@ -1166,6 +1205,184 @@ def test_external_research_uses_independent_search_plan_query() -> None:
     assert search.queries == ["基金 SPV 项目公司 优先 劣后 案例 中国 中文"]
     assert result["queried"] is True
     assert result["search_plan"]["search"]["search_intent"] == "case_search"
+
+
+def test_research_limits_scale_by_search_intent_with_total_cap() -> None:
+    plan = SearchPlan(
+        original_query="A B",
+        intent="entity_relationship",
+        queries=["A B relation", "A B ownership", "A B announcement", "A B registry"],
+        required_terms=["A", "B"],
+        preferred_domains=[],
+        authoritative_required=False,
+        query_expansions=[],
+        evidence_terms=[],
+    )
+
+    limits = research_limits_for_plan(plan, base_max_results=5, total_candidate_limit=24)
+
+    assert limits["base_max_results"] == 5
+    assert limits["intent_max_results"] == 8
+    assert limits["max_results"] == 6
+    assert limits["total_candidate_limit"] == 24
+
+
+def test_research_workflow_uses_dynamic_per_query_limit() -> None:
+    class RecordingSearch:
+        name = "recording"
+        max_results = 5
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, int]] = []
+
+        @property
+        def available(self) -> bool:
+            return True
+
+        def search(self, query: str, *, max_results: int = 5):
+            self.calls.append((query, max_results))
+            return [
+                ExternalSearchResult(
+                    title=f"{query} result {index}",
+                    url=f"https://example.test/{query.replace(' ', '-')}/{index}",
+                    snippet=f"{query} relation investment ownership",
+                    accessed_at="2026-06-16T00:00:00+00:00",
+                )
+                for index in range(max_results)
+            ]
+
+    plan = SearchPlan(
+        original_query="风泉资本 晶科",
+        intent="entity_relationship",
+        queries=["风泉资本 晶科 关系", "风泉资本 晶科 股权", "风泉资本 晶科 公告", "风泉资本 晶科 工商"],
+        required_terms=["风泉资本", "晶科"],
+        preferred_domains=[],
+        authoritative_required=False,
+        query_expansions=[],
+        evidence_terms=["关系", "投资", "股权"],
+    )
+    search = RecordingSearch()
+
+    result = ResearchWorkflow(search).run_plan(plan)
+
+    assert search.calls
+    assert {limit for _, limit in search.calls} == {6}
+    assert result.status["base_max_results"] == 5
+    assert result.status["intent_max_results"] == 8
+    assert result.status["max_results"] == 6
+    assert result.status["total_candidate_limit"] == 24
+
+
+def test_search_planner_agent_uses_model_search_plan() -> None:
+    class PlannerModel:
+        def chat(self, *, messages, temperature=0.0, max_tokens=700):
+            return {
+                "content": json.dumps(
+                    {
+                        "should_search": True,
+                        "search_intent": "entity_relationship",
+                        "queries": [
+                            "风泉资本 晶科 关系 投资 基金",
+                            "风泉资本 晶科 股东 合作 公告",
+                        ],
+                        "required_terms": ["风泉资本", "晶科"],
+                        "preferred_domains": ["amac.org.cn"],
+                        "authoritative_required": False,
+                        "evidence_terms": ["关系", "投资", "基金"],
+                        "locality_hint": "china",
+                        "language_hint": "zh",
+                        "reason": "model_planned_relationship_search",
+                    },
+                    ensure_ascii=False,
+                ),
+                "model": "planner-test",
+                "usage": {"total_tokens": 12},
+            }
+
+    planner = SearchPlannerAgent(PlannerModel())
+    result = planner.plan(
+        question="风泉资本什么背景，和晶科有什么关系",
+        planner={"should_search": True, "search_intent": "entity_relationship"},
+        policy={"mode": "web_research"},
+        context={"scope": "reader", "source_mode": "local_plus_external", "items": [{"title": "储能基金结构方案"}]},
+        local_evidence={},
+    )
+
+    assert result["planner_mode"] == "llm"
+    assert result["should_search"] is True
+    assert result["effective_should_search"] is True
+    assert result["search"]["search_intent"] == "entity_relationship"
+    assert result["search"]["required_terms"] == ["风泉资本", "晶科"]
+    assert result["queries"] == ["风泉资本 晶科 关系 投资 基金", "风泉资本 晶科 股东 合作 公告"]
+
+
+def test_search_plan_tool_falls_back_without_model() -> None:
+    tool = SearchPlanTool()
+    state = {
+        "query": "风泉资本什么背景，和晶科有什么关系",
+        "tool_outputs": {
+            "context.resolve": {"context": {"scope": "reader", "source_mode": "local_plus_external", "items": [{"title": "储能基金结构方案"}]}},
+            "expansion.policy": {"mode": "web_research"},
+            "evidence.build": {},
+        },
+    }
+
+    result = tool.run({"query": "风泉资本什么背景，和晶科有什么关系", "planner": {"should_search": True, "search_intent": "entity_relationship"}}, state)
+
+    assert result["planner_mode"] == "heuristic_fallback"
+    assert result["should_search"] is True
+    assert result["effective_should_search"] is True
+    assert result["search"]["required_terms"] == ["风泉资本", "晶科"]
+
+
+def test_source_evaluator_drops_unrelated_external_candidates() -> None:
+    class EvaluatorModel:
+        def chat(self, *, messages, temperature=0.0, max_tokens=700):
+            return {
+                "content": json.dumps(
+                    {
+                        "sources": [
+                            {"index": 1, "keep": False, "confidence": 0.96, "reason": "literary source, not business relationship"},
+                            {"index": 2, "keep": False, "confidence": 0.9, "reason": "mentions only one entity"},
+                            {"index": 3, "keep": True, "confidence": 0.88, "reason": "directly discusses both entities and fund participation"},
+                        ],
+                        "overall": {"usable_count": 1, "reason": "one direct source"},
+                    },
+                    ensure_ascii=False,
+                ),
+                "model": "source-evaluator-test",
+                "usage": {},
+            }
+
+    tool = SourceEvaluatorTool(EvaluatorModel())
+    state = {
+        "retrieval_query": "风泉和晶科有什么关系",
+        "tool_outputs": {
+            "expansion.policy": {"mode": "web_research"},
+            "external.research": {
+                "search_plan": {
+                    "search": {
+                        "search_intent": "entity_relationship",
+                        "required_terms": ["风泉", "晶科"],
+                        "evidence_terms": ["关系", "合作", "投资", "基金"],
+                    },
+                },
+                "sources": [
+                    {"kind": "external", "title": "《将进酒》的风泉是个怎样的人？", "url": "https://example.test/novel", "snippet": "文学角色讨论。"},
+                    {"kind": "external", "title": "晶科年度报告", "url": "https://example.test/jinko", "snippet": "晶科业务介绍。"},
+                    {"kind": "external", "title": "风泉资本与晶科共同参与设立基金", "url": "https://example.test/relation", "snippet": "风泉和晶科围绕基金设立、投资关系开展合作。"},
+                ],
+            },
+        },
+    }
+
+    result = tool.run({"query": "风泉和晶科有什么关系"}, state)
+
+    assert result["mode"] == "llm"
+    assert result["kept_count"] == 1
+    assert result["dropped_count"] == 2
+    assert [source["title"] for source in result["sources"]] == ["风泉资本与晶科共同参与设立基金"]
+    assert result["decisions"][0]["keep"] is False
 
 
 def test_build_qa_answer_messages_prefers_gated_evidence_over_raw_evidence() -> None:
@@ -1265,6 +1482,26 @@ def test_qa_planner_agent_uses_model_json_when_valid() -> None:
     assert plan.metadata["planner"]["planner_mode"] == "llm"
     assert plan.metadata["planner"]["retrieval_mode"] == "web_research"
     assert plan.metadata["planner"]["reason"] == "model_planned_case_search"
+
+
+def test_qa_planner_agent_keeps_specific_search_intent_from_model() -> None:
+    class PlannerModel:
+        def chat(self, *, messages, temperature=0.0, max_tokens=320):
+            return {
+                "content": '{"intent":"current_info","retrieval_mode":"web_research","should_expand":true,"should_search":true,"search_intent":"entity_relationship","locality":"local_context_first","reason":"relationship_lookup"}',
+                "model": "planner-test",
+                "usage": {},
+            }
+
+    agent = KnowledgeQATaskAgent(use_model=True, model_client=PlannerModel())
+    plan = agent.plan(
+        AgentRequest(content="A 公司和 B 基金有什么关系", context={"source_mode": "local_plus_external"}),
+        {},
+        attempt=1,
+    )
+
+    assert plan.metadata["planner"]["planner_mode"] == "llm"
+    assert plan.metadata["planner"]["search_intent"] == "entity_relationship"
 
 
 def test_qa_planner_agent_falls_back_when_model_json_is_invalid() -> None:
@@ -1468,6 +1705,46 @@ def test_qa_search_plan_builds_entity_background_queries() -> None:
     assert plan.plan.intent == "entity_background"
     assert "风泉资本" in plan.plan.required_terms
     assert any("工商" in query or "备案" in query for query in plan.plan.queries)
+
+
+def test_qa_search_plan_builds_entity_relationship_queries() -> None:
+    plan = build_qa_search_plan(
+        "风泉和晶科有什么关系",
+        planner={"should_search": True, "intent": "current_info", "search_intent": "entity_lookup"},
+        context={"items": [{"title": "储能基金两层结构方案"}]},
+    )
+
+    assert plan.should_search is True
+    assert plan.plan is not None
+    assert plan.plan.intent == "entity_relationship"
+    assert plan.plan.required_terms == ["风泉", "晶科"]
+    assert any("风泉" in query and "晶科" in query for query in plan.plan.queries)
+
+
+def test_qa_search_plan_cleans_mixed_background_relationship_question() -> None:
+    plan = build_qa_search_plan(
+        "风泉资本什么背景，和晶科有什么关系",
+        planner={"should_search": True, "intent": "current_info", "search_intent": "entity_relationship"},
+        context={"items": [{"title": "储能基金两层结构方案"}]},
+    )
+
+    assert plan.should_search is True
+    assert plan.plan is not None
+    assert plan.plan.intent == "entity_relationship"
+    assert plan.plan.required_terms == ["风泉资本", "晶科"]
+    assert plan.plan.queries[0].startswith("风泉资本 晶科")
+
+
+def test_qa_search_plan_respects_specific_planner_search_intent() -> None:
+    plan = build_qa_search_plan(
+        "风泉和晶科有什么关系",
+        planner={"should_search": True, "intent": "current_info", "search_intent": "entity_relationship"},
+        context={"items": [{"title": "储能基金两层结构方案"}]},
+    )
+
+    assert plan.should_search is True
+    assert plan.plan is not None
+    assert plan.plan.intent == "entity_relationship"
 
 
 def test_knowledge_qa_verifier_rejects_mechanical_answer() -> None:

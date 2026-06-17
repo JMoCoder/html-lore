@@ -279,6 +279,9 @@ class EvidenceGateNode:
             )
             state.evidence = budgeted_evidence
             state.recent_messages = budgeted_history
+            prompt_snapshot = budget_report.pop("_budgeted_snapshot", state.context_snapshot) if isinstance(budget_report, dict) else state.context_snapshot
+            if not isinstance(prompt_snapshot, dict):
+                prompt_snapshot = state.context_snapshot
             state.evidence_budget = budget_report
             state.retrieval_status["budget"] = budget_report
             state.sources = assign_source_indices(dedupe_display_sources(state.evidence))
@@ -286,7 +289,7 @@ class EvidenceGateNode:
             state.prompt_messages = build_answer_prompt(
                 state.content,
                 prompt_evidence,
-                state.context_snapshot,
+                prompt_snapshot,
                 budgeted_history,
                 expansion_policy=state.expansion_policy,
                 agent=self.answer_agent,
@@ -515,6 +518,34 @@ def budget_prompt_inputs(
             agent=agent,
             prompt=prompt,
         )
+    while prompt_chars(messages) > max_chars and working_evidence:
+        current_chars = prompt_chars(messages)
+        overage = current_chars - max_chars
+        if overage <= 0:
+            break
+        largest_index, largest = max(
+            enumerate(working_evidence),
+            key=lambda pair: len(str(pair[1].get("snippet") or "")),
+        )
+        snippet = str(largest.get("snippet") or "")
+        if len(snippet) <= 120:
+            break
+        next_limit = max(120, len(snippet) - overage - 80)
+        if next_limit >= len(snippet):
+            next_limit = max(120, len(snippet) - max(80, len(snippet) // 4))
+        updated = dict(largest)
+        updated["snippet"] = snippet[:next_limit].rstrip() + "..."
+        working_evidence[largest_index] = updated
+        trimmed_evidence_chars = True
+        messages = build_answer_prompt(
+            content,
+            working_evidence,
+            working_snapshot,
+            working_history,
+            expansion_policy=expansion_policy,
+            agent=agent,
+            prompt=prompt,
+        )
 
     report = {
         "max_prompt_chars": max_chars,
@@ -530,6 +561,7 @@ def budget_prompt_inputs(
         "context_items_original": context_report["original_item_count"],
         "context_items_selected": context_report["selected_item_count"],
         "context_items_omitted": context_report["omitted_item_count"],
+        "_budgeted_snapshot": working_snapshot,
     }
     return working_evidence, working_history, report
 
@@ -1153,11 +1185,22 @@ def format_expansion_policy_for_prompt(policy: dict[str, Any]) -> str:
     general_allowed = mode == "model_knowledge"
     web_required = mode == "web_research"
     reason = str(policy.get("reason") or "")
-    return (
+    parts = [
         f"mode={mode}, reason={reason}, "
         f"general_knowledge_allowed={str(general_allowed).lower()}, "
         f"web_research_required={str(web_required).lower()}"
-    )
+    ]
+    if "external_evidence_count" in policy:
+        parts.append(f"external_evidence_count={safe_int(policy.get('external_evidence_count'), 0)}")
+    external_status = policy.get("external_status") if isinstance(policy.get("external_status"), dict) else {}
+    if external_status:
+        parts.append(
+            "external_status="
+            f"provider:{external_status.get('provider') or ''},"
+            f"queried:{str(bool(external_status.get('queried'))).lower()},"
+            f"count:{safe_int(external_status.get('count'), 0)}"
+        )
+    return ", ".join(parts)
 
 
 def format_context_for_prompt(snapshot: dict[str, Any]) -> str:

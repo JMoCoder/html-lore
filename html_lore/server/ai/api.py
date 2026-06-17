@@ -42,6 +42,8 @@ class AIService:
             "available": bool(external_search.available),
             "max_results": max(1, int(getattr(external_search, "max_results", self.settings.ai_external_search_max_results) or 5)),
         }
+        if hasattr(external_search, "adapters"):
+            external_status["chain"] = [str(getattr(adapter, "name", "") or "") for adapter in getattr(external_search, "adapters") if getattr(adapter, "name", "")]
         return {
             "configured": config.configured,
             "available": bool(client_status["available"]),

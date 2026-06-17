@@ -1418,6 +1418,7 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
+  margin-top: 6px;
   min-width: 0;
   font-size: 11px;
   color: var(--muted);
@@ -1434,10 +1435,10 @@ textarea {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 5px;
-  flex: 0 1 min(260px, calc(100% - 42px));
-  width: auto;
+  flex: 0 1 auto;
+  width: fit-content;
   min-width: 0;
-  max-width: 100%;
+  max-width: min(260px, calc(100% - 42px));
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 3px 8px;

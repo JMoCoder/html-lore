@@ -17,9 +17,9 @@ HTMlore 是一个自托管 HTML 知识库工作台，用于保存、浏览、阅
 - **Web 应用是主客户端。** 项目目标是浏览器和移动端 PWA，而不是额外开发桌面端。
 - **AI 是可选服务层。** 当前已经具备 AI 工作流的界面和上下文架构，但凭据与模型调用不会写入静态前端。
 
-## 0.9.x 当前范围
+## 1.0.0 当前范围
 
-当前 `0.9.x` 版本线面向本地、私有网络和自托管的真实使用：Docker 部署、内置登录、HTML 导入、元数据持久化、筛选、阅读、归档、公开分享，以及第一批服务端 AI 工作流。
+当前 `1.0.0` 版本线面向本地、私有网络和自托管的真实使用：Docker 部署、内置登录、HTML 导入、元数据持久化、筛选、阅读、归档、公开分享，以及第一批服务端 AI 工作流。
 
 当前已实现：
 
@@ -42,7 +42,7 @@ HTMlore 是一个自托管 HTML 知识库工作台，用于保存、浏览、阅
 - 资料库、集合、标签的侧栏显隐管理。
 - 全局 AI 侧栏，支持工作区、集合、标签、阅读页和用户手动选择笔记等上下文。
 - 服务端 AI 服务商配置，支持 OpenAI-compatible 接口。API key 只从后端环境变量读取，不允许通过浏览器设置接口提交或读取。
-- 知识库问答 beta：支持上下文检索、当前上下文摘要、基于近期对话的追问理解、Markdown 回复渲染、可点击的外部来源引用、会话持久化、按当前上下文恢复最近会话和会话历史。
+- 知识库问答已正式交付：支持上下文检索、当前上下文摘要、基于近期对话的追问理解、Markdown 回复渲染、可点击的外部来源引用、会话持久化、按当前上下文恢复最近会话和会话历史。
 - 知识库问答运行时已拆分为 planner、search planner、answer、verifier、reviewer 等阶段，并暴露 agent/prompt trace，便于后续统一多智能体后端架构演进与排障。
 - AI 回复支持严格模式与内容拓展模式。严格模式只基于当前资料库上下文回答；内容拓展模式预留外部来源检索，启用时必须返回明确来源。
 - AI 运行记录、轻量异步生成历史、失败的对话生成任务重试，以及设置页中的全局 AI 会话管理。
@@ -59,7 +59,7 @@ HTMlore 是一个自托管 HTML 知识库工作台，用于保存、浏览、阅
 
 当前仍有限制或尚未实现：
 
-- AI 功能仍处于 beta 阶段，优先用于自托管验证，尚不是云服务形态。
+- AI 生成、修改和知识库管理工作流仍处于 beta 阶段；知识库问答是 1.0.0 正式交付的 AI 工作流。
 - 外部搜索已预留适配器，但暂未内置默认搜索服务商。
 - vector / hybrid 检索需要在服务端配置 embedding 模型；未配置时会继续使用关键词检索。
 - PDF 资料解析暂缓，后续会单独评估系统开销和方案。
@@ -277,20 +277,23 @@ HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
   工作流；如果 LangGraph 不可用，则回退到 `agent_runtime`。开发排查时可用
   `HTML_LORE_AI_QA_ENGINE=langgraph` 强制启用 LangGraph；需要稳定回退时可用
   `HTML_LORE_AI_QA_ENGINE=agent_runtime`。
-- 启用 Tavily 外部搜索时使用独立的服务端 key。
+- 启用外部搜索时使用独立的服务端 key。Tavily 与 Brave 都是可选服务商，不配置时程序仍可按本地资料库和模型知识最低可用运行。
 - smoke-test 命令会产生真实 provider 调用，只有确认当前环境模型和 key 都正确后再运行。
 
-内容拓展模式可以使用 Tavily 作为受控外部搜索服务：
+拓展模式可以使用 Tavily、Brave，或 Tavily 到 Brave 的链式回退作为受控外部搜索服务：
 
 ```bash
-HTML_LORE_AI_EXTERNAL_SEARCH=tavily
+HTML_LORE_AI_EXTERNAL_SEARCH=tavily+brave
 HTML_LORE_AI_EXTERNAL_SEARCH_API_KEY=replace-with-your-tavily-key
+HTML_LORE_AI_EXTERNAL_SEARCH_BRAVE_API_KEY=replace-with-your-brave-key
 HTML_LORE_AI_EXTERNAL_SEARCH_MAX_RESULTS=5
 HTML_LORE_AI_EXTERNAL_SEARCH_DEPTH=basic
 HTML_LORE_AI_EXTERNAL_SEARCH_AUTO_PARAMETERS=false
 ```
 
-HTMlore 默认不使用 Tavily 生成的 answer，而是把 Tavily 作为外部证据检索工具，再由知识库问答 workflow 统一组织最终回答。搜索默认从低成本 `basic` 模式开始；遇到强时效或金融问题时自动切换 topic / time range；可以从用户问题中识别国家提示；只有用户明确要求深度研究、多来源对比，或部署者显式配置时，才会升级到 `advanced`。
+`HTML_LORE_AI_EXTERNAL_SEARCH` 可设为 `disabled`、`fake`、`tavily`、`brave` 或 `tavily+brave`。只配置 Tavily 或 Brave 任意一方即可启用外部检索；两者都配置时，HTMlore 会先用 Tavily，Tavily 不可用或无有效结果时再切换到 Brave，最后才回退到本地/关键词策略。
+
+HTMlore 默认不使用搜索服务商生成的 answer，而是把 Tavily / Brave 作为外部证据检索工具，再由知识库问答 workflow 统一组织最终回答。搜索默认从低成本 `basic` 模式开始；遇到强时效、实体背景、多来源关系或用户明确要求详细核验时，会由搜索规划动态增加查询组合和结果上限。只有用户明确要求深度研究、多来源对比，或部署者显式配置时，才会升级到更高成本搜索参数。
 像“联网搜索”这样的短追问，在进入搜索规划前会先继承最近一条用户问题，不再把上一轮 AI 回复正文拼进检索 query。
 
 vector / hybrid 检索会在当前用户的 metadata 目录下保存轻量本地索引，例如 `meta/ai/vector_index.json`；多用户部署时则位于对应的 `users/{data_id}/meta/ai/vector_index.json`。这样可以在同一个应用进程中复用能力，同时保持用户工作台的逻辑隔离。

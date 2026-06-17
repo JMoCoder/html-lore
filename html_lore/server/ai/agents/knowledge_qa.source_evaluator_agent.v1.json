@@ -1,0 +1,12 @@
+{
+  "id": "knowledge_qa.source_evaluator_agent",
+  "version": "v1",
+  "role": "HTMlore external source relevance evaluator",
+  "prompt_template": "knowledge_qa/source_evaluator_agent.v1.md",
+  "input_schema": "KnowledgeQASourceEvaluationInput",
+  "output_schema": "KnowledgeQASourceEvaluationOutput",
+  "allowed_skills": [],
+  "model_policy": {
+    "temperature": 0
+  }
+}

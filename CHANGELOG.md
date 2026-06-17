@@ -9,6 +9,31 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-17
+
+### Added
+
+- Promoted the knowledge-base Q&A flow to a formal 1.0.0 release with
+  LangGraph-first orchestration, context-aware retrieval, recent-conversation
+  grounding, Markdown rendering, clickable source pills, and per-context
+  history.
+- Added the Tavily -> Brave -> disabled external-search fallback chain, with
+  both providers optional and the app still usable in local-only mode.
+- Added dynamic search planning so result caps can grow with intent while still
+  respecting cost limits.
+
+### Changed
+
+- Updated README guidance for 1.0.0 release scope, external-search options,
+  and demo/static boundaries.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.0.0`.
+
+### Fixed
+
+- External Q&A source pills now open their source URL when a search result
+  includes a link.
+
 ## [0.9.10] - 2026-06-17
 
 ### Changed

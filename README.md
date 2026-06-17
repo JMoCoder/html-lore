@@ -31,9 +31,9 @@ Markdown-first authoring. HTMlore takes a different path:
   the UI architecture for AI-assisted workflows, while credentials and model
   calls are kept out of the static frontend.
 
-## 0.9.x Current Scope
+## 1.0.0 Current Scope
 
-The current `0.9.x` line focuses on real local, private-network, and
+The current `1.0.0` line focuses on real local, private-network, and
 self-hosted use: Docker deployment, built-in login, HTML import, persistent
 metadata, filtering, reading, archiving, public sharing, and the first
 server-side AI workflows.
@@ -68,7 +68,7 @@ Implemented today:
 - Server-side AI provider configuration for OpenAI-compatible endpoints. API
   keys stay in backend environment variables and are never accepted through the
   browser settings endpoint.
-- Knowledge-base Q&A beta with context-aware retrieval, current-context
+- Knowledge-base Q&A delivered as a formal release with context-aware retrieval, current-context
   summaries, recent-conversation grounding for follow-up questions,
   Markdown-rendered answers, clickable external source pills, conversation
   persistence, latest-conversation restore, and per-context history.
@@ -100,8 +100,8 @@ Implemented today:
 
 Still limited or not implemented yet:
 
-- The AI features are beta and are designed for self-hosted validation before
-  hosted/cloud product work.
+- AI generation, modification, and knowledge-management workflows remain beta;
+  knowledge-base Q&A is the formal 1.0.0 delivered AI workflow.
 - External web search is adapter-scaffolded but not bundled with a default
   provider.
 - Vector / hybrid retrieval requires a server-side embedding model
@@ -350,7 +350,9 @@ Deployment notes:
   available. Use `HTML_LORE_AI_QA_ENGINE=langgraph` to force LangGraph during
   development, or `HTML_LORE_AI_QA_ENGINE=agent_runtime` for a stable runtime
   fallback.
-- External search uses a separate server-side key when Tavily is enabled.
+- External search supports a fallback chain: Tavily -> Brave -> disabled. Each provider is optional; configure neither to keep the app fully usable in local-only mode.
+- `HTML_LORE_AI_EXTERNAL_SEARCH_API_KEY` enables Tavily.
+- `HTML_LORE_AI_EXTERNAL_SEARCH_BRAVE_API_KEY` enables Brave Search.
 - Smoke-test commands make real provider calls and should only be run after the
   target model and key are confirmed for that environment.
 
@@ -358,21 +360,29 @@ For development tests, `HTML_LORE_AI_PROVIDER=fake` can exercise the UI and
 conversation flow without sending model requests. Public provider status only
 returns `has_api_key`, never the secret value.
 
-External expansion mode can use Tavily as a controlled web-search provider:
+External expansion mode can use Tavily, Brave, or a Tavily-to-Brave fallback chain as a controlled web-search provider:
 
 ```bash
-HTML_LORE_AI_EXTERNAL_SEARCH=tavily
+HTML_LORE_AI_EXTERNAL_SEARCH=tavily+brave
 HTML_LORE_AI_EXTERNAL_SEARCH_API_KEY=replace-with-your-tavily-key
+HTML_LORE_AI_EXTERNAL_SEARCH_BRAVE_API_KEY=replace-with-your-brave-key
 HTML_LORE_AI_EXTERNAL_SEARCH_MAX_RESULTS=5
 HTML_LORE_AI_EXTERNAL_SEARCH_DEPTH=basic
 HTML_LORE_AI_EXTERNAL_SEARCH_AUTO_PARAMETERS=false
 ```
 
-HTMlore does not use Tavily's generated answer by default. It treats Tavily as
-evidence retrieval, then lets the knowledge Q&A workflow compose the final
-answer. Search starts in low-cost `basic` mode, switches topic/time range for
-time-sensitive or finance questions, can infer country from the user's query,
-and only escalates to `advanced` when the user explicitly asks for deep,
+`HTML_LORE_AI_EXTERNAL_SEARCH` can be `disabled`, `fake`, `tavily`, `brave`, or
+`tavily+brave`. HTMlore can run with only one provider configured; when both
+are configured it prefers Tavily first, then falls back to Brave if Tavily is
+unavailable or produces no usable result, and finally falls back to local /
+keyword strategy.
+
+HTMlore does not use the search provider's generated answer by default. It
+uses Tavily / Brave for evidence retrieval and lets the knowledge Q&A workflow
+compose the final answer. Search starts in low-cost `basic` mode, then the
+query planner increases query combinations and result caps for timely, entity
+background, relationship, or explicit verification requests. It only escalates
+to higher-cost search parameters when the user explicitly asks for deep,
 multi-source research or the operator configures that depth.
 Short follow-up prompts such as `联网搜索` inherit the most recent user
 question before search planning, instead of reusing prior assistant answer

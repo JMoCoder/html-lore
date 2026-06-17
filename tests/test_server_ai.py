@@ -19,7 +19,7 @@ from html_lore.server.ai.retrieval import extract_safe_text, retrieve_evidence_w
 from html_lore.server.ai.search_planner import plan_external_search, verify_planned_sources
 from html_lore.server.ai.runs import AIRunStore
 from html_lore.server.ai.vector_store import LocalVectorStore
-from html_lore.server.ai.external_search import ExternalSearchResult, TavilyExternalSearchAdapter, build_tavily_payload, prepare_external_search_query, is_safe_external_url, sanitize_external_results
+from html_lore.server.ai.external_search import BraveExternalSearchAdapter, ChainedExternalSearchAdapter, ExternalSearchProviderError, ExternalSearchResult, TavilyExternalSearchAdapter, build_external_search_adapter, build_tavily_payload, prepare_external_search_query, is_safe_external_url, sanitize_external_results
 from html_lore.server.ai.api import qa_status_from_report
 from html_lore.server.users import UserStore
 
@@ -291,6 +291,28 @@ def test_ai_status_reports_tavily_external_search_without_key_leak(tmp_path: Pat
         server.close()
 
 
+def test_ai_status_reports_tavily_brave_external_search_chain_without_key_leak(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_external_search="tavily",
+        ai_external_search_api_key="tvly-test-secret",
+        ai_external_search_brave_api_key="brave-test-secret",
+        ai_external_search_max_results=4,
+    )
+    try:
+        status = server.request("GET", "/api/ai/status")
+        assert status["external_search_available"] is True
+        assert status["external_search"] == {"provider": "tavily+brave", "available": True, "max_results": 4, "chain": ["tavily", "brave"]}
+        raw = json.dumps(status)
+        assert "tvly-test-secret" not in raw
+        assert "brave-test-secret" not in raw
+    finally:
+        server.close()
+
+
 def test_tavily_payload_uses_controlled_defaults_and_enhancements() -> None:
     default_payload = build_tavily_payload(
         "Explain HTMlore project positioning",
@@ -384,6 +406,24 @@ def test_search_planner_builds_entity_ownership_plan() -> None:
     assert any("持股比例" in query or "股东" in query for query in plan.queries)
 
 
+def test_search_planner_builds_entity_relationship_plan() -> None:
+    plan = plan_external_search("风泉和晶科有什么关系")
+
+    assert plan.intent == "entity_relationship"
+    assert plan.required_terms == ["风泉", "晶科"]
+    assert "关系" in "".join(plan.evidence_terms)
+    assert any("风泉" in query and "晶科" in query and ("合作" in query or "投资" in query) for query in plan.queries)
+
+
+def test_search_planner_cleans_mixed_background_relationship_question() -> None:
+    plan = plan_external_search("风泉资本什么背景，和晶科有什么关系")
+
+    assert plan.intent == "entity_relationship"
+    assert plan.required_terms == ["风泉资本", "晶科"]
+    assert plan.queries[0].startswith("风泉资本 晶科")
+    assert "什么背景" not in plan.queries[0]
+
+
 def test_search_planner_builds_policy_lookup_queries_with_region_and_policy_terms() -> None:
     plan = plan_external_search("最近国内虚拟电厂政策有哪些变化 中国 中文 policy regulation")
 
@@ -455,6 +495,35 @@ def test_search_planner_filters_generic_background_results_for_entity_ownership(
 
     assert [source["title"] for source in kept] == ["风泉资本股东及持股信息"]
     assert report == {"verified_count": 1, "dropped_count": 1}
+
+
+def test_search_planner_filters_unrelated_entity_relationship_results() -> None:
+    plan = plan_external_search("风泉和晶科有什么关系")
+    sources = [
+        {
+            "kind": "external",
+            "title": "《将进酒》的风泉是个怎样的人？",
+            "url": "https://example.test/novel-fengquan",
+            "snippet": "文学角色讨论，与企业关系无关。",
+        },
+        {
+            "kind": "external",
+            "title": "晶科电力科技股份有限公司年度报告",
+            "url": "https://example.test/jinko-annual-report",
+            "snippet": "晶科电力年度报告，但未提到风泉。",
+        },
+        {
+            "kind": "external",
+            "title": "风泉资本与晶科共同参与设立基金",
+            "url": "https://example.test/fengquan-jinko-fund",
+            "snippet": "公告披露风泉和晶科围绕基金设立、投资关系和股东安排开展合作。",
+        },
+    ]
+
+    kept, report = verify_planned_sources(sources, plan)
+
+    assert [source["title"] for source in kept] == ["风泉资本与晶科共同参与设立基金"]
+    assert report == {"verified_count": 1, "dropped_count": 2}
 
 
 def test_search_planner_filters_unrelated_mcp_search_results() -> None:
@@ -550,6 +619,82 @@ def test_tavily_adapter_posts_bearer_key_and_parses_results(monkeypatch) -> None
     assert len(results) == 1
     assert results[0].title == "Official source"
     assert results[0].url == "https://example.com/source"
+
+
+def test_brave_adapter_uses_subscription_token_and_parses_results(monkeypatch) -> None:
+    seen: dict[str, str | None] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "web": {
+                        "results": [
+                            {
+                                "title": "Brave source",
+                                "url": "https://example.com/brave-source",
+                                "description": "Relevant Brave evidence.",
+                            },
+                        ],
+                    },
+                },
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        seen["url"] = request.full_url
+        seen["token"] = request.get_header("X-subscription-token")
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    adapter = BraveExternalSearchAdapter(api_key="brave-test-secret", max_results=5)
+    results = adapter.search("latest release news in Japan", max_results=4)
+
+    assert str(seen["url"]).startswith("https://api.search.brave.com/res/v1/web/search?")
+    assert "q=latest+release+news+in+Japan" in str(seen["url"])
+    assert "count=4" in str(seen["url"])
+    assert "country=japan" in str(seen["url"])
+    assert seen["token"] == "brave-test-secret"
+    assert len(results) == 1
+    assert results[0].title == "Brave source"
+    assert results[0].url == "https://example.com/brave-source"
+
+
+def test_chained_external_search_falls_back_from_tavily_to_brave() -> None:
+    class BrokenSearch:
+        name = "tavily"
+        max_results = 5
+
+        @property
+        def available(self) -> bool:
+            return True
+
+        def search(self, query: str, *, max_results: int = 5):
+            raise ExternalSearchProviderError("Tavily unavailable")
+
+    class WorkingSearch:
+        name = "brave"
+        max_results = 5
+
+        @property
+        def available(self) -> bool:
+            return True
+
+        def search(self, query: str, *, max_results: int = 5):
+            return [ExternalSearchResult("Fallback", "https://example.com/fallback", "Fallback evidence.", "2026-06-17T00:00:00Z")]
+
+    adapter = ChainedExternalSearchAdapter([BrokenSearch(), WorkingSearch()], max_results=5)
+
+    results = adapter.search("fallback test", max_results=3)
+
+    assert adapter.name == "tavily+brave"
+    assert results[0].title == "Fallback"
 
 
 def test_ai_secret_is_not_written_to_public_static_files(tmp_path: Path) -> None:
@@ -1042,7 +1187,8 @@ def test_ai_message_uses_local_evidence_with_fake_provider(tmp_path: Path) -> No
         assert "Answer only from the provided evidence" not in json.dumps(response, ensure_ascii=False)
         node_names = [entry["node"] for entry in response["node_trace"]]
         assert node_names[:2] == ["TaskRouter", "Planner"]
-        assert node_names.count("ToolExecutor") == 9
+        assert node_names.count("ToolExecutor") == 10
+        assert response["qa_report"]["source_evaluation"]["mode"] == "not_required"
         assert node_names[-4:] == ["Verifier", "Reviewer", "Finalizer", "OrchestratorReview"]
         assert response["external_status"] == {"provider": "disabled", "available": False}
 
@@ -1073,6 +1219,7 @@ def test_ai_message_uses_local_evidence_with_fake_provider(tmp_path: Path) -> No
             "expansion.policy",
             "search.plan",
             "external.research",
+            "source.evaluate",
             "evidence.gate",
             "evidence.assess",
             "llm.chat",
@@ -2384,7 +2531,8 @@ def test_ai_message_uses_fake_external_search_when_expansion_is_enabled(tmp_path
         assert response["external_status"]["external_evidence_count"] >= 1
         external_sources = [source for source in response["sources"] if str(source.get("url") or "").startswith("https://example.test/search")]
         assert external_sources
-        assert all(source.get("kind") == "external" for source in response["sources"])
+        assert any(source.get("kind") == "external" for source in response["sources"])
+        assert any(source.get("kind") == "local" for source in response["sources"])
         assert "Fake AI response" in response["message"]["content"]
 
         runs = server.request("GET", "/api/ai/runs")
@@ -2432,7 +2580,8 @@ def test_agent_runtime_external_search_is_not_rejected_as_weak_local_evidence(tm
         assert response["graph"] == "AgentRuntime.qa.v1"
         assert response["external_status"]["queried"] is True
         assert response["sources"]
-        assert all(source["kind"] == "external" for source in response["sources"])
+        assert any(source["kind"] == "external" for source in response["sources"])
+        assert any(source["kind"] == "local" for source in response["sources"])
         assert "Fake AI response" in response["message"]["content"]
         assert response["qa_report"]["answer_quality"]["flags"] == []
     finally:
@@ -2850,7 +2999,7 @@ def test_knowledge_qa_status_flags_partial_context_coverage() -> None:
 
 
 def test_public_agent_qa_report_carries_intent_aware_review_summary() -> None:
-    from html_lore.server.ai.runtime import AgentRunResult, AgentPlan, VerificationResult, ReviewResult
+    from html_lore.server.ai.runtime import AgentRunResult, AgentPlan, VerificationResult, ReviewResult, ToolResult
     from html_lore.server.ai.runtime_eval import public_agent_run
 
     result = AgentRunResult(
@@ -2859,7 +3008,18 @@ def test_public_agent_qa_report_carries_intent_aware_review_summary() -> None:
         status="completed",
         answer="基于当前可核验资料，先给你结论：示例内容。\n\n来源：[1] Example",
         plan=AgentPlan(task_type="qa", metadata={"planner": {"intent": "current_info"}}),
-        tool_results=(),
+        tool_results=(
+            ToolResult(
+                tool_id="source.evaluate",
+                status="completed",
+                output={
+                    "mode": "llm",
+                    "kept_count": 1,
+                    "dropped_count": 2,
+                    "decisions": [{"index": 1, "keep": True, "confidence": 0.9, "reason": "direct"}],
+                },
+            ),
+        ),
         verification=VerificationResult(True, checks={"verifier_agent": {"id": "knowledge_qa.verifier_agent"}}, reason="ok"),
         review=ReviewResult(True, checks={"reviewer_agent": {"id": "knowledge_qa.reviewer_agent"}}, reason="ok"),
         trace=(),
@@ -2870,6 +3030,8 @@ def test_public_agent_qa_report_carries_intent_aware_review_summary() -> None:
     assert review["intent"] == "current_info"
     assert review["verification_reason"] == "ok"
     assert review["search_used"] is False
+    assert run["qa_report"]["source_evaluation"]["mode"] == "llm"
+    assert run["qa_report"]["source_evaluation"]["dropped_count"] == 2
 
 
 def test_knowledge_qa_prompt_budget_compresses_context_summary() -> None:

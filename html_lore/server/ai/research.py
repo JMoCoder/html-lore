@@ -7,6 +7,23 @@ from .external_search import ExternalSearchAdapter, ExternalSearchResult, Extern
 from .search_planner import SearchPlan, plan_external_search, verify_planned_sources
 
 
+INTENT_MAX_RESULTS = {
+    "official_version": 3,
+    "version_lookup": 3,
+    "official_docs": 4,
+    "general": 5,
+    "entity_background": 6,
+    "entity_team": 6,
+    "entity_registry": 6,
+    "entity_ownership": 8,
+    "entity_relationship": 8,
+    "policy_lookup": 8,
+    "case_search": 10,
+    "research": 10,
+}
+DEFAULT_TOTAL_CANDIDATE_LIMIT = 24
+
+
 @dataclass(frozen=True)
 class ResearchResult:
     sources: list[dict[str, Any]]
@@ -37,8 +54,9 @@ class ResearchWorkflow:
             status["message"] = "External search query is empty after safety filtering."
             return ResearchResult(sources=[], status=status, trace=trace)
 
-        max_results = max(1, int(getattr(self.external_search, "max_results", 5) or 5))
-        status["max_results"] = max_results
+        limits = research_limits_for_plan(plan, base_max_results=max(1, int(getattr(self.external_search, "max_results", 5) or 5)))
+        max_results = limits["per_query_max_results"]
+        status.update(limits)
         raw_results: list[ExternalSearchResult] = []
         for query_index, search_query in enumerate(plan.queries, start=1):
             try:
@@ -50,6 +68,9 @@ class ResearchWorkflow:
             raw_results.extend(query_results)
             trace.append({"node": "ExternalSearchProviderNode", "status": "completed", "query_index": query_index, "result_count": len(query_results)})
             if enough_authoritative_results(raw_results, plan, target_count=max_results):
+                break
+            if len(raw_results) >= limits["total_candidate_limit"]:
+                trace.append({"node": "ResearchCandidateLimitNode", "status": "completed", "candidate_count": len(raw_results), "limit": limits["total_candidate_limit"]})
                 break
 
         sources, dropped = verify_research_sources(raw_results)
@@ -71,6 +92,23 @@ class ResearchWorkflow:
 
 def plan_research_query(query: Any) -> SearchPlan:
     return plan_external_search(query)
+
+
+def research_limits_for_plan(plan: SearchPlan, *, base_max_results: int, total_candidate_limit: int = DEFAULT_TOTAL_CANDIDATE_LIMIT) -> dict[str, int]:
+    base = max(1, min(int(base_max_results or 5), 20))
+    query_count = max(1, len(plan.queries))
+    intent_limit = max(1, min(int(INTENT_MAX_RESULTS.get(plan.intent, base)), 20))
+    plus_cap = max(base, min(10, 20))
+    total_limit = max(base, min(int(total_candidate_limit or DEFAULT_TOTAL_CANDIDATE_LIMIT), 40))
+    distributed_limit = max(1, (total_limit + query_count - 1) // query_count)
+    per_query = min(intent_limit, plus_cap, distributed_limit)
+    return {
+        "max_results": per_query,
+        "per_query_max_results": per_query,
+        "base_max_results": base,
+        "intent_max_results": intent_limit,
+        "total_candidate_limit": total_limit,
+    }
 
 
 def verify_research_sources(results: list[ExternalSearchResult]) -> tuple[list[dict[str, Any]], int]:

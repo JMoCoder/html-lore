@@ -35,8 +35,8 @@
 <li><strong>AI is treated as an optional service layer.</strong> The current app already has</li>
 <p>the UI architecture for AI-assisted workflows, while credentials and model calls are kept out of the static frontend.</p>
 </ul>
-<h2>0.9.x Current Scope</h2>
-<p>The current <code>0.9.x</code> line focuses on real local, private-network, and self-hosted use: Docker deployment, built-in login, HTML import, persistent metadata, filtering, reading, archiving, public sharing, and the first server-side AI workflows.</p>
+<h2>1.0.0 Current Scope</h2>
+<p>The current <code>1.0.0</code> line focuses on real local, private-network, and self-hosted use: Docker deployment, built-in login, HTML import, persistent metadata, filtering, reading, archiving, public sharing, and the first server-side AI workflows.</p>
 <p>Implemented today:</p>
 <ul>
 <li>Single-container Docker deployment with <code>docker compose up -d --build</code>.</li>
@@ -64,7 +64,7 @@
 <p>selected note contexts.</p>
 <li>Server-side AI provider configuration for OpenAI-compatible endpoints. API</li>
 <p>keys stay in backend environment variables and are never accepted through the browser settings endpoint.</p>
-<li>Knowledge-base Q&amp;A beta with context-aware retrieval, current-context summaries, recent-conversation grounding for follow-up questions, Markdown-rendered answers, source pills, conversation persistence, latest-conversation restore, and per-context history.</li>
+<li>Knowledge-base Q&amp;A delivered as a formal release with context-aware retrieval, current-context summaries, recent-conversation grounding for follow-up questions, Markdown-rendered answers, clickable source pills, conversation persistence, latest-conversation restore, and per-context history.</li>
 <li>Strict / external-expansion mode for AI answers. Strict mode answers from the</li>
 <p>selected notebook context; expansion mode is wired for explicit external sources when an external search adapter is configured.</p>
 <li>AI run history, lightweight asynchronous job queue, queue popover, and global</li>
@@ -86,8 +86,7 @@
 </ul>
 <p>Still limited or not implemented yet:</p>
 <ul>
-<li>The AI features are beta and are designed for self-hosted validation before</li>
-<p>hosted/cloud product work.</p>
+<li>AI generation, modification, and knowledge-management workflows remain beta; knowledge-base Q&amp;A is the formal 1.0.0 delivered AI workflow.</li>
 <li>External web search is adapter-scaffolded but not bundled with a default</li>
 <p>provider.</p>
 <li>Vector store / embedding retrieval is scaffolded and falls back to keyword</li>

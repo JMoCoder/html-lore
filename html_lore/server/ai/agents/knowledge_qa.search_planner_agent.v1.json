@@ -1,0 +1,12 @@
+{
+  "id": "knowledge_qa.search_planner_agent",
+  "version": "v1",
+  "role": "HTMlore external search planner",
+  "prompt_template": "knowledge_qa/search_planner_agent.v1.md",
+  "input_schema": "KnowledgeQASearchPlannerInput",
+  "output_schema": "KnowledgeQASearchPlannerOutput",
+  "allowed_skills": [],
+  "model_policy": {
+    "temperature": 0
+  }
+}

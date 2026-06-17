@@ -26,6 +26,7 @@ class KnowledgeQATaskAgent:
             "expansion.policy",
             "search.plan",
             "external.research",
+            "source.evaluate",
             "evidence.gate",
             "evidence.assess",
         )
@@ -48,6 +49,7 @@ class KnowledgeQATaskAgent:
             ToolCall("expansion.policy", {"query": request.content, "planner": planner}, reason="choose local, model-knowledge, or web research path"),
             ToolCall("search.plan", {"query": request.content, "planner": planner}, reason="plan external search query when expansion requires it"),
             ToolCall("external.research", {"query": request.content, "planner": planner}, reason="run external research only when search planner requires it"),
+            ToolCall("source.evaluate", {"query": request.content}, reason="let the source evaluator reject unrelated external candidates before drafting"),
             ToolCall("evidence.gate", {"query": request.content}, reason="prepare safe evidence and prompt budget"),
             ToolCall("evidence.assess", {"query": request.content}, reason="assess whether evidence is relevant enough to answer"),
         ]
@@ -408,6 +410,7 @@ def model_review_context(tool_results: tuple[ToolResult, ...]) -> dict[str, Any]
     assessment = tool_result_output(tool_results, "evidence.assess")
     policy = tool_result_output(tool_results, "expansion.policy")
     search_plan = tool_result_output(tool_results, "search.plan")
+    source_evaluation = tool_result_output(tool_results, "source.evaluate")
     sources = evidence.get("sources") if isinstance(evidence.get("sources"), list) else []
     chunks = evidence.get("chunks") if isinstance(evidence.get("chunks"), list) else []
     return {
@@ -423,6 +426,12 @@ def model_review_context(tool_results: tuple[ToolResult, ...]) -> dict[str, Any]
             "requires_citation": bool(policy.get("requires_citation")),
         },
         "search_plan": search_plan if isinstance(search_plan, dict) else {},
+        "source_evaluation": {
+            "mode": str(source_evaluation.get("mode") or ""),
+            "kept_count": source_evaluation.get("kept_count"),
+            "dropped_count": source_evaluation.get("dropped_count"),
+            "decisions": source_evaluation.get("decisions") if isinstance(source_evaluation.get("decisions"), list) else [],
+        },
     }
 
 
@@ -545,7 +554,21 @@ def sanitize_planner_output(decoded: Any, *, fallback: dict[str, Any]) -> dict[s
     reason = str(decoded.get("reason") or fallback.get("reason") or "planner_default").strip()
     allowed_intents = {"summary", "concept_clarify", "explain_deeper", "compare_validate", "current_info", "unrelated"}
     allowed_retrieval = {"local_only", "local_evidence", "model_knowledge", "web_research"}
-    allowed_search = {"general", "version_lookup", "policy_lookup", "official_lookup", "entity_lookup", "none"}
+    allowed_search = {
+        "general",
+        "version_lookup",
+        "policy_lookup",
+        "official_lookup",
+        "entity_lookup",
+        "entity_background",
+        "entity_ownership",
+        "entity_team",
+        "entity_registry",
+        "entity_relationship",
+        "case_search",
+        "research",
+        "none",
+    }
     allowed_locality = {"local_only", "local_context_first", "general_knowledge_first"}
     if intent not in allowed_intents:
         intent = str(fallback.get("intent") or "summary")

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .search_planner import SearchPlan, plan_external_search
+from .search_planner import SearchPlan, build_search_plan, prepare_external_search_query
 
 
 @dataclass(frozen=True)
@@ -49,17 +49,23 @@ def build_qa_search_plan(question: str, *, planner: dict[str, Any] | None = None
             reason=reason,
         )
 
-    query = text
+    query = clean_search_operation_terms(text)
     if locality_hint == "china" and not has_country_hint(text):
         query = f"{query} 中国"
     if language_hint == "zh" and not has_language_anchor(query):
         query = f"{query} 中文"
-    if any(marker in lowered for marker in ("政策", "法规", "新规", "监管", "政策变化", "policy", "regulation")):
+    query_lowered = query.lower()
+    if any(marker in lowered or marker in query_lowered for marker in ("政策", "法规", "新规", "监管", "政策变化", "电力市场", "power market", "electricity market", "policy", "regulation")):
         query = f"{query} policy regulation"
     if any(marker in lowered for marker in ("官方", "官网", "official")):
         query = f"{query} official"
 
-    plan = plan_external_search(query)
+    prepared, report = prepare_external_search_query(query)
+    plan = build_search_plan(
+        prepared,
+        report=report,
+        intent_override=str(planner.get("search_intent") or ""),
+    )
     return QASearchPlan(
         should_search=True,
         plan=plan,
@@ -124,3 +130,25 @@ def has_country_hint(question: str) -> bool:
 def has_language_anchor(question: str) -> bool:
     lowered = str(question or "").lower()
     return any(marker in lowered for marker in ("中文", "english", "英文", "japanese", "日文"))
+
+
+def clean_search_operation_terms(question: str) -> str:
+    cleaned = str(question or "").strip()
+    operation_markers = (
+        "联网搜索一下",
+        "联网查一下",
+        "搜索一下",
+        "查一下",
+        "联网搜索",
+        "网上搜索",
+        "外部搜索",
+        "搜索",
+        "search online",
+        "web search",
+    )
+    lowered = cleaned.lower()
+    for marker in operation_markers:
+        if marker in lowered:
+            cleaned = cleaned.replace(marker, " ")
+            cleaned = cleaned.replace(marker.title(), " ")
+    return " ".join(cleaned.split()) or str(question or "").strip()

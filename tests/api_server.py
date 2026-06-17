@@ -42,6 +42,7 @@ class ApiServer:
         ai_enabled: bool = False,
         ai_external_search: str = "",
         ai_external_search_api_key: str = "",
+        ai_external_search_brave_api_key: str = "",
         ai_external_search_max_results: int | None = None,
         ai_external_search_depth: str | None = None,
         ai_external_search_auto_parameters: bool | None = None,
@@ -80,6 +81,7 @@ class ApiServer:
                 "HTML_LORE_AI_ENABLED": "true" if ai_enabled else "",
                 "HTML_LORE_AI_EXTERNAL_SEARCH": ai_external_search,
                 "HTML_LORE_AI_EXTERNAL_SEARCH_API_KEY": ai_external_search_api_key,
+                "HTML_LORE_AI_EXTERNAL_SEARCH_BRAVE_API_KEY": ai_external_search_brave_api_key,
             },
         )
         if ai_max_context_items is not None:
@@ -263,6 +265,7 @@ def run_api_server(
     ai_enabled: bool = False,
     ai_external_search: str = "",
     ai_external_search_api_key: str = "",
+    ai_external_search_brave_api_key: str = "",
     ai_external_search_max_results: int | None = None,
     ai_external_search_depth: str | None = None,
     ai_external_search_auto_parameters: bool | None = None,
@@ -297,6 +300,7 @@ def run_api_server(
         ai_enabled=ai_enabled,
         ai_external_search=ai_external_search,
         ai_external_search_api_key=ai_external_search_api_key,
+        ai_external_search_brave_api_key=ai_external_search_brave_api_key,
         ai_external_search_max_results=ai_external_search_max_results,
         ai_external_search_depth=ai_external_search_depth,
         ai_external_search_auto_parameters=ai_external_search_auto_parameters,

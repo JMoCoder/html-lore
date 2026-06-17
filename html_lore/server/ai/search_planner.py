@@ -44,6 +44,45 @@ EN_ENTITY_SUFFIXES = (
     "ltd",
 )
 
+ENTITY_RELATIONSHIP_MARKERS = (
+    "有什么关系",
+    "什么关系",
+    "之间关系",
+    "之间的关系",
+    "关系如何",
+    "什么关联",
+    "有什么关联",
+    "有关联",
+    "关联关系",
+    "合作关系",
+    "投资关系",
+    "业务关系",
+    "relationship",
+    "connection",
+    "partnership",
+    "ties",
+)
+
+RELATION_ENTITY_QUESTION_MARKERS = (
+    "是什么背景",
+    "什么背景",
+    "背景如何",
+    "有何背景",
+    "是干什么的",
+    "干什么的",
+    "是什么来头",
+    "什么来头",
+    "什么情况",
+    "是什么",
+    "是谁",
+    "介绍一下",
+    "简单介绍",
+    "详细介绍",
+    "查一下",
+    "搜一下",
+    "搜索一下",
+)
+
 
 @dataclass(frozen=True)
 class SearchPlan:
@@ -70,7 +109,17 @@ class SearchPlan:
 
 def plan_external_search(query: Any, *, max_chars: int = MAX_EXTERNAL_QUERY_CHARS) -> SearchPlan:
     prepared, report = prepare_external_search_query(query, max_chars=max_chars)
-    intent = classify_search_intent(prepared)
+    return build_search_plan(prepared, report=report, max_chars=max_chars)
+
+
+def build_search_plan(
+    prepared: str,
+    *,
+    report: dict[str, Any] | None = None,
+    max_chars: int = MAX_EXTERNAL_QUERY_CHARS,
+    intent_override: str = "",
+) -> SearchPlan:
+    intent = normalize_search_intent(intent_override) or classify_search_intent(prepared)
     required_terms = required_entity_terms(prepared)
     preferred_domains = preferred_source_domains(prepared, intent)
     authoritative_required = intent in {"official_version", "official_docs"}
@@ -83,9 +132,34 @@ def plan_external_search(query: Any, *, max_chars: int = MAX_EXTERNAL_QUERY_CHAR
         required_terms=required_terms,
         preferred_domains=preferred_domains,
         authoritative_required=authoritative_required,
-        query_expansions=list(report.get("query_expansions") or []),
+        query_expansions=list((report or {}).get("query_expansions") or []),
         evidence_terms=evidence_terms,
     )
+
+
+def normalize_search_intent(value: Any) -> str:
+    intent = str(value or "").strip().lower()
+    aliases = {
+        "general": "",
+        "entity_lookup": "",
+        "official_lookup": "official_docs",
+    }
+    intent = aliases.get(intent, intent)
+    allowed = {
+        "general",
+        "version_lookup",
+        "policy_lookup",
+        "official_version",
+        "official_docs",
+        "entity_background",
+        "entity_ownership",
+        "entity_team",
+        "entity_registry",
+        "entity_relationship",
+        "case_search",
+        "research",
+    }
+    return intent if intent in allowed else ""
 
 
 def prepare_external_search_query(query: Any, *, max_chars: int = MAX_EXTERNAL_QUERY_CHARS) -> tuple[str, dict[str, Any]]:
@@ -144,15 +218,6 @@ def classify_search_intent(query: str) -> str:
     policyish = any(marker in lowered for marker in ("policy", "regulation", "政策", "法规", "监管", "发改", "能源局", "电力市场"))
     if is_case_search_question(query):
         return "case_search"
-    entity_attribute = classify_entity_question_attribute(query)
-    if entity_attribute == "ownership":
-        return "entity_ownership"
-    if entity_attribute == "team":
-        return "entity_team"
-    if entity_attribute == "registry":
-        return "entity_registry"
-    if entity_attribute == "background" or is_entity_lookup_question(query):
-        return "entity_background"
     if official and versionish:
         return "official_version"
     if official and docish:
@@ -161,6 +226,17 @@ def classify_search_intent(query: str) -> str:
         return "version_lookup"
     if policyish:
         return "policy_lookup"
+    entity_attribute = classify_entity_question_attribute(query)
+    if entity_attribute == "ownership":
+        return "entity_ownership"
+    if entity_attribute == "team":
+        return "entity_team"
+    if entity_attribute == "registry":
+        return "entity_registry"
+    if entity_attribute == "relationship":
+        return "entity_relationship"
+    if entity_attribute == "background" or is_entity_lookup_question(query):
+        return "entity_background"
     if any(marker in lowered for marker in ("deep research", "深入研究", "深度研究", "多来源", "compare sources")):
         return "research"
     return "general"
@@ -170,6 +246,9 @@ def required_entity_terms(query: str) -> list[str]:
     lowered = str(query or "").lower()
     if is_case_search_question(query):
         return []
+    relation_terms = extract_entity_relation_terms(query)
+    if relation_terms:
+        return relation_terms
     extracted = extract_entity_terms(query)
     if extracted:
         return extracted
@@ -180,7 +259,7 @@ def required_entity_terms(query: str) -> list[str]:
 
 def preferred_source_domains(query: str, intent: str) -> list[str]:
     lowered = str(query or "").lower()
-    if intent in {"entity_background", "entity_ownership", "entity_team", "entity_registry"}:
+    if intent in {"entity_background", "entity_ownership", "entity_team", "entity_registry", "entity_relationship"}:
         return ["gsxt.gov.cn", "amac.org.cn", "qcc.com", "tianyancha.com", "企查查", "天眼查"]
     if "model context protocol" in lowered or re.search(r"(?<![a-z0-9])mcp(?![a-z0-9])", lowered):
         return ["modelcontextprotocol.io", "github.com/modelcontextprotocol"]
@@ -262,6 +341,23 @@ def planned_queries(query: str, intent: str, preferred_domains: list[str], *, ma
                 f"{primary_entity} legal representative registered address",
                 base,
             ]
+    if intent == "entity_relationship" and required_terms:
+        joined_entities = " ".join(required_terms)
+        if any("\u4e00" <= char <= "\u9fff" for char in joined_entities):
+            candidates = [
+                f"{joined_entities} 关系 合作 股权 投资",
+                f"{joined_entities} 基金 设立 参与 股东",
+                f"{joined_entities} 公告 年报 投资者关系",
+                f"{joined_entities} site:sse.com.cn OR site:cninfo.com.cn",
+                base,
+            ]
+        else:
+            candidates = [
+                f"{joined_entities} relationship partnership ownership investment",
+                f"{joined_entities} fund joint venture shareholder filing",
+                f"{joined_entities} annual report announcement investor relations",
+                base,
+            ]
     if intent == "policy_lookup":
         policy_terms = extract_policy_search_terms(base)
         joined = " ".join(policy_terms) if policy_terms else base
@@ -322,7 +418,10 @@ def source_matches_plan(source: dict[str, Any], plan: SearchPlan) -> bool:
         str(source.get(key) or "")
         for key in ("title", "url", "snippet")
     ).lower()
-    entity_match = not plan.required_terms or any(term in text for term in plan.required_terms)
+    if plan.intent == "entity_relationship" and plan.required_terms:
+        entity_match = all(term in text for term in plan.required_terms)
+    else:
+        entity_match = not plan.required_terms or any(term in text for term in plan.required_terms)
     if not entity_match:
         return False
     if plan.evidence_terms and not any(term in text for term in plan.evidence_terms):
@@ -388,7 +487,7 @@ def is_entity_lookup_question(query: Any) -> bool:
     text = " ".join(str(query or "").split())
     if not text:
         return False
-    return bool(extract_entity_terms(text) and classify_entity_question_attribute(text))
+    return bool((extract_entity_terms(text) or extract_entity_relation_terms(text)) and classify_entity_question_attribute(text))
 
 
 def is_entity_background_question(query: Any) -> bool:
@@ -398,7 +497,7 @@ def is_entity_background_question(query: Any) -> bool:
 def classify_entity_question_attribute(query: Any) -> str | None:
     text = " ".join(str(query or "").split())
     lowered = text.lower()
-    if not text or not extract_entity_terms(text):
+    if not text or not (extract_entity_terms(text) or extract_entity_relation_terms(text)):
         return None
     ownership_markers = (
         "股权",
@@ -454,6 +553,8 @@ def classify_entity_question_attribute(query: Any) -> str | None:
         "official website",
         "about",
     )
+    if has_entity_relationship_marker(text):
+        return "relationship"
     if any(marker in lowered for marker in ownership_markers):
         return "ownership"
     if any(marker in lowered for marker in team_markers):
@@ -474,6 +575,8 @@ def search_evidence_terms(intent: str) -> list[str]:
         return ["团队", "高管", "创始人", "董事", "ceo", "founder", "management", "leadership", "executive"]
     if intent == "entity_registry":
         return ["工商", "注册", "登记", "备案", "统一社会信用代码", "registry", "registration", "incorporation", "legal representative"]
+    if intent == "entity_relationship":
+        return ["关系", "合作", "投资", "股权", "股东", "基金", "设立", "参与", "公告", "年报", "relationship", "partnership", "investment", "ownership", "shareholder"]
     if intent == "policy_lookup":
         return ["政策", "监管", "法规", "通知", "意见", "发改委", "能源局", "policy", "regulation"]
     return []
@@ -580,3 +683,96 @@ def extract_entity_terms(query: Any) -> list[str]:
         seen.add(key)
         normalized.append(value)
     return normalized
+
+
+def extract_entity_relation_terms(query: Any) -> list[str]:
+    text = " ".join(str(query or "").split())
+    if not text:
+        return []
+    if not has_entity_relationship_marker(text):
+        return []
+    pairs: list[str] = []
+    separators = ("和", "与", "跟", "及", "、", "&", " and ")
+    for separator in separators:
+        if separator not in text:
+            continue
+        left, right = text.split(separator, 1)
+        left_term = clean_relation_entity_term(left, keep_tail=True)
+        right_term = clean_relation_entity_term(right, keep_tail=False)
+        if left_term and right_term:
+            pairs.extend([left_term, right_term])
+            break
+    if len(pairs) < 2:
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for term in pairs:
+        key = term.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(term)
+    return result[:2] if len(result) >= 2 else []
+
+
+def has_entity_relationship_marker(query: Any) -> bool:
+    text = " ".join(str(query or "").split())
+    lowered = text.lower()
+    if not text:
+        return False
+    if "逻辑关系" in lowered:
+        return False
+    return any(marker in lowered for marker in ENTITY_RELATIONSHIP_MARKERS)
+
+
+def clean_relation_entity_term(value: Any, *, keep_tail: bool) -> str:
+    text = " ".join(str(value or "").split())
+    text = text.strip("：:，,。.;；、()（）[]【】\"' ")
+    text = strip_relation_entity_question_markers(text)
+    if keep_tail:
+        tokens = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{2,30}", text)
+        text = tokens[-1] if tokens else text
+    else:
+        for marker in (
+            "之间的关系",
+            "之间关系",
+            "有什么关系",
+            "什么关系",
+            "关系如何",
+            "有什么关联",
+            "什么关联",
+            "有关联",
+            "合作关系",
+            "投资关系",
+            "业务关系",
+            "关系",
+            "合作",
+            "关联",
+            "中文",
+            "中国",
+        ):
+            index = text.find(marker)
+            if index >= 0:
+                text = text[:index]
+        tokens = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{2,30}", text)
+        text = tokens[0] if tokens else text
+    text = text.strip("的了呢吗么是什么有无和与跟及、 ")
+    if len(text) < 2 or len(text) > 30:
+        return ""
+    if text in {"联网搜索", "搜索一下", "请问", "介绍一下", "简单介绍"}:
+        return ""
+    return text
+
+
+def strip_relation_entity_question_markers(value: Any) -> str:
+    text = " ".join(str(value or "").split())
+    if not text:
+        return ""
+    for marker in RELATION_ENTITY_QUESTION_MARKERS:
+        index = text.find(marker)
+        if index >= 0:
+            before = text[:index].strip("：:，,。.;；、()（）[]【】\"' 的")
+            after = text[index + len(marker) :].strip("：:，,。.;；、()（）[]【】\"' 的")
+            text = before or after
+            break
+    return text.strip("：:，,。.;；、()（）[]【】\"' ")

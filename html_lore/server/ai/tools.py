@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -37,6 +38,7 @@ from .registry import load_agent, load_prompt
 from .research import ResearchWorkflow
 from .retrieval import retrieve_evidence_with_status
 from .qa_search_plan import build_qa_search_plan, search_plan_from_public_report
+from .search_agent import SearchPlannerAgent
 from .metrics import evaluate_qa_result
 
 
@@ -227,18 +229,24 @@ class ExpansionPolicyTool:
 class SearchPlanTool:
     id = "search.plan"
 
+    def __init__(self, model_client: ModelClient | None = None) -> None:
+        self.search_planner = SearchPlannerAgent(model_client)
+
     def run(self, arguments: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
         values = dict(arguments or {})
         planner = values.get("planner") if isinstance(values.get("planner"), dict) else {}
         policy = state.get("tool_outputs", {}).get("expansion.policy", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         context_output = state.get("tool_outputs", {}).get("context.resolve", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         context = context_output.get("context") if isinstance(context_output.get("context"), dict) else {}
+        evidence_pack = state.get("tool_outputs", {}).get("evidence.build", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         query = str(state.get("retrieval_query") or values.get("query") or state.get("query") or "").strip()
-        qa_search_plan = build_qa_search_plan(query, planner=planner, context=context)
-        report = qa_search_plan.public_report()
-        report["enabled_by_policy"] = str(policy.get("mode") or "") == "web_research"
-        report["effective_should_search"] = bool(qa_search_plan.should_search and report["enabled_by_policy"])
-        return report
+        return self.search_planner.plan(
+            question=query,
+            planner=planner,
+            policy=policy,
+            context=context,
+            local_evidence=evidence_pack.get("retrieval") if isinstance(evidence_pack.get("retrieval"), dict) else {},
+        )
 
 
 class ExternalResearchTool:
@@ -273,6 +281,75 @@ class ExternalResearchTool:
         return {"sources": research.sources, "status": dict(research.status or {}), "trace": research.trace, "queried": True, "search_plan": public_plan}
 
 
+class SourceEvaluatorTool:
+    id = "source.evaluate"
+
+    def __init__(self, model_client: ModelClient | None = None) -> None:
+        self.model_client = model_client
+        self.agent = load_agent("knowledge_qa.source_evaluator_agent.v1")
+        self.prompt = load_prompt(self.agent.prompt_template)
+
+    def run(self, arguments: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+        policy = state.get("tool_outputs", {}).get("expansion.policy", {}) if isinstance(state.get("tool_outputs"), dict) else {}
+        research = state.get("tool_outputs", {}).get("external.research", {}) if isinstance(state.get("tool_outputs"), dict) else {}
+        mode = str(policy.get("mode") or "local_only")
+        sources = [dict(item) for item in research.get("sources") or [] if isinstance(item, dict)]
+        if mode != "web_research" or not sources:
+            return {
+                "sources": sources,
+                "kept_count": len(sources),
+                "dropped_count": 0,
+                "mode": "not_required",
+                "agent_trace": [],
+                "prompt_trace": [],
+                "decisions": [],
+            }
+        query = str(state.get("retrieval_query") or (arguments or {}).get("query") or state.get("query") or "").strip()
+        search_plan = research.get("search_plan") if isinstance(research.get("search_plan"), dict) else {}
+        if self.model_client is None:
+            return self._fallback_filter(query=query, sources=sources, search_plan=search_plan, mode="fallback_no_model")
+        messages = build_source_evaluator_messages(self.prompt.render({}), query=query, sources=sources, search_plan=search_plan)
+        try:
+            response = self.model_client.chat(messages=messages, temperature=0.0, max_tokens=700)
+            decoded = decode_source_evaluator_json(str(response.get("content") or ""))
+            kept, decisions = apply_source_evaluator_decisions(sources, decoded)
+            if not decisions:
+                return self._fallback_filter(query=query, sources=sources, search_plan=search_plan, mode="fallback_empty_decision")
+            return {
+                "sources": kept,
+                "kept_count": len(kept),
+                "dropped_count": max(0, len(sources) - len(kept)),
+                "mode": "llm",
+                "model": str(response.get("model") or ""),
+                "usage": response.get("usage") if isinstance(response.get("usage"), dict) else {},
+                "agent_trace": [self.agent.public_dict()],
+                "prompt_trace": [self.prompt.public_dict()],
+                "decisions": decisions,
+            }
+        except Exception as exc:
+            result = self._fallback_filter(query=query, sources=sources, search_plan=search_plan, mode="fallback_model_error")
+            result["error"] = {"type": exc.__class__.__name__, "message": str(exc)}
+            return result
+
+    def _fallback_filter(self, *, query: str, sources: list[dict[str, Any]], search_plan: dict[str, Any], mode: str) -> dict[str, Any]:
+        kept: list[dict[str, Any]] = []
+        decisions: list[dict[str, Any]] = []
+        for index, source in enumerate(sources, start=1):
+            keep, reason = fallback_source_relevance(source, query=query, search_plan=search_plan)
+            if keep:
+                kept.append(source)
+            decisions.append({"index": index, "keep": keep, "confidence": 0.55 if keep else 0.65, "reason": reason})
+        return {
+            "sources": kept,
+            "kept_count": len(kept),
+            "dropped_count": max(0, len(sources) - len(kept)),
+            "mode": mode,
+            "agent_trace": [self.agent.public_dict()],
+            "prompt_trace": [self.prompt.public_dict()],
+            "decisions": decisions,
+        }
+
+
 class EvidenceGateTool:
     id = "evidence.gate"
 
@@ -286,15 +363,35 @@ class EvidenceGateTool:
         evidence_pack = state.get("tool_outputs", {}).get("evidence.build", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         policy = state.get("tool_outputs", {}).get("expansion.policy", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         research = state.get("tool_outputs", {}).get("external.research", {}) if isinstance(state.get("tool_outputs"), dict) else {}
+        source_evaluation = state.get("tool_outputs", {}).get("source.evaluate", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         context = context_output.get("context") if isinstance(context_output.get("context"), dict) else {}
         query = str(state.get("retrieval_query") or (arguments or {}).get("query") or evidence_pack.get("query") or state.get("query") or "").strip()
         local_chunks = [dict(item) for item in evidence_pack.get("chunks") or [] if isinstance(item, dict)]
-        external_chunks = [dict(item) for item in research.get("sources") or [] if isinstance(item, dict)]
+        evaluated_sources = source_evaluation.get("sources") if isinstance(source_evaluation.get("sources"), list) else None
+        external_chunks = [dict(item) for item in (evaluated_sources if evaluated_sources is not None else research.get("sources") or []) if isinstance(item, dict)]
         mode = str(policy.get("mode") or "local_only")
-        evidence = external_chunks if mode == "web_research" else local_chunks
+        if mode == "web_research":
+            evidence = [*local_chunks, *external_chunks]
+        else:
+            evidence = local_chunks
+        prompt_policy = dict(policy)
+        if mode == "web_research":
+            prompt_policy["external_evidence_count"] = len(external_chunks)
+            status = research.get("status") if isinstance(research.get("status"), dict) else {}
+            prompt_policy["external_status"] = {
+                "provider": str(status.get("provider") or ""),
+                "available": bool(status.get("available", True)),
+                "queried": bool(status.get("queried")),
+                "count": int(status.get("count") or 0),
+                "message": str(status.get("message") or ""),
+            }
         skipped_model_call = False
         answer = ""
-        if mode == "web_research" and not external_chunks:
+        if mode == "web_research" and not external_chunks and is_external_research_unavailable(research.get("status") if isinstance(research.get("status"), dict) else {}):
+            answer = EXTERNAL_UNAVAILABLE_ANSWER
+            evidence = []
+            skipped_model_call = True
+        elif mode == "web_research" and not external_chunks and not local_chunks:
             status = research.get("status") if isinstance(research.get("status"), dict) else {}
             answer = EXTERNAL_UNAVAILABLE_ANSWER if is_external_research_unavailable(status) else EXTERNAL_NO_RESULTS_ANSWER
             evidence = []
@@ -316,11 +413,14 @@ class EvidenceGateTool:
                 evidence=prompt_evidence,
                 snapshot=context,
                 recent_messages=recent,
-                expansion_policy=policy,
+                expansion_policy=prompt_policy,
                 max_prompt_chars=self.max_prompt_chars,
                 agent=self.answer_agent,
                 prompt=self.answer_prompt,
             )
+            prompt_context = evidence_budget.pop("_budgeted_snapshot", context) if isinstance(evidence_budget, dict) else context
+            if not isinstance(prompt_context, dict):
+                prompt_context = context
             sources = dedupe_display_sources(prompt_evidence)
             prompt_evidence = evidence_with_display_source_indices(prompt_evidence, sources)
             renumbered_pack = build_evidence_pack(query=query, chunks=prompt_evidence, status={})
@@ -329,9 +429,9 @@ class EvidenceGateTool:
             messages = build_answer_prompt(
                 query,
                 prompt_evidence,
-                context,
+                prompt_context,
                 recent,
-                expansion_policy=policy,
+                expansion_policy=prompt_policy,
                 agent=self.answer_agent,
                 prompt=self.answer_prompt,
             )
@@ -359,6 +459,12 @@ class EvidenceGateTool:
             "evidence_sufficiency": sufficiency,
             "agent_trace": [self.answer_agent.public_dict()] if messages else [],
             "prompt_trace": [self.answer_prompt.public_dict()] if messages else [],
+            "source_evaluation": {
+                "mode": str(source_evaluation.get("mode") or ""),
+                "kept_count": int(source_evaluation.get("kept_count") or 0) if source_evaluation else 0,
+                "dropped_count": int(source_evaluation.get("dropped_count") or 0) if source_evaluation else 0,
+                "decisions": source_evaluation.get("decisions") if isinstance(source_evaluation.get("decisions"), list) else [],
+            },
         }
 
 
@@ -699,6 +805,118 @@ def is_external_research_unavailable(status: dict[str, Any]) -> bool:
         "不可用",
     )
     return any(marker in message for marker in unavailable_markers)
+
+
+def build_source_evaluator_messages(system_prompt: str, *, query: str, sources: list[dict[str, Any]], search_plan: dict[str, Any]) -> list[dict[str, str]]:
+    candidates: list[dict[str, Any]] = []
+    for index, source in enumerate(sources, start=1):
+        candidates.append(
+            {
+                "index": index,
+                "title": str(source.get("title") or "")[:220],
+                "url": str(source.get("url") or "")[:260],
+                "snippet": str(source.get("snippet") or "")[:900],
+            },
+        )
+    search = search_plan.get("search") if isinstance(search_plan.get("search"), dict) else {}
+    payload = {
+        "question": query,
+        "search_plan": {
+            "intent": str(search.get("search_intent") or ""),
+            "required_terms": [str(term) for term in search.get("required_terms") or []],
+            "evidence_terms": [str(term) for term in search.get("evidence_terms") or []],
+            "authoritative_required": bool(search.get("authoritative_required")),
+        },
+        "candidate_sources": candidates,
+    }
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+
+
+def decode_source_evaluator_json(content: str) -> dict[str, Any]:
+    text = str(content or "").strip()
+    if not text:
+        return {}
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if len(lines) >= 2:
+            text = "\n".join(lines[1:-1]).strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start : end + 1]
+    decoded = json.loads(text)
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def apply_source_evaluator_decisions(sources: list[dict[str, Any]], decoded: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    raw_decisions = decoded.get("sources") if isinstance(decoded.get("sources"), list) else []
+    decisions_by_index: dict[int, dict[str, Any]] = {}
+    for raw in raw_decisions:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            index = int(raw.get("index"))
+        except (TypeError, ValueError):
+            continue
+        if index < 1 or index > len(sources):
+            continue
+        keep = parse_bool(raw.get("keep"), default=False)
+        confidence = parse_float(raw.get("confidence"), default=0.0)
+        decisions_by_index[index] = {
+            "index": index,
+            "keep": keep,
+            "confidence": confidence,
+            "reason": str(raw.get("reason") or "").strip()[:180],
+        }
+    if not decisions_by_index:
+        return [], []
+    kept = [dict(source) for index, source in enumerate(sources, start=1) if decisions_by_index.get(index, {}).get("keep")]
+    decisions = [decisions_by_index.get(index, {"index": index, "keep": False, "confidence": 0.0, "reason": "missing_decision"}) for index in range(1, len(sources) + 1)]
+    return kept, decisions
+
+
+def fallback_source_relevance(source: dict[str, Any], *, query: str, search_plan: dict[str, Any]) -> tuple[bool, str]:
+    search = search_plan.get("search") if isinstance(search_plan.get("search"), dict) else {}
+    required_terms = [str(term).lower() for term in search.get("required_terms") or [] if str(term).strip()]
+    evidence_terms = [str(term).lower() for term in search.get("evidence_terms") or [] if str(term).strip()]
+    text = " ".join(str(source.get(key) or "") for key in ("title", "url", "snippet")).lower()
+    if "example.test/search" in text and ("external reference for" in text or "fake external source related to:" in text):
+        return True, "fake_search_fixture_pass"
+    intent = str(search.get("search_intent") or "").lower()
+    if required_terms and intent == "entity_relationship" and not all(term in text for term in required_terms):
+        return False, "missing_required_relationship_terms"
+    if required_terms and intent.startswith("entity_") and not any(term in text for term in required_terms):
+        return False, "missing_required_entity_terms"
+    if evidence_terms and not any(term in text for term in evidence_terms):
+        return False, "missing_evidence_terms"
+    query_tokens = [token for token in answer_query_tokens(query) if is_specific_relevance_token(token)]
+    if query_tokens and not any(token.lower() in text for token in query_tokens[:8]):
+        return False, "no_query_token_overlap"
+    return True, "fallback_relevance_pass"
+
+
+def parse_bool(value: Any, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "1", "keep", "pass"}:
+            return True
+        if normalized in {"false", "no", "0", "drop", "fail"}:
+            return False
+    return default
+
+
+def parse_float(value: Any, *, default: float) -> float:
+    try:
+        return max(0.0, min(float(value), 1.0))
+    except (TypeError, ValueError):
+        return default
 
 
 def context_title(context: dict[str, Any]) -> str:

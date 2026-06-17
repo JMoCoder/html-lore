@@ -1,6 +1,7 @@
 documents/
 public/
 data/
+meta/
 uploads/
 .venv/
 __pycache__/

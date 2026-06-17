@@ -17,9 +17,9 @@ HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書�
 - **Web アプリを主クライアントにします。** 別のデスクトップアプリではなく、ブラウザーとモバイル PWA を主な利用形態にします。
 - **AI は任意のサービス層です。** 現在のアプリには AI ワークフロー用 UI とコンテキスト設計がありますが、認証情報とモデル呼び出しは静的フロントエンドには保存しません。
 
-## 0.9.x Current Scope
+## 1.0.0 Current Scope
 
-現在の `0.9.x` ラインは、ローカル、プライベートネットワーク、セルフホストでの実運用を対象にしています。Docker デプロイ、内蔵ログイン、HTML インポート、メタデータ永続化、フィルター、読書、アーカイブ、公開共有に加え、最初のサーバー側 AI ワークフローを含みます。
+現在の `1.0.0` ラインは、ローカル、プライベートネットワーク、セルフホストでの実運用を対象にしています。Docker デプロイ、内蔵ログイン、HTML インポート、メタデータ永続化、フィルター、読書、アーカイブ、公開共有に加え、最初のサーバー側 AI ワークフローを含みます。
 
 現在実装済み:
 
@@ -42,7 +42,7 @@ HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書�
 - ライブラリ、コレクション、タグのサイドバー表示管理。
 - ワークスペース、コレクション、タグ、リーダー、手動選択ノートを扱うグローバル AI サイドバー。
 - OpenAI-compatible エンドポイント向けのサーバー側 AI プロバイダー設定。API key はバックエンド環境変数からのみ読み取り、ブラウザー設定 API では送信も取得もできません。
-- ナレッジベース Q&A beta。コンテキスト検索、現在コンテキストの概要、直近会話に基づく追問理解、Markdown 回答表示、クリック可能な外部ソース表示、会話永続化、現在コンテキストの最新会話復元、コンテキスト別履歴を備えます。
+- ナレッジベース Q&A は正式リリース済み。コンテキスト検索、現在コンテキストの概要、直近会話に基づく追問理解、Markdown 回答表示、クリック可能な外部ソース表示、会話永続化、現在コンテキストの最新会話復元、コンテキスト別履歴を備えます。
 - ナレッジベース Q&A ランタイムは planner、search planner、answer、verifier、reviewer の段階に分割され、agent/prompt trace も公開されます。今後の統一マルチエージェント backend への拡張とデバッグのためです。
 - AI 回答の strict / content expansion モード。strict は選択中のノートブックコンテキストだけで回答し、expansion は外部検索アダプター設定時に明示的な外部ソースを扱います。
 - AI 実行履歴、軽量非同期の生成履歴、失敗した会話生成ジョブの再試行、Settings 内のグローバル会話管理。
@@ -59,7 +59,7 @@ HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書�
 
 現在の制限または未実装:
 
-- AI 機能は beta であり、ホスト型/クラウド製品化の前にセルフホスト検証を優先しています。
+- AI 生成、修正、ナレッジ管理 workflow はまだ beta です。ナレッジベース Q&A は 1.0.0 で正式に提供する AI workflow です。
 - 外部 Web 検索はアダプターを用意していますが、既定プロバイダーは同梱していません。
 - vector / hybrid 検索にはサーバー側の embedding model 設定が必要です。未設定の場合、HTMlore はキーワード検索を使い続けます。
 - PDF 資料解析は意図的に後回しにしています。
@@ -278,20 +278,23 @@ HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
   `agent_runtime` へフォールバックします。開発時に LangGraph を強制する場合は
   `HTML_LORE_AI_QA_ENGINE=langgraph`、安定した runtime fallback を使う場合は
   `HTML_LORE_AI_QA_ENGINE=agent_runtime` を設定します。
-- Tavily 外部検索を有効にする場合は、別のサーバー側 key を使います。
+- 外部検索を有効にする場合は、別のサーバー側 key を使います。Tavily と Brave はどちらも任意の provider で、未設定でもローカル資料とモデル知識による最低限の Q&A は動作します。
 - smoke-test コマンドは実際の provider 呼び出しを行います。その環境の model と key が正しいことを確認してから実行してください。
 
-外部拡張モードでは、Tavily を制御された Web 検索 provider として利用できます:
+外部拡張モードでは、Tavily、Brave、または Tavily から Brave への chain fallback を制御された Web 検索 provider として利用できます:
 
 ```bash
-HTML_LORE_AI_EXTERNAL_SEARCH=tavily
+HTML_LORE_AI_EXTERNAL_SEARCH=tavily+brave
 HTML_LORE_AI_EXTERNAL_SEARCH_API_KEY=replace-with-your-tavily-key
+HTML_LORE_AI_EXTERNAL_SEARCH_BRAVE_API_KEY=replace-with-your-brave-key
 HTML_LORE_AI_EXTERNAL_SEARCH_MAX_RESULTS=5
 HTML_LORE_AI_EXTERNAL_SEARCH_DEPTH=basic
 HTML_LORE_AI_EXTERNAL_SEARCH_AUTO_PARAMETERS=false
 ```
 
-HTMlore は既定では Tavily の生成 answer を使いません。Tavily は外部証拠検索として扱い、最終回答はナレッジ Q&A workflow が組み立てます。検索は低コストの `basic` から開始し、時事性の高い質問や金融質問では topic / time range を切り替えます。ユーザーの質問から country ヒントを推定でき、ユーザーが深い調査や複数ソース比較を明示した場合、または運用者が明示設定した場合のみ `advanced` に昇格します。
+`HTML_LORE_AI_EXTERNAL_SEARCH` は `disabled`、`fake`、`tavily`、`brave`、`tavily+brave` に設定できます。Tavily または Brave のどちらか一方だけでも外部検索を有効化できます。両方を設定した場合、HTMlore は Tavily を先に使い、Tavily が利用できない、または有効な結果がない場合に Brave へ切り替え、最後にローカル/キーワード戦略へフォールバックします。
+
+HTMlore は既定では検索 provider の生成 answer を使いません。Tavily / Brave は外部証拠検索として扱い、最終回答はナレッジ Q&A workflow が組み立てます。検索は低コストの `basic` から開始し、時事性、entity background、複数ソース関係、ユーザーの詳細検証要求に応じて、検索計画が query 組み合わせと結果上限を動的に増やします。ユーザーが深い調査や複数ソース比較を明示した場合、または運用者が明示設定した場合のみ高コストな検索パラメータへ昇格します。
 `联网搜索` のような短い追問は、検索計画の前に直近のユーザー質問を継承し、以前の assistant 回答本文をそのまま検索クエリへ混ぜないようにしています。
 
 vector / hybrid 検索は、現在のユーザー metadata ディレクトリに軽量ローカル index を保存します。例: `meta/ai/vector_index.json`。マルチユーザーデプロイでは、対応する `users/{data_id}/meta/ai/vector_index.json` に保存されます。これにより、同じアプリケーションプロセスを共有しつつ、各ユーザーのワークスペースを論理的に分離できます。

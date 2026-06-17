@@ -30,6 +30,7 @@ class ServerSettings:
     ai_enabled: bool = False
     ai_external_search: str = ""
     ai_external_search_api_key: str = ""
+    ai_external_search_brave_api_key: str = ""
     ai_external_search_max_results: int = 5
     ai_external_search_depth: str = "basic"
     ai_external_search_auto_parameters: bool = False
@@ -92,6 +93,7 @@ def load_settings() -> ServerSettings:
     ai_enabled = parse_bool(get_env("AI_ENABLED", "false"))
     ai_external_search = get_env("AI_EXTERNAL_SEARCH", "").strip()
     ai_external_search_api_key = get_env("AI_EXTERNAL_SEARCH_API_KEY", "")
+    ai_external_search_brave_api_key = get_env("AI_EXTERNAL_SEARCH_BRAVE_API_KEY", "")
     ai_external_search_max_results = parse_positive_int(get_env("AI_EXTERNAL_SEARCH_MAX_RESULTS", "5"), 5)
     ai_external_search_depth = parse_choice(get_env("AI_EXTERNAL_SEARCH_DEPTH", "basic"), {"basic", "fast", "ultra-fast", "advanced"}, "basic")
     ai_external_search_auto_parameters = parse_bool(get_env("AI_EXTERNAL_SEARCH_AUTO_PARAMETERS", "false"))
@@ -130,6 +132,7 @@ def load_settings() -> ServerSettings:
         ai_enabled=ai_enabled,
         ai_external_search=ai_external_search,
         ai_external_search_api_key=ai_external_search_api_key,
+        ai_external_search_brave_api_key=ai_external_search_brave_api_key,
         ai_external_search_max_results=ai_external_search_max_results,
         ai_external_search_depth=ai_external_search_depth,
         ai_external_search_auto_parameters=ai_external_search_auto_parameters,
