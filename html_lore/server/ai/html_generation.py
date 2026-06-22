@@ -17,9 +17,11 @@ from .html_generation_graph import HtmlGenerationGraph, HtmlGenerationState
 
 
 VALID_THEMES = {"default", "dark", "light"}
-VALID_TARGET_USES = {"default", "personal", "share"}
-VALID_REFERENCE_STYLES = {"default", "image", "note"}
-VALID_STYLE_PREFERENCES = {"default", "report", "website", "ppt"}
+VALID_TARGET_USES = {"default", "personal", "share", "report", "website", "ppt"}
+VALID_REFERENCE_STYLES = {"default", "file", "image", "note"}
+VALID_STYLE_PREFERENCES = {"default", "report", "website", "ppt", "minimal", "business", "tech", "retro"}
+VALID_AUDIENCES = {"default", "personal", "share"}
+MAX_REFERENCE_FILE_SIZE = 25 * 1024 * 1024
 
 
 class HtmlGenerationError(ValueError):
@@ -34,19 +36,36 @@ class GenerationSpec:
     target_use: str = "default"
     reference_style: str = "default"
     reference_note_id: str = ""
+    reference_file_name: str = ""
+    reference_file_type: str = ""
+    reference_file_size: int = 0
     style_preference: str = "default"
+    audience: str = "default"
 
     @classmethod
     def from_values(cls, values: dict[str, Any]) -> "GenerationSpec":
         theme = validate_enum(values.get("theme", "default"), VALID_THEMES, "theme")
         target_use = validate_enum(values.get("target_use", values.get("targetUse", "default")), VALID_TARGET_USES, "target_use")
+        audience = validate_enum(values.get("audience", "default"), VALID_AUDIENCES, "audience")
+        if target_use in VALID_AUDIENCES and target_use != "default" and audience == "default":
+            audience = target_use
+            target_use = "default"
         style_preference = validate_enum(values.get("style_preference", values.get("stylePreference", "default")), VALID_STYLE_PREFERENCES, "style_preference")
         reference_style = validate_enum(values.get("reference_style", values.get("referenceStyle", "default")), VALID_REFERENCE_STYLES, "reference_style")
         reference_note_id = normalize_reference_note_id(values.get("reference_note_id") or values.get("referenceNoteId") or "")
-        if reference_style == "default":
+        reference_file_name = normalize_reference_file_name(values.get("reference_file_name") or values.get("referenceFileName") or "")
+        reference_file_type = normalize_reference_file_type(values.get("reference_file_type") or values.get("referenceFileType") or "")
+        reference_file_size = normalize_reference_file_size(values.get("reference_file_size") or values.get("referenceFileSize") or 0)
+        if reference_style != "note":
             reference_note_id = ""
+        if reference_style != "file":
+            reference_file_name = ""
+            reference_file_type = ""
+            reference_file_size = 0
         if reference_style == "note" and not reference_note_id:
             raise HtmlGenerationError("Reference note is required.")
+        if reference_style == "file" and not reference_file_name:
+            raise HtmlGenerationError("Reference style file is required.")
         if reference_style == "image":
             raise HtmlGenerationError("Reference image style is not implemented yet.")
         return cls(
@@ -54,7 +73,11 @@ class GenerationSpec:
             target_use=target_use,
             reference_style=reference_style,
             reference_note_id=reference_note_id,
+            reference_file_name=reference_file_name,
+            reference_file_type=reference_file_type,
+            reference_file_size=reference_file_size,
             style_preference=style_preference,
+            audience=audience,
         )
 
     def as_dict(self) -> dict[str, str]:
@@ -63,7 +86,11 @@ class GenerationSpec:
             "target_use": self.target_use,
             "reference_style": self.reference_style,
             "reference_note_id": self.reference_note_id,
+            "reference_file_name": self.reference_file_name,
+            "reference_file_type": self.reference_file_type,
+            "reference_file_size": str(self.reference_file_size),
             "style_preference": self.style_preference,
+            "audience": self.audience,
         }
 
 
@@ -220,6 +247,32 @@ def normalize_reference_note_id(value: Any) -> str:
     ):
         raise HtmlGenerationError("Unsupported reference note.")
     return cleaned
+
+
+def normalize_reference_file_name(value: Any) -> str:
+    cleaned = Path(str(value or "").replace("\\", "/")).name.strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) > 180 or any(ord(char) < 32 for char in cleaned):
+        raise HtmlGenerationError("Unsupported reference style file.")
+    return cleaned
+
+
+def normalize_reference_file_type(value: Any) -> str:
+    cleaned = str(value or "").strip().lower()
+    if len(cleaned) > 120 or any(ord(char) < 32 for char in cleaned):
+        raise HtmlGenerationError("Unsupported reference style file type.")
+    return cleaned
+
+
+def normalize_reference_file_size(value: Any) -> int:
+    try:
+        size = int(value or 0)
+    except (TypeError, ValueError) as exc:
+        raise HtmlGenerationError("Unsupported reference style file size.") from exc
+    if size < 0 or size > MAX_REFERENCE_FILE_SIZE:
+        raise HtmlGenerationError("Reference style file is too large.")
+    return size
 
 
 def slugify(value: str) -> str:

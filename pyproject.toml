@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "html-lore"
-version = "1.0.0"
+version = "1.0.1"
 description = "Static-first HTML knowledge workspace with card browsing and manifest generation."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,7 +25,8 @@ agent = [
   "uvicorn>=0.30",
   "jinja2>=3.1",
   "python-multipart>=0.0.9",
-  "langgraph>=0.2,<0.4"
+  "langgraph>=0.2,<0.4",
+  "markitdown[pdf,docx,pptx,xlsx,xls]>=0.1.0"
 ]
 
 [project.scripts]
@@ -36,3 +37,4 @@ include = ["html_lore*"]
 
 [tool.setuptools.package-data]
 "html_lore.server.ai" = ["agents/*.json", "prompts/*/*.md"]
+"html_lore.server.ai.generation_v2" = ["prompts/*.md", "skills/registry.json", "skills/*/SKILL.md"]

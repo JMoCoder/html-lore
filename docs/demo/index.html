@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600;900&family=Noto+Serif+JP:wght@600;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.0.0">
+  <link rel="stylesheet" href="style.css?v=1.0.1">
 </head>
 <body>
   <a class="demo-home-link" href="../" aria-label="HTMlore homepage" title="HTMlore homepage">
@@ -98,9 +98,6 @@
 
       <div class="sidebar-tools">
         <div class="sidebar-tool-group">
-          <button class="settings-toggle" type="button" id="settings-open" aria-label="Settings" title="Settings" data-i18n-attr="aria-label:settings,title:settings">
-            <span aria-hidden="true">⚙</span>
-          </button>
           <a class="github-link" href="https://github.com/JMoCoder/html_lore" target="_blank" rel="noreferrer" aria-label="GitHub repository" title="GitHub repository">
             <svg class="github-mark" viewBox="0 0 16 16" aria-hidden="true">
               <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
@@ -178,9 +175,19 @@
                 <path d="M17 16h4"></path>
               </svg>
             </button>
+            <button class="settings-toggle topbar-settings-toggle" type="button" id="settings-open" aria-label="Settings" title="Settings" data-i18n-attr="aria-label:settings,title:settings">
+              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .3 1.7 1.7 0 0 0-.8 1.45V21a2 2 0 0 1-4 0v-.09a1.7 1.7 0 0 0-.8-1.45 1.7 1.7 0 0 0-1-.3 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.3-1 1.7 1.7 0 0 0-1.45-.8H3a2 2 0 0 1 0-4h.09a1.7 1.7 0 0 0 1.45-.8 1.7 1.7 0 0 0 .3-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.3 1.7 1.7 0 0 0 .8-1.45V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 .8 1.45 1.7 1.7 0 0 0 1 .3 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.06.34.16.68.3 1 .28.48.8.8 1.45.8H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.45.8 1.7 1.7 0 0 0-.3 1Z"></path>
+              </svg>
+            </button>
           </div>
           <div class="topbar-search-group">
             <label class="search">
+              <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6"></circle>
+                <path d="m16 16 4 4"></path>
+              </svg>
               <input id="search-input" type="search" autocomplete="off" data-i18n-attr="aria-label:search,placeholder:searchPlaceholder">
             </label>
             <button class="ai-panel-toggle" type="button" id="ai-panel-open" aria-label="Open AI assistant" title="Open AI assistant" data-i18n-attr="aria-label:openGlobalAi,title:openGlobalAi">
@@ -195,7 +202,7 @@
       </header>
 
       <input id="html-import-file" type="file" accept=".html,.htm,text/html" hidden>
-      <input id="material-generate-file" type="file" accept=".html,.htm,.md,.markdown,.txt,text/html,text/markdown,text/plain" hidden>
+      <input id="material-generate-file" type="file" accept=".html,.htm,.md,.markdown,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,text/html,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg,image/png" hidden>
 
       <section class="new-card" id="new-card">
         <div class="new-card-header">
@@ -204,6 +211,13 @@
           </div>
         </div>
         <form id="new-item-form" class="new-form">
+          <button type="button" class="new-generation-toggle" id="new-generation-toggle" aria-expanded="false" aria-controls="new-generation-options" aria-label="More settings" title="More settings" data-i18n-attr="aria-label:moreSettings,title:moreSettings">
+            <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16"></path>
+              <path d="M7 12h10"></path>
+              <path d="M10 17h4"></path>
+            </svg>
+          </button>
           <select id="input-type" data-i18n-attr="aria-label:inputType">
             <option value="auto" data-i18n="inputAuto"></option>
             <option value="link" data-i18n="inputLink"></option>
@@ -211,8 +225,61 @@
             <option value="book" data-i18n="inputBook"></option>
             <option value="topic" data-i18n="inputTopic"></option>
           </select>
-          <input id="new-item-input" type="text" data-i18n-attr="placeholder:newItemPlaceholder">
+          <div class="new-prompt-box">
+            <textarea id="new-item-input" rows="1" data-i18n-attr="placeholder:newItemPlaceholder"></textarea>
+            <button type="button" class="new-upload-button" id="new-file-trigger" aria-label="Upload source file" title="Upload source file" data-i18n-attr="aria-label:chooseFile,title:chooseFile">
+              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 16V4"></path>
+                <path d="m7 9 5-5 5 5"></path>
+                <path d="M5 16v3h14v-3"></path>
+              </svg>
+            </button>
+            <span class="new-prompt-resize" id="new-prompt-resize" aria-hidden="true"></span>
+          </div>
           <button type="submit" data-i18n="create"></button>
+          <div class="new-file-row" id="new-file-row" hidden>
+            <span class="new-file-name" id="new-file-name"></span>
+            <button type="button" class="new-file-remove" id="new-file-remove" aria-label="Remove source file" title="Remove source file" data-i18n-attr="aria-label:removeFile,title:removeFile">×</button>
+          </div>
+          <div class="new-generation-drawer" id="new-generation-options" hidden>
+            <div class="new-generation-options">
+              <label>
+                <span data-i18n="generateTheme"></span>
+                <select id="new-generate-theme">
+                  <option value="default" data-i18n="generateDefault"></option>
+                  <option value="dark" data-i18n="generateDark"></option>
+                  <option value="light" data-i18n="generateLight"></option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="generateTargetUse"></span>
+                <select id="new-generate-target-use">
+                  <option value="default" data-i18n="generateDefault"></option>
+                  <option value="report" data-i18n="generateReport"></option>
+                  <option value="website" data-i18n="generateWebsite"></option>
+                  <option value="ppt" data-i18n="generatePpt"></option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="generateStylePreference"></span>
+                <select id="new-generate-style-preference">
+                  <option value="default" data-i18n="generateDefault"></option>
+                  <option value="minimal" data-i18n="generateMinimal"></option>
+                  <option value="business" data-i18n="generateBusiness"></option>
+                  <option value="tech" data-i18n="generateTech"></option>
+                  <option value="retro" data-i18n="generateRetro"></option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="generateAudience"></span>
+                <select id="new-generate-audience">
+                  <option value="default" data-i18n="generateDefault"></option>
+                  <option value="personal" data-i18n="generatePersonal"></option>
+                  <option value="share" data-i18n="generateShare"></option>
+                </select>
+              </label>
+            </div>
+          </div>
         </form>
         <p class="new-feedback" id="new-feedback"></p>
       </section>
@@ -893,26 +960,30 @@
             <span data-i18n="generateTargetUse"></span>
             <select id="generate-target-use">
               <option value="default" data-i18n="generateDefault"></option>
+              <option value="report" data-i18n="generateReport"></option>
+              <option value="website" data-i18n="generateWebsite"></option>
+              <option value="ppt" data-i18n="generatePpt"></option>
+            </select>
+          </label>
+          <label>
+            <span data-i18n="generateAudience"></span>
+            <select id="generate-audience">
+              <option value="default" data-i18n="generateDefault"></option>
               <option value="personal" data-i18n="generatePersonal"></option>
               <option value="share" data-i18n="generateShare"></option>
             </select>
           </label>
         </div>
-        <p class="security-note compact-note" id="generate-share-hint" data-i18n="generateShareSafetyHint" hidden></p>
         <label>
           <span data-i18n="generateStylePreference"></span>
           <select id="generate-style-preference">
             <option value="default" data-i18n="generateDefault"></option>
-            <option value="report" data-i18n="generateReport"></option>
-            <option value="website" data-i18n="generateWebsite"></option>
-            <option value="ppt" data-i18n="generatePpt"></option>
+            <option value="minimal" data-i18n="generateMinimal"></option>
+            <option value="business" data-i18n="generateBusiness"></option>
+            <option value="tech" data-i18n="generateTech"></option>
+            <option value="retro" data-i18n="generateRetro"></option>
           </select>
         </label>
-        <label>
-          <span data-i18n="generateReferenceNote"></span>
-          <select id="generate-reference-note"></select>
-        </label>
-        <p class="settings-note" data-i18n="generateReferenceImageComingSoon"></p>
         <p class="settings-feedback" id="generate-note-feedback"></p>
         <div class="metadata-actions">
           <button type="submit" id="generate-note-submit" data-i18n="generateNoteSubmit"></button>
@@ -923,6 +994,6 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=1.0.0" type="module"></script>
+  <script src="app.js?v=1.0.1" type="module"></script>
 </body>
 </html>

@@ -12,6 +12,9 @@ from .guardrails import GuardrailError
 from .html_generation import GenerationSpec, HtmlGenerationError, generate_note_from_conversation
 from .jobs import AIJobError, AIJobStore, ai_job_queue
 from .material_generation import MaterialGenerationError, generate_note_from_material
+from .generation_v2.fake_model import FakeGenerationModelClient
+from .generation_v2.material_runner import generate_note_from_material_v2
+from .generation_v2.model_client import build_provider_generation_client
 from .model_client import ModelClient, test_provider
 from .providers import AIProviderConfigError, AIProviderConfigStore, ProviderCallError
 from .runs import AIRunError, AIRunStore
@@ -196,13 +199,24 @@ class AIConversationService:
     def generate_note_from_material(self, *, filename: str, content: bytes, instruction: str, values: dict[str, Any]) -> dict[str, Any]:
         spec = GenerationSpec.from_values(values)
         try:
-            result = generate_note_from_material(
-                settings=self.settings,
-                filename=filename,
-                content=content,
-                instruction=instruction,
-                spec=spec,
-            )
+            if self.settings.ai_generation_engine == "v2":
+                result = generate_note_from_material_v2(
+                    settings=self.settings,
+                    filename=filename,
+                    content=content,
+                    instruction=instruction,
+                    spec=spec,
+                    reference_content=values.get("reference_file_content") if isinstance(values.get("reference_file_content"), bytes) else b"",
+                    model_client=self._generation_v2_model_client(),
+                )
+            else:
+                result = generate_note_from_material(
+                    settings=self.settings,
+                    filename=filename,
+                    content=content,
+                    instruction=instruction,
+                    spec=spec,
+                )
         except (HtmlGenerationError, MaterialGenerationError) as exc:
             self._store_failed_run(exc)
             raise
@@ -212,17 +226,48 @@ class AIConversationService:
     def enqueue_generate_note_from_material(self, *, filename: str, content: bytes, instruction: str, values: dict[str, Any]) -> dict[str, Any]:
         spec = GenerationSpec.from_values(values)
         store = AIJobStore(self.settings)
-        job = store.create(kind="material_html_generation", label=filename or "Uploaded material")
+        payload = {
+            "type": "material_html_generation",
+            "filename": filename,
+            "spec": spec.as_dict(),
+            "engine": self.settings.ai_generation_engine,
+        }
+        if self.settings.ai_generation_engine == "v2":
+            from .generation_v2.schemas import GenerationEngine, GenerationStage
+
+            from .generation_v2.store import GenerationStore
+
+            job = GenerationStore(self.settings).create_job(kind="material_html_generation", label=filename or "Uploaded material", payload=payload, current_stage=GenerationStage.QUEUED)
+        else:
+            job = store.create(kind="material_html_generation", label=filename or "Uploaded material", payload=payload)
 
         def task() -> dict[str, Any]:
             try:
-                result = generate_note_from_material(
-                    settings=self.settings,
-                    filename=filename,
-                    content=content,
-                    instruction=instruction,
-                    spec=spec,
-                )
+                if self.settings.ai_generation_engine == "v2":
+                    generation_store = GenerationStore(self.settings)
+
+                    def sync_v2_state(state) -> None:
+                        generation_store.jobs.update(str(job["job_id"]), generation_store.public_state_summary(state))
+
+                    result = generate_note_from_material_v2(
+                        settings=self.settings,
+                        filename=filename,
+                        content=content,
+                        instruction=instruction,
+                        spec=spec,
+                        reference_content=values.get("reference_file_content") if isinstance(values.get("reference_file_content"), bytes) else b"",
+                        model_client=self._generation_v2_model_client(),
+                        job_id=str(job["job_id"]),
+                        on_state=sync_v2_state,
+                    )
+                else:
+                    result = generate_note_from_material(
+                        settings=self.settings,
+                        filename=filename,
+                        content=content,
+                        instruction=instruction,
+                        spec=spec,
+                    )
             except (HtmlGenerationError, MaterialGenerationError) as exc:
                 self._store_failed_run(exc)
                 raise
@@ -333,6 +378,19 @@ class AIConversationService:
         run = getattr(exc, "run", None)
         if isinstance(run, dict) and run:
             self.run_store.add(run)
+
+    def _generation_v2_model_client(self):
+        from dataclasses import replace
+
+        base_config = self.provider_store.get()
+        config = replace(base_config, model=self.settings.ai_generation_model or base_config.model)
+        if config.provider == "fake":
+            return FakeGenerationModelClient()
+        return build_provider_generation_client(
+            ModelClient(config),
+            max_prompt_chars=self.settings.ai_max_prompt_chars,
+            max_tokens=max(self.settings.ai_max_response_tokens, 4096),
+        )
 
 
 def qa_status_from_report(report: dict[str, Any]) -> dict[str, Any]:

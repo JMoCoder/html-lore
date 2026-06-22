@@ -4,6 +4,20 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-22
+
+### Added
+
+- アップロード資料から HTML を生成する AI generation v2 beta workflow を追加しました。段階的な agent、構造化 model call、MarkItDown ベースの解析、安全な静的 HTML 書き込み、task trace metadata、checklist status 更新に対応しています。
+- Workspace の "Create with AI" に source file upload flow を追加し、theme、purpose、style、audience の任意 control を利用できるようにしました。
+
+### Changed
+
+- create form layout、長い prompt の resize、静的 demo preview、topbar settings/search control、AI sidebar 表示時の narrow workspace 表示を改善しました。
+- MarkItDown parser の deployment notes と resource consideration を追加しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.0.1` に更新しました。
+
 ## [1.0.0] - 2026-06-17
 
 ### Added

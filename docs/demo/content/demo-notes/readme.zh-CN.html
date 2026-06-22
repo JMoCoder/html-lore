@@ -205,7 +205,9 @@ html-lore serve-api --host 127.0.0.1 --port 8787</code></pre>
 HTML_LORE_AI_PROVIDER=openai-compatible
 HTML_LORE_AI_BASE_URL=https://your-newapi.example.com/v1
 HTML_LORE_AI_MODEL=gpt-5.5
+HTML_LORE_DOCUMENT_PARSER=markitdown
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key</code></pre>
+<p>安装可选 <code>agent</code> extra 会安装 AI 运行依赖，包括用于工作流编排的 LangGraph，以及用于 PDF / Word / PowerPoint / Excel 增强解析的 MarkItDown。<code>HTML_LORE_DOCUMENT_PARSER=markitdown</code> 是默认值；轻量部署或排查解析问题时可设置为 <code>basic</code>。</p>
 <p>开发测试时可以使用 <code>HTML_LORE_AI_PROVIDER=fake</code> 验证界面与会话流程，不会发起真实模型请求。公开状态接口只返回 <code>has_api_key</code>，不会返回密钥内容。</p>
 <h2>安全模型</h2>
 <p>默认 Docker 模式面向本地、局域网和私有自托管使用。默认本地/测试账号为 <code>admin</code> / <code>test-password</code>，并使用开发 session secret。浏览器会先进入登录页，登录后使用 HttpOnly session Cookie。当前不开放注册；生产部署必须替换默认用户名、密码和 session secret。自托管用户保存在 <code>data/users.json</code>；每个新增用户的资料库数据分别保存在 <code>data/users/&lt;data_id&gt;/</code>。</p>

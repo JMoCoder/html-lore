@@ -57,6 +57,9 @@ class ApiServer:
         ai_rate_limit_window_seconds: int | None = None,
         ai_retrieval_mode: str | None = None,
         ai_qa_engine: str | None = None,
+        ai_generation_engine: str | None = None,
+        ai_generation_model: str | None = None,
+        document_parser: str | None = None,
     ) -> None:
         self.port = free_port()
         self.api_token = api_token
@@ -112,6 +115,12 @@ class ApiServer:
             env["HTML_LORE_AI_RETRIEVAL_MODE"] = ai_retrieval_mode
         if ai_qa_engine is not None:
             env["HTML_LORE_AI_QA_ENGINE"] = ai_qa_engine
+        if ai_generation_engine is not None:
+            env["HTML_LORE_AI_GENERATION_ENGINE"] = ai_generation_engine
+        if ai_generation_model is not None:
+            env["HTML_LORE_AI_GENERATION_MODEL"] = ai_generation_model
+        if document_parser is not None:
+            env["HTML_LORE_DOCUMENT_PARSER"] = document_parser
         if users_file:
             env["HTML_LORE_USERS_FILE"] = str(users_file)
         if user_data_dir:
@@ -280,6 +289,9 @@ def run_api_server(
     ai_rate_limit_window_seconds: int | None = None,
     ai_retrieval_mode: str | None = None,
     ai_qa_engine: str | None = None,
+    ai_generation_engine: str | None = None,
+    ai_generation_model: str | None = None,
+    document_parser: str | None = None,
 ) -> ApiServer:
     return ApiServer(
         content_dir=content_dir,
@@ -315,4 +327,7 @@ def run_api_server(
         ai_rate_limit_window_seconds=ai_rate_limit_window_seconds,
         ai_retrieval_mode=ai_retrieval_mode,
         ai_qa_engine=ai_qa_engine,
+        ai_generation_engine=ai_generation_engine,
+        ai_generation_model=ai_generation_model,
+        document_parser=document_parser,
     )

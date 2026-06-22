@@ -335,13 +335,22 @@ HTML_LORE_AI_BASE_URL=https://your-newapi.example.com/v1
 HTML_LORE_AI_MODEL=gpt-5.5
 HTML_LORE_AI_EMBEDDING_MODEL=baai/bge-m3
 HTML_LORE_AI_RETRIEVAL_MODE=hybrid
+HTML_LORE_DOCUMENT_PARSER=markitdown
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 ```
 
 Deployment notes:
 
+- Installing the `agent` extra installs the AI runtime dependencies used by the
+  backend, including LangGraph for workflow orchestration and MarkItDown for
+  enhanced document parsing.
 - `HTML_LORE_AI_API_KEY` is used by the server for chat and embedding calls; it
   must not be placed in frontend config files.
+- `HTML_LORE_DOCUMENT_PARSER=markitdown` is the default parser mode for AI
+  generation. PDF, Word, PowerPoint, and Excel files are parsed with MarkItDown
+  when available, then fall back to the basic local parser on failure. Set
+  `HTML_LORE_DOCUMENT_PARSER=basic` for lightweight deployments or parser
+  troubleshooting.
 - `HTML_LORE_AI_EMBEDDING_MODEL` enables vector / hybrid retrieval. If the
   embedding model or index is unavailable, HTMlore falls back to keyword
   retrieval.
@@ -353,6 +362,10 @@ Deployment notes:
 - External search supports a fallback chain: Tavily -> Brave -> disabled. Each provider is optional; configure neither to keep the app fully usable in local-only mode.
 - `HTML_LORE_AI_EXTERNAL_SEARCH_API_KEY` enables Tavily.
 - `HTML_LORE_AI_EXTERNAL_SEARCH_BRAVE_API_KEY` enables Brave Search.
+- Enhanced file parsing can use more CPU, memory, and temporary disk space for
+  large PDF / Office / spreadsheet files. Production deployments should keep upload-size
+  limits, task concurrency, and worker memory headroom aligned with expected
+  document sizes.
 - Smoke-test commands make real provider calls and should only be run after the
   target model and key are confirmed for that environment.
 

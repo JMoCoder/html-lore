@@ -45,6 +45,9 @@ class ServerSettings:
     ai_rate_limit_window_seconds: int = 60
     ai_retrieval_mode: str = "keyword"
     ai_qa_engine: str = "auto"
+    ai_generation_engine: str = "legacy"
+    ai_generation_model: str = "gpt-5.5"
+    document_parser: str = "markitdown"
 
     @property
     def auth_enabled(self) -> bool:
@@ -108,6 +111,9 @@ def load_settings() -> ServerSettings:
     ai_rate_limit_window_seconds = parse_positive_int(get_env("AI_RATE_LIMIT_WINDOW_SECONDS", "60"), 60)
     ai_retrieval_mode = parse_choice(get_env("AI_RETRIEVAL_MODE", "keyword"), {"keyword", "vector", "hybrid"}, "keyword")
     ai_qa_engine = parse_choice(get_env("AI_QA_ENGINE", "auto"), {"auto", "agent_runtime", "langgraph"}, "auto")
+    ai_generation_engine = parse_choice(get_env("AI_GENERATION_ENGINE", "legacy"), {"legacy", "v2"}, "legacy")
+    ai_generation_model = get_env("AI_GENERATION_MODEL", "gpt-5.5").strip() or "gpt-5.5"
+    document_parser = parse_choice(get_env("DOCUMENT_PARSER", "markitdown"), {"markitdown", "basic"}, "markitdown")
     return ServerSettings(
         content_dir=content_dir,
         meta_dir=meta_dir,
@@ -147,6 +153,9 @@ def load_settings() -> ServerSettings:
         ai_rate_limit_window_seconds=ai_rate_limit_window_seconds,
         ai_retrieval_mode=ai_retrieval_mode,
         ai_qa_engine=ai_qa_engine,
+        ai_generation_engine=ai_generation_engine,
+        ai_generation_model=ai_generation_model,
+        document_parser=document_parser,
     )
 
 

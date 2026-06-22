@@ -215,6 +215,19 @@ test("workspace file create mode uploads material to the AI generation endpoint"
             kind: "material_html_generation",
             status: completed ? "completed" : "pending",
             label: "material.md",
+            generation_engine: "v2",
+            current_stage: completed ? "writing_file" : "designing_style",
+            stage_trace: [
+              { stage: "parsing", agent: "Ingest", status: "completed", message: "Uploaded material parsed." },
+              { stage: "designing_style", agent: "StyleDesigner", status: completed ? "completed" : "running", message: "Style direction prepared." },
+            ],
+            execution_checklist: [
+              { id: "parse", label: "Parse uploaded material", status: "completed" },
+              { id: "style", label: "Prepare visual direction", status: completed ? "completed" : "running" },
+            ],
+            skill_trace: [
+              { id: "html_page_design", title: "HTML page design", agent: "StyleDesigner", version: "1" },
+            ],
             run_id: completed ? generatedRun.id : "",
             item_id: completed ? "generated/2026/06/material-note.html" : "",
             cancellable: !completed,
@@ -251,15 +264,25 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   await page.goto("/workspace/", { waitUntil: "domcontentloaded" });
   await page.locator("#input-type").selectOption("file");
   await page.locator("#new-item-input").fill("Turn this material into a concise study note.");
+  await expect(page.locator("#new-generation-options")).toBeHidden();
+  await page.locator("#new-generation-toggle").click();
+  await expect(page.locator("#new-generation-options")).toBeVisible();
+  await page.locator("#new-generate-theme").selectOption("dark");
+  await page.locator("#new-generate-target-use").selectOption("ppt");
+  await page.locator("#new-generate-style-preference").selectOption("tech");
+  await page.locator("#new-generate-audience").selectOption("share");
 
   const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.locator("#new-item-form button[type='submit']").click();
+  await page.locator("#new-file-trigger").click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles({
     name: "material.md",
     mimeType: "text/markdown",
     buffer: Buffer.from("# Material\n\nImportant uploaded source.", "utf8"),
   });
+  await expect(page.locator("#new-file-name")).toContainText("material.md");
+  await expect(page.locator("#new-file-trigger")).toHaveClass(/has-file/);
+  await page.locator("#new-item-form button[type='submit']").click();
 
   await expect(page.locator("#new-feedback")).toContainText("Queued job ai-job-material-test");
   await expect(page.locator(".item-card", { hasText: "Generated Material Note" })).toBeVisible();
@@ -269,12 +292,26 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   expect(materialRequest.method).toBe("POST");
   expect(materialRequest.postData).toContain("material.md");
   expect(materialRequest.postData).toContain("Turn this material into a concise study note.");
+  expect(materialRequest.postData).toContain("name=\"theme\"");
+  expect(materialRequest.postData).toContain("dark");
+  expect(materialRequest.postData).toContain("name=\"target_use\"");
+  expect(materialRequest.postData).toContain("ppt");
+  expect(materialRequest.postData).toContain("name=\"style_preference\"");
+  expect(materialRequest.postData).toContain("tech");
+  expect(materialRequest.postData).toContain("name=\"audience\"");
+  expect(materialRequest.postData).toContain("share");
+  expect(materialRequest.postData).not.toContain("name=\"reference_style\"");
+  expect(materialRequest.postData).not.toContain("style-reference.pdf");
   await page.locator("#ai-panel-open").click();
   await page.locator("#ai-more-toggle").click();
   await page.locator("#ai-job-toggle").click();
   await expect(page.locator("#ai-job-list")).toContainText("Generation history");
   await expect(page.locator("#ai-job-list")).toContainText("Failed note");
   await expect(page.locator("#ai-job-list")).toContainText("material.md");
+  await page.locator(".ai-job-row", { hasText: "material.md" }).click();
+  await expect(page.locator("#ai-job-list")).toContainText("Process");
+  await expect(page.locator("#ai-job-list")).toContainText("StyleDesigner");
+  await expect(page.locator("#ai-job-list")).toContainText("HTML page design");
   await expect(page.locator("#ai-chat-log")).not.toContainText("AI job completed");
   await expect(page.locator("#ai-job-list").getByRole("button", { name: "Retry" })).toBeVisible();
   await page.locator("#ai-job-list").getByRole("button", { name: "Retry" }).click();
@@ -398,7 +435,7 @@ test("workspace material generation failure refreshes AI run history", async ({ 
   await expect(page.locator("#ai-run-list")).not.toContainText("private uploaded source text");
 });
 
-test("workspace note generation can select an existing note as reference style", async ({ page }) => {
+test("workspace note generation sends target format and style preference", async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
   await routeWorkspace(page);
 
@@ -505,23 +542,22 @@ test("workspace note generation can select an existing note as reference style",
   await page.goto("/workspace/", { waitUntil: "domcontentloaded" });
   await page.locator("#ai-panel-open").click();
   await page.locator("#ai-generate-note").click();
-  await expect(page.locator("#generate-reference-note")).toContainText("Style Reference");
-  await expect(page.locator("#generate-reference-note")).not.toContainText("Archived Style");
-  await expect(page.locator("[data-i18n='generateReferenceImageComingSoon']")).toContainText("Screenshot style reference");
-  await expect(page.locator("#generate-share-hint")).toBeHidden();
-  await page.locator("#generate-target-use").selectOption("share");
-  await expect(page.locator("#generate-share-hint")).toBeVisible();
-  await page.locator("#generate-reference-note").selectOption("style.html");
+  await expect(page.locator("#generate-reference-file")).toHaveCount(0);
+  await page.locator("#generate-target-use").selectOption("website");
+  await page.locator("#generate-audience").selectOption("personal");
+  await page.locator("#generate-style-preference").selectOption("business");
   await page.locator("#generate-note-submit").click();
 
   await expect(page.locator("#generate-note-feedback")).toContainText("AI job queued: ai-job-reference-test");
   await expect(page.locator("#ai-chat-log")).not.toContainText("AI job queued");
   expect(conversationRequest).not.toBeNull();
   expect(generationRequest).toMatchObject({
-    target_use: "share",
-    reference_style: "note",
-    reference_note_id: "style.html",
+    target_use: "website",
+    audience: "personal",
+    style_preference: "business",
   });
+  expect(generationRequest.reference_style).toBeUndefined();
+  expect(generationRequest.reference_file_name).toBeUndefined();
 });
 
 test("workspace AI content expansion controls conversation source mode", async ({ page }) => {

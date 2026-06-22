@@ -45,21 +45,22 @@ test("workspace logo returns to the workspace home", async ({ page }) => {
   await expect(page.locator(".cover h1")).toHaveCount(0);
 });
 
-test("sidebar footer uses settings, homepage, and GitHub actions", async ({ page }) => {
+test("topbar settings sits after lucky while sidebar footer keeps homepage and GitHub actions", async ({ page }) => {
   await expect(page.locator("#profile-status")).toHaveCount(0);
   await expect(page.locator("#settings-open")).toBeVisible();
   await expect(page.locator(".project-link")).toBeVisible();
   await expect(page.locator(".github-link")).toBeVisible();
+  await expect(page.locator(".sidebar-tools #settings-open")).toHaveCount(0);
+  await expect(page.locator(".topbar-control-group #settings-open")).toHaveCount(1);
   await expect(page.locator(".project-link")).toHaveAttribute("href", /html_lore\/$/);
   await expect(page.locator(".github-link")).toHaveAttribute("href", /github\.com\/JMoCoder\/html_lore/);
 
   await expect
     .poll(async () => {
       const settings = await page.locator("#settings-open").boundingBox();
-      const project = await page.locator(".project-link").boundingBox();
-      const github = await page.locator(".github-link").boundingBox();
-      if (!settings || !project || !github) return false;
-      return settings.x < github.x && github.x < project.x;
+      const lucky = await page.locator("#lucky-button").boundingBox();
+      if (!settings || !lucky) return false;
+      return lucky.x < settings.x;
     })
     .toBe(true);
 });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -165,7 +166,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.0.0 curl-compatible",
+                "User-Agent": "HTMlore/1.0.1 curl-compatible",
                 "Accept": "application/json, text/event-stream",
             },
         )
@@ -176,7 +177,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
         except urllib.error.HTTPError as exc:
             detail = provider_error_detail(exc)
             raise ProviderCallError(f"AI provider returned HTTP {exc.code}{detail}.") from exc
-        except urllib.error.URLError as exc:
+        except (TimeoutError, socket.timeout, urllib.error.URLError, OSError) as exc:
             raise ProviderCallError("AI provider is unreachable.") from exc
         except json.JSONDecodeError as exc:
             raise ProviderCallError("AI provider returned invalid JSON.") from exc
@@ -202,7 +203,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.0.0 curl-compatible",
+                "User-Agent": "HTMlore/1.0.1 curl-compatible",
                 "Accept": "application/json",
             },
         )
@@ -212,7 +213,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
         except urllib.error.HTTPError as exc:
             detail = provider_error_detail(exc)
             raise ProviderCallError(f"AI embedding provider returned HTTP {exc.code}{detail}.") from exc
-        except urllib.error.URLError as exc:
+        except (TimeoutError, socket.timeout, urllib.error.URLError, OSError) as exc:
             raise ProviderCallError("AI embedding provider is unreachable.") from exc
         except json.JSONDecodeError as exc:
             raise ProviderCallError("AI embedding provider returned invalid JSON.") from exc

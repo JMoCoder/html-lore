@@ -81,6 +81,10 @@ def sanitize_run(run: dict[str, Any]) -> dict[str, Any]:
         "qa_report": run.get("qa_report") if isinstance(run.get("qa_report"), dict) else {},
         "review_decision": run.get("review_decision") if isinstance(run.get("review_decision"), dict) else {},
         "node_trace": run.get("node_trace") if isinstance(run.get("node_trace"), list) else [],
+        "generation_engine": str(run.get("generation_engine") or "")[:40],
+        "current_stage": str(run.get("current_stage") or "")[:80],
+        "stage_trace": sanitize_generation_stage_trace(run.get("stage_trace")),
+        "execution_checklist": sanitize_execution_checklist(run.get("execution_checklist")),
         "agent_trace": sanitize_trace_list(run.get("agent_trace"), allowed_keys={"id", "version", "role", "prompt_template", "input_schema", "output_schema"}),
         "prompt_trace": sanitize_trace_list(run.get("prompt_trace"), allowed_keys={"id", "version", "path"}),
         "skill_trace": sanitize_skill_trace(run.get("skill_trace")),
@@ -129,6 +133,17 @@ def sanitize_skill_trace(value: Any) -> list[dict[str, Any]]:
     sanitized: list[dict[str, Any]] = []
     for entry in value:
         if not isinstance(entry, dict):
+            continue
+        if entry.get("id") or entry.get("agent"):
+            clean_v2 = {
+                "id": str(entry.get("id") or "")[:120],
+                "title": str(entry.get("title") or "")[:160],
+                "agent": str(entry.get("agent") or "")[:120],
+                "version": str(entry.get("version") or "")[:40],
+                "source": str(entry.get("source") or "")[:40],
+            }
+            if clean_v2["id"]:
+                sanitized.append(clean_v2)
             continue
         clean = {
             "skill_id": str(entry.get("skill_id") or ""),
@@ -204,3 +219,51 @@ def sanitize_error(value: Any) -> dict[str, str]:
     if message:
         result["message"] = message
     return result
+
+
+def sanitize_generation_stage_trace(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    sanitized: list[dict[str, Any]] = []
+    for entry in value[-120:]:
+        if not isinstance(entry, dict):
+            continue
+        stage = str(entry.get("stage") or "")[:80]
+        status = str(entry.get("status") or "")[:40]
+        if not stage or not status:
+            continue
+        sanitized.append(
+            {
+                "stage": stage,
+                "agent": str(entry.get("agent") or "")[:120],
+                "status": status,
+                "started_at": str(entry.get("started_at") or "")[:80],
+                "completed_at": str(entry.get("completed_at") or "")[:80],
+                "message": str(entry.get("message") or "")[:240],
+                "error_summary": str(entry.get("error_summary") or "")[:240],
+                "retryable": bool(entry.get("retryable")),
+            },
+        )
+    return sanitized
+
+
+def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    sanitized: list[dict[str, str]] = []
+    for entry in value[:120]:
+        if not isinstance(entry, dict):
+            continue
+        item_id = str(entry.get("id") or "")[:80]
+        title = str(entry.get("title") or "")[:160]
+        if not item_id and not title:
+            continue
+        sanitized.append(
+            {
+                "id": item_id,
+                "title": title,
+                "owner": str(entry.get("owner") or "")[:80],
+                "status": str(entry.get("status") or "")[:40],
+            },
+        )
+    return sanitized

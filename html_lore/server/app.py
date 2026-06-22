@@ -136,6 +136,28 @@ def verify_ai_rate_limit(
 AiRateLimit = Annotated[None, Depends(verify_ai_rate_limit)]
 
 
+async def read_style_reference_metadata(
+    reference_file: UploadFile | None,
+    reference_file_name: str,
+    reference_file_type: str,
+    reference_file_size: int,
+) -> dict[str, object]:
+    if reference_file is None:
+        return {
+            "reference_file_name": reference_file_name,
+            "reference_file_type": reference_file_type,
+            "reference_file_size": reference_file_size,
+            "reference_file_content": b"",
+        }
+    content = await reference_file.read()
+    return {
+        "reference_file_name": reference_file.filename or reference_file_name,
+        "reference_file_type": reference_file.content_type or reference_file_type,
+        "reference_file_size": len(content) or reference_file_size,
+        "reference_file_content": content,
+    }
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     if settings.auth_enabled:
@@ -332,9 +354,14 @@ def create_app() -> FastAPI:
         target_use: Annotated[str, Form()] = "default",
         reference_style: Annotated[str, Form()] = "default",
         reference_note_id: Annotated[str, Form()] = "",
+        reference_file: Annotated[UploadFile | None, File()] = None,
+        reference_file_name: Annotated[str, Form()] = "",
+        reference_file_type: Annotated[str, Form()] = "",
+        reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
         content = await file.read()
+        uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size)
         try:
             return service.generate_note_from_material(
                 filename=file.filename or "material.txt",
@@ -345,6 +372,7 @@ def create_app() -> FastAPI:
                     "target_use": target_use,
                     "reference_style": reference_style,
                     "reference_note_id": reference_note_id,
+                    **uploaded_reference,
                     "style_preference": style_preference,
                 },
             )
@@ -362,9 +390,14 @@ def create_app() -> FastAPI:
         target_use: Annotated[str, Form()] = "default",
         reference_style: Annotated[str, Form()] = "default",
         reference_note_id: Annotated[str, Form()] = "",
+        reference_file: Annotated[UploadFile | None, File()] = None,
+        reference_file_name: Annotated[str, Form()] = "",
+        reference_file_type: Annotated[str, Form()] = "",
+        reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
         content = await file.read()
+        uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size)
         try:
             return service.enqueue_generate_note_from_material(
                 filename=file.filename or "material.txt",
@@ -375,6 +408,7 @@ def create_app() -> FastAPI:
                     "target_use": target_use,
                     "reference_style": reference_style,
                     "reference_note_id": reference_note_id,
+                    **uploaded_reference,
                     "style_preference": style_preference,
                 },
             )

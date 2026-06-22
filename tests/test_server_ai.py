@@ -1,13 +1,17 @@
 import json
+import socket
 import time
 import urllib.error
 import urllib.parse
 from pathlib import Path
 
+import pytest
+
 from html_lore.builder import build_site
 from html_lore.server.config import ServerSettings
 from html_lore.server.ai.guardrails import GuardrailError
 from html_lore.server.ai.eval import KnowledgeQAEvalSpec, run_knowledge_qa_eval
+from html_lore.server.ai.html_generation import GenerationSpec, HtmlGenerationError
 from html_lore.server.ai.html_generation_graph import HtmlGenerationGraph, HtmlGenerationState, review_html
 from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_NO_RESULTS_ANSWER, EXTERNAL_UNAVAILABLE_ANSWER, KnowledgeQAGraph, KnowledgeQAState, NO_EVIDENCE_ANSWER, assess_answer_quality, assess_evidence_coverage, assess_evidence_sufficiency, assign_source_indices, build_answer_prompt, budget_prompt_inputs, dedupe_display_sources, evidence_with_display_source_indices, filter_evidence_by_context, format_evidence_for_prompt, is_time_sensitive_question, prompt_chars, public_qa_run, rank_answer_evidence, rerank_answer_evidence, verify_answer_citations
 from html_lore.server.ai.langgraph_qa import langgraph_available
@@ -824,6 +828,30 @@ def test_openai_compatible_adapter_uses_bearer_header_without_logging_key(monkey
     assert "HTMlore" in seen["user_agent"]
     assert "test-secret-key" not in seen["body"]
     assert response["content"] == "connection ok"
+
+
+def test_openai_compatible_adapter_wraps_socket_timeout(monkeypatch) -> None:
+    def fake_urlopen(request, timeout):
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    adapter = OpenAICompatibleHttpAdapter(
+        AIProviderConfig(
+            provider="openai-compatible",
+            base_url="https://api.example.test",
+            model="gpt-5.5",
+            enabled=True,
+            api_key="test-secret-key",
+        ),
+    )
+
+    try:
+        adapter.chat(messages=[{"role": "user", "content": "ping"}])
+    except Exception as exc:
+        assert type(exc).__name__ == "ProviderCallError"
+        assert str(exc) == "AI provider is unreachable."
+    else:
+        raise AssertionError("Expected provider timeout to be wrapped.")
 
 
 def test_openai_compatible_adapter_parses_sse_chat_completion() -> None:
@@ -3301,10 +3329,9 @@ def test_ai_generate_note_job_completes_and_links_run(tmp_path: Path) -> None:
         server.close()
 
 
-def test_ai_generate_note_accepts_reference_note_spec(tmp_path: Path) -> None:
+def test_ai_generate_note_accepts_reference_file_spec(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = make_dirs(tmp_path)
     make_note(content_dir, meta_dir, "mcp.html", title="MCP Security", collection="AI", tags=["MCP"])
-    make_note(content_dir, meta_dir, "style.html", title="Style Reference", collection="AI", tags=["Style"])
     server = run_api_server(
         content_dir=content_dir,
         meta_dir=meta_dir,
@@ -3322,16 +3349,20 @@ def test_ai_generate_note_accepts_reference_note_spec(tmp_path: Path) -> None:
                 "theme": "default",
                 "target_use": "default",
                 "style_preference": "default",
-                "reference_style": "note",
-                "reference_note_id": "style.html",
+                "reference_style": "file",
+                "reference_file_name": "style-reference.pdf",
+                "reference_file_type": "application/pdf",
+                "reference_file_size": 12345,
             },
         )
 
         run = generated["run"]
-        assert run["spec"]["reference_style"] == "note"
-        assert run["spec"]["reference_note_id"] == "style.html"
-        assert run["generation_intent"]["reference_style"] == "note"
-        assert run["generation_intent"]["reference_note_id"] == "style.html"
+        assert run["spec"]["reference_style"] == "file"
+        assert run["spec"]["reference_file_name"] == "style-reference.pdf"
+        assert run["spec"]["reference_file_type"] == "application/pdf"
+        assert run["spec"]["reference_file_size"] == "12345"
+        assert run["generation_intent"]["reference_style"] == "file"
+        assert run["generation_intent"]["reference_file_name"] == "style-reference.pdf"
     finally:
         server.close()
 
@@ -3392,20 +3423,42 @@ def test_html_generation_graph_marks_non_default_options_as_style_prompt() -> No
 
 
 def test_html_generation_share_review_uses_share_safety_scan() -> None:
+    html = """
+    <!doctype html>
+    <html>
+      <head><script src="https://cdn.example.com/chart.umd.min.js"></script></head>
+      <body><canvas id="chart"></canvas><script>new Chart(document.getElementById('chart'), {});</script></body>
+    </html>
+    """
     decision = review_html(
-        """
-        <!doctype html>
-        <html>
-          <head><script src="https://cdn.example.com/chart.umd.min.js"></script></head>
-          <body><canvas id="chart"></canvas><script>new Chart(document.getElementById('chart'), {});</script></body>
-        </html>
-        """,
-        {"target_use": "share"},
+        html,
+        {"audience": "share"},
     )
     assert decision["ok"] is False
     assert decision["safety"]["shareable"] is False
     assert "blocked-tag:script" in decision["safety"]["reasons"]
     assert "requires-static-export:chart" in decision["safety"]["reasons"]
+
+    legacy_decision = review_html(
+        html,
+        {"target_use": "share"},
+    )
+    assert legacy_decision["ok"] is False
+    assert legacy_decision["safety"]["shareable"] is False
+
+
+def test_generation_spec_maps_legacy_target_use_to_audience() -> None:
+    spec = GenerationSpec.from_values({"target_use": "share"})
+    assert spec.target_use == "default"
+    assert spec.audience == "share"
+
+    explicit = GenerationSpec.from_values({"target_use": "ppt", "audience": "personal", "style_preference": "business"})
+    assert explicit.target_use == "ppt"
+    assert explicit.audience == "personal"
+    assert explicit.style_preference == "business"
+
+    with pytest.raises(HtmlGenerationError, match="Unsupported audience"):
+        GenerationSpec.from_values({"audience": "public"})
 
 
 def test_material_html_parsing_treats_source_as_untrusted_visible_text() -> None:
@@ -3507,6 +3560,55 @@ def test_ai_material_job_completes_without_persisting_source_text(tmp_path: Path
         assert jobs["count"] == 1
         assert "Very private source body" not in json.dumps(jobs, ensure_ascii=False)
         assert "Very private source body" not in raw_jobs
+    finally:
+        server.close()
+
+
+def test_ai_material_job_v2_completes_with_stage_trace(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-generation-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        ai_generation_model="fake-generation-model",
+        document_parser="basic",
+    )
+    try:
+        queued = server.multipart(
+            "/api/ai/material-jobs",
+            fields={
+                "instruction": "Create a concise knowledge note.",
+                "theme": "default",
+                "target_use": "default",
+                "style_preference": "default",
+            },
+            file_field="file",
+            filename="private-material.md",
+            content=b"# Material Topic\n\nVery private v2 source body.",
+            content_type="text/markdown",
+        )
+
+        assert queued["job"]["generation_engine"] == "v2"
+        assert queued["job"]["current_stage"] == "queued"
+        job = wait_for_ai_job(server, queued["job_id"])
+        fetched = server.request("GET", f"/api/ai/jobs/{queued['job_id']}")["job"]
+        jobs = server.request("GET", "/api/ai/jobs")
+        raw_jobs = (meta_dir / "ai" / "jobs.json").read_text(encoding="utf-8")
+
+        assert job["status"] == "completed"
+        assert job["generation_engine"] == "v2"
+        assert job["item_id"].startswith("generated/")
+        assert job["current_stage"] == "completed"
+        assert any(event["agent"] == "Verifier" for event in fetched["stage_trace"])
+        assert any(entry["agent"] == "HTMLCoder" for entry in fetched["skill_trace"])
+        assert jobs["jobs"][0]["generation_engine"] == "v2"
+        assert (content_dir / job["item_id"]).exists()
+        assert "Very private v2 source body" not in json.dumps(jobs, ensure_ascii=False)
+        assert "Very private v2 source body" not in raw_jobs
     finally:
         server.close()
 
@@ -3881,6 +3983,22 @@ def test_ai_generate_note_rejects_invalid_spec_without_writing_file(tmp_path: Pa
         )
         assert code == 400
         assert "Unsupported reference note" in error["detail"]
+
+        code, error = server.json_error(
+            "POST",
+            f"/api/ai/conversations/{conversation['id']}/generate-note",
+            {"reference_style": "file", "reference_file_name": ""},
+        )
+        assert code == 400
+        assert "Reference style file is required" in error["detail"]
+
+        code, error = server.json_error(
+            "POST",
+            f"/api/ai/conversations/{conversation['id']}/generate-note",
+            {"reference_style": "file", "reference_file_name": "style.pdf", "reference_file_size": str(30 * 1024 * 1024)},
+        )
+        assert code == 400
+        assert "Reference style file is too large" in error["detail"]
 
         code, error = server.json_error(
             "POST",

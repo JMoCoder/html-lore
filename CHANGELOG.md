@@ -9,6 +9,25 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-22
+
+### Added
+
+- Added the beta AI HTML generation v2 workflow for uploaded materials, with
+  staged agents, structured model calls, MarkItDown-backed parsing, safe static
+  HTML writing, task trace metadata, and checklist status updates.
+- Added the workspace "Create with AI" source-file upload flow with optional
+  theme, purpose, style, and audience controls.
+
+### Changed
+
+- Improved the create form layout, long-prompt resizing, static demo preview,
+  topbar settings/search controls, and narrow workspace behavior when the AI
+  sidebar is open.
+- Documented MarkItDown parser deployment notes and resource considerations.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.0.1`.
+
 ## [1.0.0] - 2026-06-17
 
 ### Added

@@ -79,17 +79,20 @@ const i18n = {
     generateNoteDialog: "Generate note",
     generateNoteIntro: "Create an HTML note from the current AI conversation and selected workspace context.",
     generateTheme: "Theme",
-    generateTargetUse: "Target use",
+    generateTargetUse: "Purpose",
     generateStylePreference: "Style preference",
-    generateReferenceNote: "Reference style",
+    generateAudience: "Audience",
     generateReferenceDefault: "Default",
-    generateReferenceImageComingSoon: "Screenshot style reference is reserved for a future vision adapter and is not available yet.",
     generateShareSafetyHint: "Share-target notes are reviewed with the public share safety rules. Static, self-contained output is more likely to pass.",
     generateDefault: "Default",
     generateDark: "Dark",
     generateLight: "Light",
     generatePersonal: "Personal",
     generateShare: "Share",
+    generateMinimal: "Minimal",
+    generateBusiness: "Business",
+    generateTech: "Tech",
+    generateRetro: "Retro",
     generateReport: "Report",
     generateWebsite: "Website",
     generatePpt: "PPT",
@@ -139,6 +142,10 @@ const i18n = {
     aiJobRetrying: "Retrying AI job: {jobId}",
     aiJobCompleted: "AI job completed.",
     aiJobFailed: "AI job failed: {message}",
+    aiJobCurrentStage: "Current stage",
+    aiJobTrace: "Process",
+    aiJobChecklist: "Checklist",
+    aiJobSkills: "Skills",
     aiRunHtmlGeneration: "Generated from conversation",
     aiRunMaterialGeneration: "Generated from uploaded material",
     aiRunKnowledgeQa: "Knowledge Q&A",
@@ -147,6 +154,16 @@ const i18n = {
     aiRunStatusFailed: "Failed",
     aiRunStatusRunning: "Running",
     aiRunStatusPending: "Pending",
+    aiGenerationStageParsing: "Parsing",
+    aiGenerationStageAnalyzing: "Analyzing",
+    aiGenerationStagePlanning: "Planning",
+    aiGenerationStageWriting: "Writing",
+    aiGenerationStageDesigning: "Designing",
+    aiGenerationStageCoding: "Coding",
+    aiGenerationStageVerifying: "Verifying",
+    aiGenerationStageSafety: "Safety review",
+    aiGenerationStageFinalizing: "Finalizing",
+    aiGenerationStageWritingFile: "Writing file",
     aiRunNodeCount: "{count} steps",
     aiRunDuration: "{duration}",
     aiRunCompletedAt: "Completed: {date}",
@@ -334,6 +351,12 @@ const i18n = {
     inputBook: "Book",
     inputTopic: "Topic",
     newItemPlaceholder: "Paste a link, choose file mode, enter a book, or describe a topic",
+    chooseFile: "Choose file",
+    noFileSelected: "No file selected",
+    fileSelected: "{name}",
+    removeFile: "Remove file",
+    moreSettings: "More",
+    chooseFileFirst: "Choose a source file first.",
     create: "Create",
     emptyInput: "Enter a link, book, file path, or topic first.",
     agentNotConfigured: "Agent Server not configured. Set window.HTML_LORE_AGENT_URL before loading the app.",
@@ -512,15 +535,18 @@ const i18n = {
     generateTheme: "主题",
     generateTargetUse: "目标用途",
     generateStylePreference: "样式偏好",
-    generateReferenceNote: "参考样式",
+    generateAudience: "受众",
     generateReferenceDefault: "默认",
-    generateReferenceImageComingSoon: "截图参考样式已预留，需等视觉模型适配器完成后开放。",
     generateShareSafetyHint: "分享用途会按公开分享安全规则预检。静态、无外部依赖的输出更容易通过。",
     generateDefault: "默认",
     generateDark: "暗色",
     generateLight: "亮色",
     generatePersonal: "自用",
     generateShare: "分享",
+    generateMinimal: "简约",
+    generateBusiness: "商务",
+    generateTech: "科技",
+    generateRetro: "复古",
     generateReport: "报告",
     generateWebsite: "网站",
     generatePpt: "PPT",
@@ -570,6 +596,10 @@ const i18n = {
     aiJobRetrying: "正在重试 AI 任务：{jobId}",
     aiJobCompleted: "AI 任务已完成。",
     aiJobFailed: "AI 任务失败：{message}",
+    aiJobCurrentStage: "当前阶段",
+    aiJobTrace: "处理过程",
+    aiJobChecklist: "检查项",
+    aiJobSkills: "技能",
     aiRunHtmlGeneration: "根据对话生成",
     aiRunMaterialGeneration: "根据上传资料生成",
     aiRunKnowledgeQa: "知识库问答",
@@ -578,6 +608,16 @@ const i18n = {
     aiRunStatusFailed: "失败",
     aiRunStatusRunning: "运行中",
     aiRunStatusPending: "等待中",
+    aiGenerationStageParsing: "解析资料",
+    aiGenerationStageAnalyzing: "分析需求",
+    aiGenerationStagePlanning: "规划方案",
+    aiGenerationStageWriting: "撰写内容",
+    aiGenerationStageDesigning: "设计样式",
+    aiGenerationStageCoding: "生成 HTML",
+    aiGenerationStageVerifying: "验证质量",
+    aiGenerationStageSafety: "安全审查",
+    aiGenerationStageFinalizing: "整理交付",
+    aiGenerationStageWritingFile: "写入资料库",
     aiRunNodeCount: "{count} 个步骤",
     aiRunDuration: "{duration}",
     aiRunCompletedAt: "完成时间：{date}",
@@ -765,6 +805,12 @@ const i18n = {
     inputBook: "书籍",
     inputTopic: "主题",
     newItemPlaceholder: "粘贴链接、切换文件模式、输入书名，或描述一个主题",
+    chooseFile: "选择文件",
+    noFileSelected: "未选择文件",
+    fileSelected: "{name}",
+    removeFile: "移除文件",
+    moreSettings: "更多",
+    chooseFileFirst: "请先选择一个资料文件。",
     create: "创建",
     emptyInput: "请先输入链接、书籍、文件路径或主题。",
     agentNotConfigured: "尚未配置 Agent Server。请在加载应用前设置 window.HTML_LORE_AGENT_URL。",
@@ -943,15 +989,18 @@ const i18n = {
     generateTheme: "テーマ",
     generateTargetUse: "用途",
     generateStylePreference: "スタイル",
-    generateReferenceNote: "参照スタイル",
+    generateAudience: "対象",
     generateReferenceDefault: "デフォルト",
-    generateReferenceImageComingSoon: "スクリーンショット参照は将来の vision adapter 向けに予約されており、まだ利用できません。",
     generateShareSafetyHint: "共有用途のノートは公開共有の安全ルールで事前確認されます。静的で自己完結した出力ほど通過しやすくなります。",
     generateDefault: "デフォルト",
     generateDark: "ダーク",
     generateLight: "ライト",
     generatePersonal: "自分用",
     generateShare: "共有",
+    generateMinimal: "ミニマル",
+    generateBusiness: "ビジネス",
+    generateTech: "テック",
+    generateRetro: "レトロ",
     generateReport: "レポート",
     generateWebsite: "Web サイト",
     generatePpt: "PPT",
@@ -1001,6 +1050,10 @@ const i18n = {
     aiJobRetrying: "AI ジョブを再試行中: {jobId}",
     aiJobCompleted: "AI ジョブが完了しました。",
     aiJobFailed: "AI ジョブに失敗しました: {message}",
+    aiJobCurrentStage: "現在の段階",
+    aiJobTrace: "プロセス",
+    aiJobChecklist: "チェックリスト",
+    aiJobSkills: "スキル",
     aiRunHtmlGeneration: "会話から生成",
     aiRunMaterialGeneration: "アップロード資料から生成",
     aiRunKnowledgeQa: "ナレッジ Q&A",
@@ -1009,6 +1062,16 @@ const i18n = {
     aiRunStatusFailed: "失敗",
     aiRunStatusRunning: "実行中",
     aiRunStatusPending: "待機中",
+    aiGenerationStageParsing: "解析",
+    aiGenerationStageAnalyzing: "分析",
+    aiGenerationStagePlanning: "計画",
+    aiGenerationStageWriting: "執筆",
+    aiGenerationStageDesigning: "デザイン",
+    aiGenerationStageCoding: "HTML 生成",
+    aiGenerationStageVerifying: "検証",
+    aiGenerationStageSafety: "安全確認",
+    aiGenerationStageFinalizing: "仕上げ",
+    aiGenerationStageWritingFile: "書き込み",
     aiRunNodeCount: "{count} ステップ",
     aiRunDuration: "{duration}",
     aiRunCompletedAt: "完了時刻: {date}",
@@ -1196,6 +1259,12 @@ const i18n = {
     inputBook: "書籍",
     inputTopic: "トピック",
     newItemPlaceholder: "リンク、ファイルモード、書名、またはトピックを入力",
+    chooseFile: "ファイルを選択",
+    noFileSelected: "ファイル未選択",
+    fileSelected: "{name}",
+    removeFile: "ファイルを削除",
+    moreSettings: "詳細",
+    chooseFileFirst: "先に資料ファイルを選択してください。",
     create: "作成",
     emptyInput: "リンク、書籍、ファイルパス、またはトピックを入力してください。",
     agentNotConfigured: "Agent Server が設定されていません。アプリ読み込み前に window.HTML_LORE_AGENT_URL を設定してください。",
@@ -1362,7 +1431,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.0.0",
+  currentVersion: "1.0.1",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1377,6 +1446,7 @@ const state = {
   aiRuns: [],
   aiJobs: [],
   aiJobsOpen: false,
+  expandedAiJobIds: new Set(),
   aiMoreOpen: false,
   aiHistoryOpen: false,
   aiHistory: [],
@@ -1431,6 +1501,7 @@ const state = {
   fileEditorHistoryTimer: 0,
   fileEditorPanelWidth: getInitialFileEditorPanelWidth(),
   fileEditorPanelCollapsed: false,
+  pendingMaterialFile: null,
   shares: [],
   sharingItemId: "",
 };
@@ -1457,6 +1528,10 @@ const elements = {
   importEntries: document.querySelectorAll("[data-import-entry]"),
   htmlImportFile: ensureHtmlImportInput(),
   materialGenerateFile: document.querySelector("#material-generate-file"),
+  newGenerateTheme: document.querySelector("#new-generate-theme"),
+  newGenerateTargetUse: document.querySelector("#new-generate-target-use"),
+  newGenerateStylePreference: document.querySelector("#new-generate-style-preference"),
+  newGenerateAudience: document.querySelector("#new-generate-audience"),
   siteTitle: document.querySelector("#site-title"),
   languageSelect: document.querySelector("#language-select"),
   themeModeButtons: document.querySelectorAll("[data-theme-mode]"),
@@ -1544,6 +1619,13 @@ const elements = {
   newItemForm: document.querySelector("#new-item-form"),
   inputType: document.querySelector("#input-type"),
   newItemInput: document.querySelector("#new-item-input"),
+  newPromptResize: document.querySelector("#new-prompt-resize"),
+  newGenerationToggle: document.querySelector("#new-generation-toggle"),
+  newGenerationOptions: document.querySelector("#new-generation-options"),
+  newFileTrigger: document.querySelector("#new-file-trigger"),
+  newFileRow: document.querySelector("#new-file-row"),
+  newFileName: document.querySelector("#new-file-name"),
+  newFileRemove: document.querySelector("#new-file-remove"),
   newFeedback: document.querySelector("#new-feedback"),
   agentStatus: document.querySelector("#agent-status"),
   reader: document.querySelector("#reader"),
@@ -1576,9 +1658,8 @@ const elements = {
   generateNoteForm: document.querySelector("#generate-note-form"),
   generateTheme: document.querySelector("#generate-theme"),
   generateTargetUse: document.querySelector("#generate-target-use"),
-  generateShareHint: document.querySelector("#generate-share-hint"),
+  generateAudience: document.querySelector("#generate-audience"),
   generateStylePreference: document.querySelector("#generate-style-preference"),
-  generateReferenceNote: document.querySelector("#generate-reference-note"),
   generateNoteFeedback: document.querySelector("#generate-note-feedback"),
   generateNoteSubmit: document.querySelector("#generate-note-submit"),
   generateNoteCancel: document.querySelector("#generate-note-cancel"),
@@ -1652,6 +1733,7 @@ async function boot() {
   }
   applyTheme();
   applyTranslations();
+  updateNewFileMode();
   try {
     await checkAuthStatus();
     if (state.authEnabled && !state.authenticated) {
@@ -1953,6 +2035,7 @@ function renderApp() {
   renderTagNav();
   renderMultiFilterOptions();
   applySortState();
+  updateNewFileMode();
   renderGrid();
   renderAiContext();
   updateAgentStatus();
@@ -2512,7 +2595,12 @@ function openFromHash() {
 
 async function submitNewItem(event) {
   event.preventDefault();
+  if (state.pendingMaterialFile) {
+    await generateNoteFromMaterialFile(state.pendingMaterialFile);
+    return;
+  }
   if (elements.inputType.value === "file") {
+    setFeedback("chooseFileFirst");
     openMaterialGeneratePicker();
     return;
   }
@@ -2562,6 +2650,11 @@ function openMaterialGeneratePicker() {
   elements.materialGenerateFile.click();
 }
 
+function setPendingMaterialFile(file) {
+  state.pendingMaterialFile = file || null;
+  updateNewFileMode();
+}
+
 async function generateNoteFromMaterialFile(file) {
   if (!file) return;
   if (!state.agentUrl) {
@@ -2572,10 +2665,10 @@ async function generateNoteFromMaterialFile(file) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("instruction", elements.newItemInput.value.trim());
-  formData.append("theme", "default");
-  formData.append("target_use", "default");
-  formData.append("style_preference", "default");
-  formData.append("reference_style", "default");
+  formData.append("theme", elements.newGenerateTheme?.value || "default");
+  formData.append("target_use", elements.newGenerateTargetUse?.value || "default");
+  formData.append("style_preference", elements.newGenerateStylePreference?.value || "default");
+  formData.append("audience", elements.newGenerateAudience?.value || "default");
 
   try {
     const response = await apiFetch("/api/ai/material-jobs", {
@@ -2588,12 +2681,86 @@ async function generateNoteFromMaterialFile(file) {
     await loadAiJobs();
     startAiJobPolling();
     elements.newItemInput.value = "";
+    resetNewItemInputHeight();
+    setPendingMaterialFile(null);
     setFeedback("queuedJob", { jobId: result.job_id || "" });
   } catch (error) {
     await loadAiRuns();
     setFeedback("materialNoteFailed");
     console.error(error);
   }
+}
+
+function updateNewFileMode() {
+  const hasFile = Boolean(state.pendingMaterialFile);
+  elements.newFileTrigger?.classList.toggle("has-file", hasFile);
+  if (elements.newFileRow) elements.newFileRow.hidden = !hasFile;
+  if (elements.newFileName) {
+    elements.newFileName.textContent = hasFile ? t("fileSelected", { name: state.pendingMaterialFile.name }) : "";
+    elements.newFileName.title = state.pendingMaterialFile?.name || "";
+  }
+}
+
+function toggleNewGenerationOptions() {
+  if (!elements.newGenerationOptions) return;
+  const expanded = !elements.newGenerationOptions.classList.contains("is-open");
+  if (expanded) {
+    elements.newGenerationOptions.hidden = false;
+    requestAnimationFrame(() => {
+      elements.newGenerationOptions.classList.add("is-open");
+    });
+  } else {
+    elements.newGenerationOptions.classList.remove("is-open");
+    window.setTimeout(() => {
+      if (!elements.newGenerationOptions.classList.contains("is-open")) {
+        elements.newGenerationOptions.hidden = true;
+      }
+    }, 220);
+  }
+  elements.newGenerationToggle?.setAttribute("aria-expanded", String(expanded));
+}
+
+function resizeNewItemInput() {
+  const input = elements.newItemInput;
+  if (!input) return;
+  const currentHeight = Math.ceil(input.getBoundingClientRect().height || 42);
+  const nextHeight = Math.min(Math.max(input.scrollHeight, currentHeight, 42), 220);
+  input.style.height = `${nextHeight}px`;
+}
+
+function resetNewItemInputHeight() {
+  const input = elements.newItemInput;
+  if (!input) return;
+  input.style.height = "";
+}
+
+function startNewPromptResize(event) {
+  event.preventDefault();
+  const input = elements.newItemInput;
+  if (!input) return;
+  if (event.pointerId !== undefined) event.currentTarget?.setPointerCapture?.(event.pointerId);
+  const promptBox = input.closest(".new-prompt-box");
+  promptBox?.classList.add("is-resizing");
+  const startY = event.clientY;
+  const startHeight = input.getBoundingClientRect().height || 42;
+  const moveEventName = event.type === "mousedown" ? "mousemove" : "pointermove";
+  const upEventName = event.type === "mousedown" ? "mouseup" : "pointerup";
+  const onMove = (moveEvent) => {
+    input.style.height = `${Math.min(Math.max(startHeight + moveEvent.clientY - startY, 42), 220)}px`;
+  };
+  const onUp = () => {
+    promptBox?.classList.remove("is-resizing");
+    window.removeEventListener(moveEventName, onMove);
+    window.removeEventListener(upEventName, onUp);
+    if (event.type !== "mousedown") window.removeEventListener("pointercancel", onUp);
+    window.removeEventListener("blur", onUp);
+    event.currentTarget?.removeEventListener?.("lostpointercapture", onUp);
+  };
+  window.addEventListener(moveEventName, onMove);
+  window.addEventListener(upEventName, onUp);
+  if (event.type !== "mousedown") window.addEventListener("pointercancel", onUp);
+  window.addEventListener("blur", onUp);
+  event.currentTarget?.addEventListener?.("lostpointercapture", onUp, { once: true });
 }
 
 async function importHtmlFile(file) {
@@ -4846,37 +5013,11 @@ function applyStaticDemoMode() {
 function openGenerateNoteDialog() {
   elements.generateTheme.value = "default";
   elements.generateTargetUse.value = "default";
+  elements.generateAudience.value = "default";
   elements.generateStylePreference.value = "default";
-  renderGenerateReferenceOptions();
-  syncGenerateTargetUseHint();
   elements.generateNoteFeedback.textContent = state.agentUrl ? "" : t("generateNoteNeedsAgent");
   elements.generateNoteDialog.hidden = false;
   elements.generateTheme.focus();
-}
-
-function syncGenerateTargetUseHint() {
-  if (!elements.generateShareHint) return;
-  elements.generateShareHint.hidden = elements.generateTargetUse.value !== "share";
-}
-
-function renderGenerateReferenceOptions() {
-  if (!elements.generateReferenceNote) return;
-  elements.generateReferenceNote.replaceChildren();
-  const defaultOption = document.createElement("option");
-  defaultOption.value = "";
-  defaultOption.textContent = t("generateReferenceDefault");
-  elements.generateReferenceNote.append(defaultOption);
-  state.items
-    .filter((item) => item?.id && !isArchived(item))
-    .slice()
-    .sort((a, b) => getItemTitle(a).localeCompare(getItemTitle(b)))
-    .forEach((item) => {
-      const option = document.createElement("option");
-      option.value = item.id;
-      option.textContent = getItemTitle(item);
-      elements.generateReferenceNote.append(option);
-    });
-  elements.generateReferenceNote.value = "";
 }
 
 function closeGenerateNoteDialog() {
@@ -4901,9 +5042,8 @@ async function submitGenerateNoteDialog(event) {
       body: JSON.stringify({
         theme: elements.generateTheme.value,
         target_use: elements.generateTargetUse.value,
+        audience: elements.generateAudience.value,
         style_preference: elements.generateStylePreference.value,
-        reference_style: elements.generateReferenceNote.value ? "note" : "default",
-        reference_note_id: elements.generateReferenceNote.value,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -5722,35 +5862,117 @@ function emptyState(message) {
 function renderAiJobRow(job) {
   const row = document.createElement("div");
   row.className = "ai-job-row";
+  const jobId = String(job.job_id || "");
+  const hasDetails = hasAiJobDetails(job);
+  const expanded = hasDetails && state.expandedAiJobIds.has(jobId);
   const statusClass = `status-${String(job.status || "pending").toLowerCase().replace(/[^a-z0-9-]/g, "") || "pending"}`;
   row.classList.add(statusClass);
+  if (hasDetails) {
+    row.classList.add("has-details");
+    row.setAttribute("role", "button");
+    row.setAttribute("tabindex", "0");
+    row.setAttribute("aria-expanded", String(expanded));
+  }
   const label = job.label || getAiRunKindLabel(job);
   const isActive = ["pending", "running"].includes(job.status);
   const isCompleted = job.status === "completed";
   const isFailed = job.status === "failed";
   const itemMeta = job.item_id ? `<span>${escapeHtml(t("aiRunItem", { id: job.item_id }))}</span>` : "";
   const timeMeta = isCompleted ? `<span>${escapeHtml(formatDateTime(job.completed_at || job.updated_at))}</span>` : "";
+  const stageMeta = job.current_stage ? `<span>${escapeHtml(formatAiGenerationStage(job.current_stage))}</span>` : "";
   const messageText = isCompleted ? "" : (job.error?.message || job.message || "");
   const message = messageText ? `<span>${escapeHtml(messageText)}</span>` : "";
   const action = job.cancellable
     ? `<button type="button" class="ai-job-icon-button" data-ai-job-cancel="${escapeHtml(job.job_id)}" aria-label="${escapeHtml(t("cancel"))}" title="${escapeHtml(t("cancel"))}">×</button>`
     : (isFailed && job.retryable ? `<button type="button" class="ai-job-icon-button" data-ai-job-retry="${escapeHtml(job.job_id)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(t("aiJobRetry"))}">${retryIcon()}</button>` : "");
   row.innerHTML = `
-    <div>
+    <div class="ai-job-main">
       <strong>${escapeHtml(label)}</strong>
       <span class="ai-run-meta">
         ${isActive ? '<i class="ai-job-progress-dot" aria-hidden="true"></i>' : ""}
         <em class="ai-run-status ${statusClass}">${escapeHtml(getAiRunStatusLabel(job.status))}</em>
+        ${stageMeta}
         ${itemMeta}
         ${timeMeta}
         ${message}
       </span>
     </div>
     ${action}
+    ${expanded ? renderAiJobDetails(job) : ""}
   `;
-  row.querySelector("[data-ai-job-cancel]")?.addEventListener("click", () => cancelAiJob(job.job_id));
-  row.querySelector("[data-ai-job-retry]")?.addEventListener("click", () => retryAiJob(job.job_id));
+  if (hasDetails) {
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, a")) return;
+      toggleAiJobDetails(jobId);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggleAiJobDetails(jobId);
+    });
+  }
+  row.querySelector("[data-ai-job-cancel]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    cancelAiJob(job.job_id);
+  });
+  row.querySelector("[data-ai-job-retry]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    retryAiJob(job.job_id);
+  });
   return row;
+}
+
+function toggleAiJobDetails(jobId) {
+  if (!jobId) return;
+  if (state.expandedAiJobIds.has(jobId)) {
+    state.expandedAiJobIds.delete(jobId);
+  } else {
+    state.expandedAiJobIds.add(jobId);
+  }
+  renderAiJobs();
+}
+
+function hasAiJobDetails(job) {
+  return Boolean(
+    job?.current_stage ||
+    (Array.isArray(job?.stage_trace) && job.stage_trace.length > 0) ||
+    (Array.isArray(job?.execution_checklist) && job.execution_checklist.length > 0) ||
+    (Array.isArray(job?.skill_trace) && job.skill_trace.length > 0)
+  );
+}
+
+function renderAiJobDetails(job) {
+  const currentStage = job.current_stage
+    ? `<p><span>${escapeHtml(t("aiJobCurrentStage"))}</span><b>${escapeHtml(formatAiGenerationStage(job.current_stage))}</b></p>`
+    : "";
+  const trace = Array.isArray(job.stage_trace) ? job.stage_trace.slice(-8) : [];
+  const traceRows = trace.map((entry) => {
+    const stage = formatAiGenerationStage(entry.stage || entry.node || "");
+    const actor = entry.agent || entry.name || "";
+    const status = entry.status || "";
+    const message = entry.message || entry.error || "";
+    return `<li><b>${escapeHtml(stage)}</b>${actor ? `<span>${escapeHtml(actor)}</span>` : ""}${status ? `<em>${escapeHtml(status)}</em>` : ""}${message ? `<small>${escapeHtml(message)}</small>` : ""}</li>`;
+  }).join("");
+  const checklist = Array.isArray(job.execution_checklist) ? job.execution_checklist.slice(0, 8) : [];
+  const checklistRows = checklist.map((item) => {
+    const label = item.label || item.title || item.name || item.id || "";
+    const status = item.status || (item.completed ? "completed" : "");
+    return `<li><span>${escapeHtml(label)}</span>${status ? `<em>${escapeHtml(status)}</em>` : ""}</li>`;
+  }).join("");
+  const skills = Array.isArray(job.skill_trace) ? job.skill_trace.slice(0, 5) : [];
+  const skillRows = skills.map((skill) => {
+    const title = skill.title || skill.id || "";
+    const agent = skill.agent || "";
+    return `<li><span>${escapeHtml(title)}</span>${agent ? `<em>${escapeHtml(agent)}</em>` : ""}</li>`;
+  }).join("");
+  return `
+    <div class="ai-job-detail">
+      ${currentStage}
+      ${traceRows ? `<section><h4>${escapeHtml(t("aiJobTrace"))}</h4><ol class="ai-job-trace">${traceRows}</ol></section>` : ""}
+      ${checklistRows ? `<section><h4>${escapeHtml(t("aiJobChecklist"))}</h4><ul class="ai-job-checklist">${checklistRows}</ul></section>` : ""}
+      ${skillRows ? `<section><h4>${escapeHtml(t("aiJobSkills"))}</h4><ul class="ai-job-checklist">${skillRows}</ul></section>` : ""}
+    </div>
+  `;
 }
 
 async function cancelAiJob(jobId) {
@@ -5984,6 +6206,38 @@ function getAiRunStatusLabel(status) {
     pending: "aiRunStatusPending",
   }[String(status || "").toLowerCase()];
   return key ? t(key) : String(status || t("aiRunStatusPending"));
+}
+
+function formatAiGenerationStage(stage) {
+  const normalized = String(stage || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const key = {
+    parse: "aiGenerationStageParsing",
+    parsing: "aiGenerationStageParsing",
+    ingest: "aiGenerationStageParsing",
+    ingesting: "aiGenerationStageParsing",
+    analyze: "aiGenerationStageAnalyzing",
+    analyzing: "aiGenerationStageAnalyzing",
+    requirement_analysis: "aiGenerationStageAnalyzing",
+    planning: "aiGenerationStagePlanning",
+    plan: "aiGenerationStagePlanning",
+    writing: "aiGenerationStageWriting",
+    content_writing: "aiGenerationStageWriting",
+    designing: "aiGenerationStageDesigning",
+    designing_style: "aiGenerationStageDesigning",
+    style_design: "aiGenerationStageDesigning",
+    coding: "aiGenerationStageCoding",
+    html_coding: "aiGenerationStageCoding",
+    verifying: "aiGenerationStageVerifying",
+    verification: "aiGenerationStageVerifying",
+    safety: "aiGenerationStageSafety",
+    safety_review: "aiGenerationStageSafety",
+    finalizing: "aiGenerationStageFinalizing",
+    finalize: "aiGenerationStageFinalizing",
+    write: "aiGenerationStageWritingFile",
+    writing_file: "aiGenerationStageWritingFile",
+  }[normalized];
+  if (key) return t(key);
+  return normalized ? normalized.replace(/_/g, " ") : "";
 }
 
 function syncAiConfigFromServer(provider) {
@@ -6417,7 +6671,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.0-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.1-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
@@ -6624,6 +6878,15 @@ elements.testProvider.addEventListener("click", testProviderConfig);
 elements.aiRunRefresh?.addEventListener("click", loadAiRuns);
 elements.aiConversationRefresh?.addEventListener("click", loadAiConversationManagement);
 elements.newItemForm.addEventListener("submit", submitNewItem);
+elements.inputType.addEventListener("change", () => {
+  updateNewFileMode();
+});
+elements.newGenerationToggle?.addEventListener("click", toggleNewGenerationOptions);
+elements.newItemInput.addEventListener("input", resizeNewItemInput);
+elements.newPromptResize?.addEventListener("pointerdown", startNewPromptResize);
+elements.newPromptResize?.addEventListener("mousedown", startNewPromptResize);
+elements.newFileTrigger?.addEventListener("click", openMaterialGeneratePicker);
+elements.newFileRemove?.addEventListener("click", () => setPendingMaterialFile(null));
 elements.readerClose.addEventListener("click", closeReader);
 elements.readerEdit.addEventListener("click", () => {
   if (state.currentReaderItemId) openMetadataEditor(state.currentReaderItemId);
@@ -6651,7 +6914,6 @@ elements.shareDialog.addEventListener("click", (event) => {
   if (event.target === elements.shareDialog) closeShareDialog();
 });
 elements.generateNoteForm.addEventListener("submit", submitGenerateNoteDialog);
-elements.generateTargetUse.addEventListener("change", syncGenerateTargetUseHint);
 elements.generateNoteCancel.addEventListener("click", closeGenerateNoteDialog);
 elements.generateNoteCancelIcon.addEventListener("click", closeGenerateNoteDialog);
 elements.generateNoteDialog.addEventListener("click", (event) => {
@@ -6719,7 +6981,7 @@ elements.importEntries.forEach((button) => {
   button.addEventListener("click", openHtmlImportPicker);
 });
 elements.htmlImportFile.addEventListener("change", (event) => importHtmlFile(event.target.files?.[0]));
-elements.materialGenerateFile.addEventListener("change", (event) => generateNoteFromMaterialFile(event.target.files?.[0]));
+elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFile(event.target.files?.[0]));
 window.addEventListener("hashchange", openFromHash);
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (state.themeMode === "system") applyTheme();

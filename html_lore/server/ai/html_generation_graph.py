@@ -80,10 +80,14 @@ class GenerationIntentNode:
             "target_use": controlled_option(spec.get("target_use"), "default"),
             "reference_style": controlled_option(spec.get("reference_style"), "default"),
             "reference_note_id": spec.get("reference_note_id") or "",
+            "reference_file_name": spec.get("reference_file_name") or "",
+            "reference_file_type": spec.get("reference_file_type") or "",
+            "reference_file_size": spec.get("reference_file_size") or "0",
             "style_preference": controlled_option(spec.get("style_preference"), "default"),
+            "audience": controlled_option(spec.get("audience"), "default"),
             "uses_style_prompt": any(
                 controlled_option(spec.get(key), "default") != "default"
-                for key in ("theme", "target_use", "reference_style", "style_preference")
+                for key in ("theme", "target_use", "reference_style", "style_preference", "audience")
             ),
         }
 
@@ -199,7 +203,7 @@ def review_html(html: str, spec: dict[str, str]) -> dict[str, Any]:
     lowered = html.lower()
     if "html_lore_ai_api_key" in lowered or re.search(r"sk-[a-z0-9_-]{12,}", html, re.IGNORECASE):
         return {"ok": False, "message": "Generated HTML contains a likely secret."}
-    if spec.get("target_use") == "share":
+    if spec.get("audience") == "share" or spec.get("target_use") == "share":
         scan = scan_share_content(html)
         if not scan["shareable"]:
             return {

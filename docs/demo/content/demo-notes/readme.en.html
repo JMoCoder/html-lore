@@ -223,7 +223,9 @@ html-lore serve-api --host 127.0.0.1 --port 8787</code></pre>
 HTML_LORE_AI_PROVIDER=openai-compatible
 HTML_LORE_AI_BASE_URL=https://your-newapi.example.com/v1
 HTML_LORE_AI_MODEL=gpt-5.5
+HTML_LORE_DOCUMENT_PARSER=markitdown
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key</code></pre>
+<p>Installing the optional <code>agent</code> extra installs the AI runtime dependencies, including LangGraph for workflow orchestration and MarkItDown for enhanced PDF / Word / PowerPoint / Excel parsing. <code>HTML_LORE_DOCUMENT_PARSER=markitdown</code> is the default; set it to <code>basic</code> for lightweight deployments or parser troubleshooting.</p>
 <p>For development tests, <code>HTML_LORE_AI_PROVIDER=fake</code> can exercise the UI and conversation flow without sending model requests. Public provider status only returns <code>has_api_key</code>, never the secret value.</p>
 <h2>Security Model</h2>
 <p>Default Docker mode is optimized for local, LAN, and private self-hosted use. Default Docker starts with the local/test login <code>admin</code> / <code>test-password</code> and a development session secret. The browser opens a login screen first and uses an HttpOnly session cookie after sign-in. Registration is disabled; production deployments must replace the default username, password, and session secret. Self-hosted users are stored in <code>data/users.json</code>; each additional user&#x27;s notebook data is stored separately under <code>data/users/&lt;data_id&gt;/</code>.</p>

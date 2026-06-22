@@ -13,7 +13,25 @@ from html_lore.server.config import ServerSettings
 
 
 AIJobTask = Callable[[], dict[str, Any]]
-AI_JOB_STATUSES = {"pending", "running", "completed", "failed", "cancelled"}
+AI_JOB_STATUSES = {"pending", "running", "completed", "failed", "cancelled", "canceled", "canceling"}
+AI_GENERATION_STAGES = {
+    "queued",
+    "parsing",
+    "parse_failed",
+    "analyzing_requirements",
+    "planning",
+    "writing_content",
+    "executing_tools",
+    "designing_style",
+    "coding_html",
+    "verifying",
+    "safety_checking",
+    "finalizing",
+    "writing",
+    "completed",
+    "failed",
+    "canceled",
+}
 
 
 class AIJobError(ValueError):
@@ -162,16 +180,15 @@ class AIJobQueue:
             return
         run = result.get("run") if isinstance(result.get("run"), dict) else {}
         item = result.get("item") if isinstance(result.get("item"), dict) else {}
-        store.update(
-            entry.job_id,
-            {
-                "status": "completed",
-                "completed_at": utc_now(),
-                "message": "AI job completed.",
-                "run_id": str(run.get("id") or ""),
-                "item_id": str(item.get("id") or ""),
-            },
-        )
+        updates = {
+            "status": "completed",
+            "completed_at": utc_now(),
+            "message": "AI job completed.",
+            "run_id": str(run.get("id") or ""),
+            "item_id": str(item.get("id") or ""),
+        }
+        updates.update(ai_job_updates_from_run(run))
+        store.update(entry.job_id, updates)
 
 
 ai_job_queue = AIJobQueue()
@@ -206,9 +223,35 @@ def sanitize_ai_job(job: dict[str, Any], *, include_private: bool = False) -> di
         "retryable": status == "failed" and is_retryable_payload(payload),
         "attempts": sanitize_int(job.get("attempts")),
     }
+    generation_engine = str(job.get("generation_engine") or "").strip()[:40]
+    current_stage = sanitize_generation_stage(job.get("current_stage"))
+    if generation_engine:
+        sanitized["generation_engine"] = generation_engine
+    if current_stage:
+        sanitized["current_stage"] = current_stage
+        sanitized["stage_label"] = current_stage
+    stage_trace = sanitize_stage_trace(job.get("stage_trace"))
+    if stage_trace:
+        sanitized["stage_trace"] = stage_trace
+    checklist = sanitize_execution_checklist(job.get("execution_checklist"))
+    if checklist:
+        sanitized["execution_checklist"] = checklist
+    skill_trace = sanitize_skill_trace(job.get("skill_trace"))
+    if skill_trace:
+        sanitized["skill_trace"] = skill_trace
     if include_private:
         sanitized["payload"] = sanitize_private_payload(payload)
     return sanitized
+
+
+def ai_job_updates_from_run(run: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(run, dict):
+        return {}
+    updates: dict[str, Any] = {}
+    for key in ("generation_engine", "current_stage", "stage_trace", "execution_checklist", "skill_trace"):
+        if key in run:
+            updates[key] = run[key]
+    return updates
 
 
 def is_retryable_payload(payload: dict[str, Any]) -> bool:
@@ -230,7 +273,11 @@ def sanitize_private_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "target_use": str(spec.get("target_use") or "default")[:40],
             "reference_style": str(spec.get("reference_style") or "default")[:40],
             "reference_note_id": str(spec.get("reference_note_id") or "")[:240],
+            "reference_file_name": str(spec.get("reference_file_name") or "")[:180],
+            "reference_file_type": str(spec.get("reference_file_type") or "")[:120],
+            "reference_file_size": str(spec.get("reference_file_size") or "0")[:40],
             "style_preference": str(spec.get("style_preference") or "default")[:40],
+            "audience": str(spec.get("audience") or "default")[:40],
         },
     }
 
@@ -254,6 +301,84 @@ def sanitize_int(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, parsed)
+
+
+def sanitize_generation_stage(value: Any) -> str:
+    stage = str(value or "").strip()
+    return stage if stage in AI_GENERATION_STAGES else ""
+
+
+def sanitize_stage_trace(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for raw in value[-80:]:
+        if not isinstance(raw, dict):
+            continue
+        stage = sanitize_generation_stage(raw.get("stage"))
+        status = str(raw.get("status") or "").strip()[:40]
+        if not stage or not status:
+            continue
+        result.append(
+            {
+                "stage": stage,
+                "agent": str(raw.get("agent") or "")[:120],
+                "status": status,
+                "started_at": str(raw.get("started_at") or "")[:80],
+                "completed_at": str(raw.get("completed_at") or "")[:80],
+                "message": str(raw.get("message") or "")[:240],
+                "error_summary": str(raw.get("error_summary") or "")[:240],
+                "retryable": bool(raw.get("retryable")),
+            },
+        )
+    return result
+
+
+def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, str]] = []
+    for raw in value[:80]:
+        if not isinstance(raw, dict):
+            continue
+        item_id = str(raw.get("id") or "")[:80]
+        title = str(raw.get("title") or "")[:160]
+        if not item_id and not title:
+            continue
+        status = str(raw.get("status") or "pending")[:40]
+        if status == "done":
+            status = "completed"
+        result.append(
+            {
+                "id": item_id,
+                "title": title,
+                "owner": str(raw.get("owner") or "")[:80],
+                "status": status,
+            },
+        )
+    return result
+
+
+def sanitize_skill_trace(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, str]] = []
+    for raw in value[:40]:
+        if not isinstance(raw, dict):
+            continue
+        skill_id = str(raw.get("id") or "")[:120]
+        if not skill_id:
+            continue
+        result.append(
+            {
+                "id": skill_id,
+                "title": str(raw.get("title") or "")[:160],
+                "agent": str(raw.get("agent") or "")[:120],
+                "version": str(raw.get("version") or "")[:40],
+                "source": str(raw.get("source") or "")[:40],
+            },
+        )
+    return result
 
 
 def utc_now() -> str:
