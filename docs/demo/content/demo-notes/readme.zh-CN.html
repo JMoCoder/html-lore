@@ -261,7 +261,7 @@ python tests/run_smoke.py
 npm ci
 npm run test:e2e
 html-lore build --content examples/content --meta examples/meta --out public</code></pre>
-<p><code>npm run test:e2e</code> 使用本机已安装的 Chrome channel。CI 使用 <code>npm run test:e2e:ci</code> 和 Playwright 管理的 Chromium。GitHub Actions 会在 <code>develop</code>、<code>main</code> 和 Pull Request 上运行 pytest、Playwright Demo 检查和 <code>docker compose config</code>。</p>
+<p><code>npm run test:e2e</code> 和 <code>npm run test:e2e:ci</code> 使用本机已安装的 Chrome channel。GitHub Actions 会在 <code>develop</code>、<code>main</code> 和 Pull Request 上运行 pytest、Playwright Demo 检查和 <code>docker compose config</code>。</p>
 <h2>许可证</h2>
 <p>MIT</p>
 </section>

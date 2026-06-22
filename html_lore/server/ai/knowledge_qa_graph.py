@@ -257,7 +257,11 @@ class EvidenceGateNode:
         allow_model_knowledge = state.expansion_policy.get("mode") == "model_knowledge"
         requires_web_research = state.expansion_policy.get("mode") == "web_research"
         has_external_evidence = any(source.get("kind") == "external" for source in state.evidence)
-        if state.evidence and should_reject_weak_evidence(state.evidence, state.context_snapshot, state.content):
+        if (
+            state.evidence
+            and should_reject_weak_evidence(state.evidence, state.context_snapshot, state.content)
+            and not should_trust_local_context_evidence(state.content, state.context_snapshot, state.expansion_policy, state.evidence)
+        ):
             state.retrieval_status["weak_evidence_rejected"] = True
             state.retrieval_status["source_count_before_weak_reject"] = len(state.evidence)
             state.evidence = []
@@ -636,6 +640,61 @@ def should_reject_weak_evidence(evidence: list[dict[str, Any]], snapshot: dict[s
     if any(item.get("kind") == "external" for item in evidence):
         return False
     return not assess_local_evidence_signal(evidence, snapshot, query)["sufficient"]
+
+
+def should_trust_local_context_evidence(query: str, snapshot: dict[str, Any], policy: dict[str, Any], evidence: list[dict[str, Any]]) -> bool:
+    if not evidence:
+        return False
+    if str(policy.get("mode") or "") not in {"local_evidence", "local_only"}:
+        return False
+    scope = str(snapshot.get("scope") or "")
+    if scope not in {"reader", "manual"}:
+        return False
+    local_item_ids = {str(item_id) for item_id in snapshot.get("item_ids") or [] if str(item_id)}
+    local_evidence = [item for item in evidence if isinstance(item, dict) and item.get("kind") != "external"]
+    if not local_evidence:
+        return False
+    if local_item_ids and not any(str(item.get("item_id") or "") in local_item_ids for item in local_evidence):
+        return False
+    planner_intent = str(policy.get("planner_intent") or "").strip().lower()
+    if planner_intent in {"concept_clarify", "explain_deeper", "compare_validate"}:
+        return True
+    return is_local_context_expansion_request(query)
+
+
+def is_local_context_expansion_request(query: str) -> bool:
+    normalized = str(query or "").strip().lower()
+    if not normalized:
+        return False
+    markers = (
+        "拓展",
+        "扩展",
+        "展开",
+        "补充",
+        "完善",
+        "建议",
+        "优化",
+        "改进",
+        "具体",
+        "详细",
+        "再讲",
+        "深入",
+        "深化",
+        "分析",
+        "评价",
+        "意见",
+        "根据这个笔记",
+        "基于当前笔记",
+        "基于这个笔记",
+        "this note",
+        "this document",
+        "expand",
+        "elaborate",
+        "improve",
+        "suggest",
+        "recommend",
+    )
+    return any(marker in normalized for marker in markers)
 
 
 def assess_local_evidence_signal(evidence: list[dict[str, Any]], snapshot: dict[str, Any], query: str) -> dict[str, Any]:

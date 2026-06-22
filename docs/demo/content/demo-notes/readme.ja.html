@@ -261,7 +261,7 @@ python tests/run_smoke.py
 npm ci
 npm run test:e2e
 html-lore build --content examples/content --meta examples/meta --out public</code></pre>
-<p><code>npm run test:e2e</code> はローカルにインストール済みの Chrome channel を使います。CI では <code>npm run test:e2e:ci</code> と Playwright 管理の Chromium を使います。GitHub Actions は <code>develop</code>、<code>main</code>、Pull Request で pytest、Playwright Demo チェック、<code>docker compose config</code> を実行します。</p>
+<p><code>npm run test:e2e</code> と <code>npm run test:e2e:ci</code> はローカルにインストール済みの Chrome channel を使います。GitHub Actions は <code>develop</code>、<code>main</code>、Pull Request で pytest、Playwright Demo チェック、<code>docker compose config</code> を実行します。</p>
 <h2>License</h2>
 <p>MIT</p>
 </section>

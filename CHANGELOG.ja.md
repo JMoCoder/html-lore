@@ -4,6 +4,20 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-22
+
+### Fixed
+
+- ナレッジベース Q&A の evidence gating を修正し、現在のノートや手動指定コンテキストの展開質問が、model 応答前に weak relevance と誤判定されないようにしました。
+- 短い follow-up instruction が現在の topic を継承できるようにし、空の context から始まらないようにしました。
+- Ubuntu 26.04 の GitHub Actions で Playwright-managed Chromium の install に失敗する問題を避けるため、system Chrome channel を使うようにしました。
+- 現在の file picker flow に合わせて workspace AI upload regression check を更新し、Demo と app build の topbar / reader layout behavior を調整しました。
+
+### Changed
+
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.0.3` に更新しました。
+
 ## [1.0.2] - 2026-06-22
 
 ### Changed

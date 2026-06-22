@@ -41,8 +41,8 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Check system Chrome
+        run: google-chrome --version
 
       - name: Run Playwright demo checks
         run: npm run test:e2e:ci

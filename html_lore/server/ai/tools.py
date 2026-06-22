@@ -31,6 +31,7 @@ from .knowledge_qa_graph import (
     build_retrieval_query,
     retrieval_coverage_status,
     should_reject_weak_evidence,
+    should_trust_local_context_evidence,
 )
 from .model_client import ModelClient
 from .providers import ProviderCallError
@@ -396,7 +397,12 @@ class EvidenceGateTool:
             answer = EXTERNAL_UNAVAILABLE_ANSWER if is_external_research_unavailable(status) else EXTERNAL_NO_RESULTS_ANSWER
             evidence = []
             skipped_model_call = True
-        if evidence and should_reject_weak_evidence(evidence, context, query) and mode != "model_knowledge":
+        if (
+            evidence
+            and should_reject_weak_evidence(evidence, context, query)
+            and mode != "model_knowledge"
+            and not should_trust_local_context_evidence(query, context, policy, evidence)
+        ):
             evidence = []
         if not evidence and mode == "local_only":
             skipped_model_call = True
@@ -500,7 +506,7 @@ class EvidenceAssessmentTool:
         policy = state.get("tool_outputs", {}).get("expansion.policy", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         research = state.get("tool_outputs", {}).get("external.research", {}) if isinstance(state.get("tool_outputs"), dict) else {}
         search_plan = research.get("search_plan") if isinstance(research.get("search_plan"), dict) else {}
-        if is_assessment_exempt(query, context, policy):
+        if is_assessment_exempt(query, context, policy) or should_trust_local_context_evidence(query, context, policy, chunks):
             if str(policy.get("mode") or "") == "web_research" and search_requires_attribute_evidence(search_plan):
                 external_check = external_evidence_assessment(chunks=chunks, query=query, search_plan=search_plan)
                 if external_check["insufficient_evidence"] or external_check["weak_relevance"]:

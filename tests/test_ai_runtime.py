@@ -34,7 +34,7 @@ from html_lore.server.ai.tools import ContextTool, EvidenceAssessmentTool, Evide
 from html_lore.server.ai.qa_search_plan import build_qa_search_plan
 from html_lore.server.ai.eval import InMemoryEvalConversationStore
 from html_lore.server.ai.external_search import ExternalSearchResult
-from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_NO_RESULTS_ANSWER, EXTERNAL_UNAVAILABLE_ANSWER, build_retrieval_query
+from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_NO_RESULTS_ANSWER, EXTERNAL_UNAVAILABLE_ANSWER, KnowledgeQAGraph, KnowledgeQAState, build_retrieval_query
 from html_lore.server.config import ServerSettings
 from html_lore.server.items import ItemService
 
@@ -750,6 +750,164 @@ def test_knowledge_qa_agent_declines_insufficient_evidence_before_model_call(tmp
     assert assessment["decision"]["reason"] == "insufficient_evidence"
     assert result.review is not None
     assert result.review.checks["declined"] == "insufficient_evidence"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "组织与治理部分，你觉得还有哪些可以完善的内容",
+        "我的要求就是根据这个笔记的上下文，为我拓展第五部分的内容和建议",
+    ],
+)
+def test_knowledge_qa_agent_answers_reader_context_expansion_even_with_weak_query_overlap(tmp_path, question: str) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_generated_note(
+        content_dir,
+        meta_dir,
+        "new-power.html",
+        title="新动力储能业务公司发展规划框架",
+        summary="围绕储能业务公司战略定位、业务架构、三年路径、组织与治理、风险控制和KPI展开。",
+        body="5. 组织与治理。建议建立投资决策委员会、项目开发小组、运营中台和风险控制机制。组织能力应覆盖项目筛选、投后管理、交易运营、数据复盘和外部合作方管理。",
+        tags=["储能"],
+    )
+    service = ItemService(
+        ServerSettings(
+            content_dir=content_dir,
+            meta_dir=meta_dir,
+            public_dir=public_dir,
+            site_title="Runtime Test",
+            max_upload_bytes=10 * 1024 * 1024,
+            ai_retrieval_mode="hybrid",
+        ),
+    )
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    runtime = AgentRuntime(
+        agents=(KnowledgeQATaskAgent(use_model=True),),
+        tools=qa_tools(service, model_client=model_client, use_model=True),
+        verifier=KnowledgeQAVerifier(),
+        reviewer=KnowledgeQAReviewer(),
+    )
+
+    result = runtime.run(
+        AgentRequest(
+            content=question,
+            context={"item_id": "new-power.html"},
+            requested_task="qa",
+        ),
+    )
+
+    assert result.status == "completed"
+    assert result.answer.startswith("Fake AI response")
+    llm_result = next(tool for tool in result.tool_results if tool.tool_id == "llm.chat")
+    assert llm_result.output.get("skipped") is not True
+    assessment = next(tool.output for tool in result.tool_results if tool.tool_id == "evidence.assess")
+    assert assessment["decision"]["action"] == "answer"
+    assert assessment["decision"]["reason"] == "assessment_exempt"
+
+
+def test_knowledge_qa_agent_answers_reader_context_followup_request_with_recent_topic(tmp_path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_generated_note(
+        content_dir,
+        meta_dir,
+        "new-power.html",
+        title="新动力储能业务公司发展规划框架",
+        summary="围绕储能业务公司战略定位、业务架构、三年路径、组织与治理、风险控制和KPI展开。",
+        body="5. 组织与治理。建议建立投资决策委员会、项目开发小组、运营中台和风险控制机制。组织能力应覆盖项目筛选、投后管理、交易运营、数据复盘和外部合作方管理。",
+        tags=["储能"],
+    )
+    service = ItemService(
+        ServerSettings(
+            content_dir=content_dir,
+            meta_dir=meta_dir,
+            public_dir=public_dir,
+            site_title="Runtime Test",
+            max_upload_bytes=10 * 1024 * 1024,
+            ai_retrieval_mode="hybrid",
+        ),
+    )
+    model_client = ModelClient(AIProviderConfig(provider="fake", enabled=True, model="fake-model"))
+    runtime = AgentRuntime(
+        agents=(KnowledgeQATaskAgent(use_model=True),),
+        tools=qa_tools(service, model_client=model_client, use_model=True),
+        verifier=KnowledgeQAVerifier(),
+        reviewer=KnowledgeQAReviewer(),
+    )
+
+    result = runtime.run(
+        AgentRequest(
+            content="你调用自己的LLM能力提出意见",
+            context={
+                "item_id": "new-power.html",
+                "_conversation_messages": [
+                    {"role": "user", "content": "组织与治理部分，你觉得还有哪些可以完善的内容"},
+                    {"role": "assistant", "content": "可以从决策机制、组织分工、风控闭环和外部协同四方面完善。"},
+                ],
+            },
+            requested_task="qa",
+        ),
+    )
+
+    assert result.status == "completed"
+    assert result.answer.startswith("Fake AI response")
+    llm_result = next(tool for tool in result.tool_results if tool.tool_id == "llm.chat")
+    assert llm_result.output.get("skipped") is not True
+    evidence = next(tool.output for tool in result.tool_results if tool.tool_id == "evidence.build")
+    assert evidence["status"]["query_expanded"] is True
+    assessment = next(tool.output for tool in result.tool_results if tool.tool_id == "evidence.assess")
+    assert assessment["decision"]["action"] == "answer"
+
+
+def test_legacy_knowledge_qa_graph_answers_reader_context_expansion_even_with_weak_query_overlap(tmp_path) -> None:
+    from html_lore.server.ai.conversations import ConversationStore
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.called = False
+
+        def chat(self, *, messages, temperature=0.2, max_tokens=1024):
+            self.called = True
+            return {"content": "组织治理可以补充授权边界、会议机制和投后复盘。", "usage": {"total_tokens": 12}}
+
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_generated_note(
+        content_dir,
+        meta_dir,
+        "new-power.html",
+        title="新动力储能业务公司发展规划框架",
+        summary="围绕储能业务公司战略定位、业务架构、三年路径、组织与治理、风险控制和KPI展开。",
+        body="5. 组织与治理。建议建立投资决策委员会、项目开发小组、运营中台和风险控制机制。组织能力应覆盖项目筛选、投后管理、交易运营、数据复盘和外部合作方管理。",
+        tags=["储能"],
+    )
+    service = ItemService(
+        ServerSettings(
+            content_dir=content_dir,
+            meta_dir=meta_dir,
+            public_dir=public_dir,
+            site_title="Runtime Test",
+            max_upload_bytes=10 * 1024 * 1024,
+        ),
+    )
+    conversation_store = ConversationStore(service.settings, service)
+    conversation = conversation_store.create({"context": {"item_id": "new-power.html"}})
+    client = RecordingClient()
+
+    state = KnowledgeQAGraph(
+        item_service=service,
+        model_client=client,
+        conversation_store=conversation_store,
+    ).run(
+        KnowledgeQAState(
+            conversation_id=conversation["id"],
+            conversation=conversation,
+            content="组织与治理部分，你觉得还有哪些可以完善的内容",
+        ),
+    )
+
+    assert client.called is True
+    assert state.skipped_model_call is False
+    assert state.sources[0]["item_id"] == "new-power.html"
+    assert "组织治理可以补充" in state.answer
 
 
 def test_external_evidence_assessment_rejects_results_without_attribute_terms() -> None:

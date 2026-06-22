@@ -9,6 +9,26 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-22
+
+### Fixed
+
+- Fixed knowledge-base Q&A evidence gating so current-note and manually scoped
+  expansion questions are not rejected as weakly relevant before the model can
+  answer.
+- Fixed short follow-up instructions so they can inherit the active topic
+  instead of starting from an empty context.
+- Fixed GitHub Actions Playwright validation on Ubuntu 26.04 by using the
+  system Chrome channel instead of Playwright-managed Chromium.
+- Updated the workspace AI upload regression check for the current file-picker
+  flow and tightened topbar / reader layout behavior across demo and app
+  builds.
+
+### Changed
+
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.0.3`.
+
 ## [1.0.2] - 2026-06-22
 
 ### Changed

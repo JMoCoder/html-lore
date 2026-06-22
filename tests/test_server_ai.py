@@ -1284,6 +1284,50 @@ def test_ai_message_uses_current_note_for_generic_summary_question(tmp_path: Pat
         server.close()
 
 
+def test_ai_message_answers_reader_note_expansion_request(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    make_note_with_html(
+        content_dir,
+        meta_dir,
+        "new-power.html",
+        title="新动力储能业务公司发展规划框架",
+        collection="Inbox",
+        tags=["储能"],
+        summary="围绕储能业务公司战略定位、业务架构、组织与治理、风险控制和KPI展开。",
+        html="""
+        <!doctype html><html><body>
+          <h1>新动力储能业务公司发展规划框架</h1>
+          <h2>5. 组织与治理</h2>
+          <p>建议建立投资决策委员会、项目开发小组、运营中台和风险控制机制。</p>
+          <p>组织能力应覆盖项目筛选、投后管理、交易运营、数据复盘和外部合作方管理。</p>
+        </body></html>
+        """,
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_retrieval_mode="hybrid",
+    )
+    try:
+        conversation = server.json("POST", "/api/ai/conversations", {"context": {"item_id": "new-power.html"}})["conversation"]
+        response = server.json(
+            "POST",
+            f"/api/ai/conversations/{conversation['id']}/messages",
+            {"content": "我的要求就是根据这个笔记的上下文，为我拓展第五部分的内容和建议"},
+        )
+        assert "Fake AI response" in response["message"]["content"]
+        assert "关联不足" not in response["message"]["content"]
+        assert response["qa_report"]["skipped_model_call"] is False
+        assert response["qa_report"]["evidence_assessment"]["decision"]["action"] == "answer"
+        assert response["sources"][0]["item_id"] == "new-power.html"
+    finally:
+        server.close()
+
+
 def test_global_overview_uses_all_context_items_instead_of_top_keyword_chunks(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = make_dirs(tmp_path)
     for index in range(1, 7):

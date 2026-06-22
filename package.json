@@ -1,11 +1,11 @@
 {
   "name": "html-lore",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Development tooling for HTMlore frontend and static demo checks.",
   "scripts": {
     "test:e2e": "PLAYWRIGHT_BROWSER_CHANNEL=chrome playwright test",
-    "test:e2e:ci": "playwright test"
+    "test:e2e:ci": "PLAYWRIGHT_BROWSER_CHANNEL=chrome playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0"

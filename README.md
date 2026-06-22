@@ -495,8 +495,8 @@ npm run test:e2e
 html-lore build --content examples/content --meta examples/meta --out public
 ```
 
-`npm run test:e2e` uses the locally installed Chrome channel. CI uses
-`npm run test:e2e:ci` with Playwright-managed Chromium. GitHub Actions runs
+`npm run test:e2e` and `npm run test:e2e:ci` use the locally installed Chrome
+channel. GitHub Actions runs
 pytest, Playwright demo checks, and `docker compose config` on `develop`,
 `main`, and pull requests.
 

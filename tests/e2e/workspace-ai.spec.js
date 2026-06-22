@@ -413,13 +413,15 @@ test("workspace material generation failure refreshes AI run history", async ({ 
   await page.locator("#new-item-input").fill("Turn this private source into a note.");
 
   const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.locator("#new-item-form button[type='submit']").click();
+  await page.locator("#new-file-trigger").click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles({
     name: "private-source.pdf",
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF private uploaded source text", "utf8"),
   });
+  await expect(page.locator("#new-file-name")).toContainText("private-source.pdf");
+  await page.locator("#new-item-form button[type='submit']").click();
 
   await expect(page.locator("#new-feedback")).toContainText("Material note generation failed.");
   await expect.poll(() => runsRequested).toBeGreaterThan(0);

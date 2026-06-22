@@ -332,6 +332,8 @@ def is_followup_question(content: str) -> bool:
         return False
     if len(normalized) > 120:
         return False
+    if looks_like_followup_instruction(normalized):
+        return True
     if looks_like_under_specified_question(normalized):
         return True
     followup_markers = [
@@ -376,6 +378,29 @@ def is_followup_question(content: str) -> bool:
         "調べ",
     ]
     return any(marker in normalized for marker in followup_markers)
+
+
+def looks_like_followup_instruction(normalized: str) -> bool:
+    if len(normalized) > 80:
+        return False
+    instruction_markers = (
+        "提出意见",
+        "给出意见",
+        "给点意见",
+        "提意见",
+        "提建议",
+        "补充建议",
+        "继续完善",
+        "完善一下",
+        "优化一下",
+        "再优化",
+    )
+    if not any(marker in normalized for marker in instruction_markers):
+        return False
+    if normalized.startswith(("对", "对于")) and not normalized.startswith(("对这", "对于这", "对上", "对于上", "对前", "对于前", "对该", "对于该")):
+        return False
+    context_markers = ("你", "帮我", "自己", "这个", "这部分", "该", "其", "上面", "前面", "刚才", "继续", "再")
+    return any(marker in normalized for marker in context_markers)
 
 
 def looks_like_under_specified_question(normalized: str) -> bool:

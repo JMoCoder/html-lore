@@ -15,12 +15,24 @@
 <p class="eyebrow">发布轨迹</p>
 <h1>HTMlore 更新日志</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.2</span></aside>
+<aside class="stat"><span class="badge">1.0.3</span></aside>
 </section>
 <section class="timeline doc">
 <h1>更新日志</h1>
 <p>语言：<a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.0.3] - 2026-06-22</h2>
+<h3>修复</h3>
+<ul>
+<li>修复知识库问答的证据门控：当前笔记和手动上下文里的拓展类问题不再在模型回答前被误判为弱相关。</li>
+<li>修复短追问指令的上下文继承，使其能沿用当前话题，而不是从空上下文重新开始。</li>
+<li>修复 GitHub Actions 在 Ubuntu 26.04 上的 Playwright 校验，改用系统 Chrome channel，避免安装 Playwright 自带 Chromium 失败。</li>
+<li>更新 workspace AI 上传回归测试以匹配当前文件选择流程，并同步修复 Demo 与正式应用中的顶部栏 / 阅读区布局行为。</li>
+</ul>
+<h3>变更</h3>
+<ul>
+<li>包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为 <code>1.0.3</code>。</li>
+</ul>
 <h2>[1.0.2] - 2026-06-22</h2>
 <h3>变更</h3>
 <ul>

@@ -280,7 +280,7 @@ python tests/run_smoke.py
 npm ci
 npm run test:e2e
 html-lore build --content examples/content --meta examples/meta --out public</code></pre>
-<p><code>npm run test:e2e</code> uses the locally installed Chrome channel. CI uses <code>npm run test:e2e:ci</code> with Playwright-managed Chromium. GitHub Actions runs pytest, Playwright demo checks, and <code>docker compose config</code> on <code>develop</code>, <code>main</code>, and pull requests.</p>
+<p><code>npm run test:e2e</code> and <code>npm run test:e2e:ci</code> use the locally installed Chrome channel. GitHub Actions runs pytest, Playwright demo checks, and <code>docker compose config</code> on <code>develop</code>, <code>main</code>, and pull requests.</p>
 <h2>License</h2>
 <p>MIT</p>
 </section>

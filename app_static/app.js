@@ -1431,7 +1431,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.0.2",
+  currentVersion: "1.0.3",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -2048,7 +2048,8 @@ function renderApp() {
 
 function updateMobileReaderTop() {
   const isMobile = window.matchMedia("(max-width: 900px)").matches;
-  const height = isMobile && elements.sidebar ? Math.ceil(elements.sidebar.getBoundingClientRect().height) : 0;
+  const rawHeight = isMobile && elements.sidebar ? Math.ceil(elements.sidebar.getBoundingClientRect().height) : 0;
+  const height = isMobile ? Math.max(58, rawHeight) : 0;
   document.documentElement.style.setProperty("--mobile-reader-top", `${height}px`);
 }
 
@@ -2379,6 +2380,7 @@ function openReader(item) {
   elements.reader.classList.remove("compact-reader-header");
   elements.body.classList.add("reader-open");
   requestAnimationFrame(updateMobileReaderTop);
+  setTimeout(updateMobileReaderTop, 80);
   renderReaderMetadata(item);
   elements.readerFrame.src = getReaderContentUrl(item);
   renderReaderActions(item);
@@ -6671,7 +6673,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.2-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.3-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
