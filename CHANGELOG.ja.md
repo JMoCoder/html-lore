@@ -4,6 +4,15 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-22
+
+### Changed
+
+- agent runtime dependency floor を LangGraph 1.2.x に更新し、対応する LangChain Core と checkpoint package も同期しました。
+- local development environment で LangGraph import 時に出ていた LangChain pending-deprecation warning を解消しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.0.2` に更新しました。
+
 ## [1.0.1] - 2026-06-22
 
 ### Added

@@ -9,6 +9,17 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-22
+
+### Changed
+
+- Updated the agent runtime dependency floor to LangGraph 1.2.x, pulling in the
+  matching LangChain Core and checkpoint packages.
+- Removed the LangChain pending-deprecation warning emitted during LangGraph
+  imports in the local development environment.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.0.2`.
+
 ## [1.0.1] - 2026-06-22
 
 ### Added

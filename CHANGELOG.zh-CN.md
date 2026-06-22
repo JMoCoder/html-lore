@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-22
+
+### 变更
+
+- 将 agent runtime 依赖基线升级到 LangGraph 1.2.x，并同步匹配的 LangChain Core 与 checkpoint 包。
+- 清理本地开发环境中 LangGraph 导入时出现的 LangChain pending-deprecation warning。
+- 包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为
+  `1.0.2`。
+
 ## [1.0.1] - 2026-06-22
 
 ### 新增

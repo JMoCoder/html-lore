@@ -143,7 +143,7 @@ class TavilyExternalSearchAdapter:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.0.1 tavily-search",
+                "User-Agent": "HTMlore/1.0.2 tavily-search",
                 "Accept": "application/json",
             },
         )
@@ -196,7 +196,7 @@ class BraveExternalSearchAdapter:
             headers={
                 "X-Subscription-Token": self.api_key,
                 "Accept": "application/json",
-                "User-Agent": "HTMlore/1.0.1 brave-search",
+                "User-Agent": "HTMlore/1.0.2 brave-search",
             },
         )
         try:
