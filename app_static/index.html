@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600;900&family=Noto+Serif+JP:wght@600;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.0.3">
+  <link rel="stylesheet" href="style.css?v=1.0.4">
 </head>
 <body>
   <section class="login-screen" id="login-screen" hidden>
@@ -196,6 +196,7 @@
 
       <input id="html-import-file" type="file" accept=".html,.htm,text/html" hidden>
       <input id="material-generate-file" type="file" accept=".html,.htm,.md,.markdown,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,text/html,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg,image/png" hidden>
+      <input id="material-reference-file" type="file" accept=".jpg,.jpeg,.png,.html,.htm,.pdf,.ppt,.pptx,image/jpeg,image/png,text/html,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
 
       <section class="new-card" id="new-card">
         <div class="new-card-header">
@@ -204,6 +205,17 @@
           </div>
         </div>
         <form id="new-item-form" class="new-form">
+          <button type="button" class="new-upload-button" id="new-file-trigger" aria-label="Upload source file" title="Upload source file" data-i18n-attr="aria-label:chooseFile,title:chooseFile">
+            <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 16V4"></path>
+              <path d="m7 9 5-5 5 5"></path>
+              <path d="M5 16v3h14v-3"></path>
+            </svg>
+          </button>
+          <div class="new-prompt-box">
+            <textarea id="new-item-input" rows="1" data-i18n-attr="placeholder:newItemPlaceholder"></textarea>
+            <span class="new-prompt-resize" id="new-prompt-resize" aria-hidden="true"></span>
+          </div>
           <button type="button" class="new-generation-toggle" id="new-generation-toggle" aria-expanded="false" aria-controls="new-generation-options" aria-label="More settings" title="More settings" data-i18n-attr="aria-label:moreSettings,title:moreSettings">
             <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 7h16"></path>
@@ -211,24 +223,6 @@
               <path d="M10 17h4"></path>
             </svg>
           </button>
-          <select id="input-type" data-i18n-attr="aria-label:inputType">
-            <option value="auto" data-i18n="inputAuto"></option>
-            <option value="link" data-i18n="inputLink"></option>
-            <option value="file" data-i18n="inputFile"></option>
-            <option value="book" data-i18n="inputBook"></option>
-            <option value="topic" data-i18n="inputTopic"></option>
-          </select>
-          <div class="new-prompt-box">
-            <textarea id="new-item-input" rows="1" data-i18n-attr="placeholder:newItemPlaceholder"></textarea>
-            <button type="button" class="new-upload-button" id="new-file-trigger" aria-label="Upload source file" title="Upload source file" data-i18n-attr="aria-label:chooseFile,title:chooseFile">
-              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 16V4"></path>
-                <path d="m7 9 5-5 5 5"></path>
-                <path d="M5 16v3h14v-3"></path>
-              </svg>
-            </button>
-            <span class="new-prompt-resize" id="new-prompt-resize" aria-hidden="true"></span>
-          </div>
           <button type="submit" data-i18n="create"></button>
           <div class="new-file-row" id="new-file-row" hidden>
             <span class="new-file-name" id="new-file-name"></span>
@@ -271,6 +265,12 @@
                   <option value="share" data-i18n="generateShare"></option>
                 </select>
               </label>
+              <div class="new-reference-row">
+                <button type="button" class="new-reference-button" id="new-reference-trigger" data-i18n="chooseReferenceFile"></button>
+                <span class="new-reference-hint" data-i18n="referenceFileHint"></span>
+                <span class="new-reference-name" id="new-reference-name" hidden></span>
+                <button type="button" class="new-file-remove" id="new-reference-remove" aria-label="Remove reference file" title="Remove reference file" data-i18n-attr="aria-label:removeReferenceFile,title:removeReferenceFile" hidden>×</button>
+              </div>
             </div>
           </div>
         </form>
@@ -987,6 +987,6 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=1.0.3" type="module"></script>
+  <script src="app.js?v=1.0.4" type="module"></script>
 </body>
 </html>

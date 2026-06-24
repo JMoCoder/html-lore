@@ -367,9 +367,11 @@ class StageTraceEvent:
     status: str = "started"
     started_at: str = ""
     completed_at: str = ""
+    duration_ms: int = 0
     message: str = ""
     error_summary: str = ""
     retryable: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -379,6 +381,15 @@ class SkillTraceEntry:
     agent: str = ""
     version: str = ""
     source: str = "local"
+
+
+@dataclass(frozen=True)
+class AgentArtifact:
+    agent: str = ""
+    stage: GenerationStage = GenerationStage.QUEUED
+    title: str = ""
+    summary: str = ""
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -400,6 +411,7 @@ class GenerationState:
     create_note_proposal: CreateNoteProposal | None = None
     stage_trace: list[StageTraceEvent] = field(default_factory=list)
     skill_trace: list[SkillTraceEntry] = field(default_factory=list)
+    agent_artifacts: list[AgentArtifact] = field(default_factory=list)
     current_step: str = ""
     completed_steps: list[str] = field(default_factory=list)
     failed_steps: list[str] = field(default_factory=list)

@@ -158,6 +158,24 @@ async def read_style_reference_metadata(
     }
 
 
+async def read_generation_material(file: UploadFile | None, instruction: str) -> dict[str, bytes | str]:
+    if file is not None:
+        content = await file.read()
+        return {
+            "filename": file.filename or "material.txt",
+            "content": content,
+            "content_type": file.content_type or "",
+        }
+    prompt = instruction.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Provide a file or describe what you want to generate.")
+    return {
+        "filename": "prompt.txt",
+        "content": prompt.encode("utf-8"),
+        "content_type": "text/plain",
+    }
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     if settings.auth_enabled:
@@ -348,7 +366,7 @@ def create_app() -> FastAPI:
         _: ApiAuth,
         __: AiRateLimit,
         service: Annotated[AIConversationService, Depends(get_ai_conversation_service)],
-        file: Annotated[UploadFile, File()],
+        file: Annotated[UploadFile | None, File()] = None,
         instruction: Annotated[str, Form()] = "",
         theme: Annotated[str, Form()] = "default",
         target_use: Annotated[str, Form()] = "default",
@@ -360,12 +378,12 @@ def create_app() -> FastAPI:
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
-        content = await file.read()
+        material = await read_generation_material(file, instruction)
         uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size)
         try:
             return service.generate_note_from_material(
-                filename=file.filename or "material.txt",
-                content=content,
+                filename=str(material["filename"]),
+                content=material["content"] if isinstance(material["content"], bytes) else b"",
                 instruction=instruction,
                 values={
                     "theme": theme,
@@ -384,7 +402,7 @@ def create_app() -> FastAPI:
         _: ApiAuth,
         __: AiRateLimit,
         service: Annotated[AIConversationService, Depends(get_ai_conversation_service)],
-        file: Annotated[UploadFile, File()],
+        file: Annotated[UploadFile | None, File()] = None,
         instruction: Annotated[str, Form()] = "",
         theme: Annotated[str, Form()] = "default",
         target_use: Annotated[str, Form()] = "default",
@@ -396,12 +414,12 @@ def create_app() -> FastAPI:
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
-        content = await file.read()
+        material = await read_generation_material(file, instruction)
         uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size)
         try:
             return service.enqueue_generate_note_from_material(
-                filename=file.filename or "material.txt",
-                content=content,
+                filename=str(material["filename"]),
+                content=material["content"] if isinstance(material["content"], bytes) else b"",
                 instruction=instruction,
                 values={
                     "theme": theme,

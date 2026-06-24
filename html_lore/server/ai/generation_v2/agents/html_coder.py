@@ -1,6 +1,8 @@
 from dataclasses import replace
 from html import escape
 
+from ..model_client import agent_payload
+from ..schema_loader import AgentOutputSchemaError
 from ..schemas import GenerationStage, HtmlDraft
 from .base import GenerationAgent
 
@@ -9,6 +11,22 @@ class HTMLCoderAgent(GenerationAgent):
     name = "HTMLCoder"
     stage = GenerationStage.CODING_HTML
     output_schema = HtmlDraft
+
+    def invoke_structured(self, state) -> HtmlDraft:
+        html = self.model_client.complete_text(
+            node=self.name,
+            payload=agent_payload(node=self.name, schema=self.output_schema, state=state, fallback=self.fake_payload(state), skills=self.skills),
+            attempt=state.same_node_retries.get(self.name, 0),
+        )
+        if not is_complete_html_document(html):
+            raise AgentOutputSchemaError("HTMLCoder output must be a complete HTML document.")
+        return HtmlDraft(
+            html=html,
+            css_notes=["Generated as direct HTML artifact."],
+            render_assumptions=["Self-contained static HTML document."],
+            accessibility_notes=["Reviewed by downstream verifier."],
+            responsive_notes=["Reviewed by downstream verifier."],
+        )
 
     def fake_payload(self, state):
         draft = state.content_draft
@@ -44,3 +62,8 @@ class HTMLCoderAgent(GenerationAgent):
             create_note_proposal=None,
             revision_round=state.revision_round + 1 if state.html_draft is not None else state.revision_round,
         )
+
+
+def is_complete_html_document(value: str) -> bool:
+    text = str(value or "").strip().lower()
+    return ("<!doctype html" in text or text.startswith("<html")) and "</html>" in text

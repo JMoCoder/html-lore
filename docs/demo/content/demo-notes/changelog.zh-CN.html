@@ -15,12 +15,25 @@
 <p class="eyebrow">发布轨迹</p>
 <h1>HTMlore 更新日志</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.3</span></aside>
+<aside class="stat"><span class="badge">1.0.4</span></aside>
 </section>
 <section class="timeline doc">
 <h1>更新日志</h1>
 <p>语言：<a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.0.4] - 2026-06-24</h2>
+<h3>新增</h3>
+<ul>
+<li>新增 AI 生成 v2 主链路基线，支持纯文本需求、可选主材料文件和可选参考样式文件。</li>
+<li>新增生成任务的 agent artifacts 与阶段 trace 元数据，便于本地任务详情展示各环节产物，同时不保存原始上传、完整提示词、参考内容或生成 HTML 正文。</li>
+</ul>
+<h3>变更</h3>
+<ul>
+<li>工作台“用 AI 创建”改为自然语言优先，文件上传和参考样式上传作为可选控制项。</li>
+<li>生成 v2 的 finalizer 保持为 runtime 组装层，不再用最终模型调用重写 HTML coder 的输出。</li>
+<li>提升生成 v2 的 schema 容错、供应商瞬时失败重试和任务日志隐私脱敏。</li>
+<li>包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为 <code>1.0.4</code>。</li>
+</ul>
 <h2>[1.0.3] - 2026-06-22</h2>
 <h3>修复</h3>
 <ul>

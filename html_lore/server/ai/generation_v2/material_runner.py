@@ -100,6 +100,7 @@ def public_material_v2_run(
         "stage_trace": normalize_for_json([asdict(event) for event in state.stage_trace]),
         "execution_checklist": public_execution_checklist(state.execution_checklist),
         "skill_trace": normalize_for_json([asdict(item) for item in state.skill_trace]),
+        "agent_artifacts": normalize_for_json([asdict(item) for item in state.agent_artifacts]),
         "material": {"filename": state.input.filename, "reference_file_name": state.input.reference_file_name},
         "item_id": item_id,
         "error": {"code": error_code or "generation_v2_failed", "message": error_message or ", ".join(state.failed_steps)} if status == "failed" else {},

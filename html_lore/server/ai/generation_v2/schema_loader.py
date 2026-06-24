@@ -45,14 +45,20 @@ def coerce_value(value: Any, annotation: Any) -> Any:
     args = get_args(annotation)
     if origin is list:
         item_type = args[0] if args else Any
+        if value is None:
+            return []
         if not isinstance(value, list):
             raise AgentOutputSchemaError("Expected a list field.")
         return [coerce_value(item, item_type) for item in value]
     if origin is dict:
+        if value is None:
+            return {}
         if not isinstance(value, dict):
             raise AgentOutputSchemaError("Expected a dict field.")
         return value
     if is_dataclass(annotation):
+        if value is None:
+            return annotation()
         if not isinstance(value, dict):
             raise AgentOutputSchemaError("Expected an object field.")
         return dataclass_from_dict(value, annotation)
@@ -60,10 +66,22 @@ def coerce_value(value: Any, annotation: Any) -> Any:
         try:
             return annotation(value)
         except ValueError as exc:
+            normalized = normalize_enum_value(value)
+            for item in annotation:
+                if normalize_enum_value(item.value) == normalized or normalize_enum_value(item.name) == normalized:
+                    return item
             raise AgentOutputSchemaError(f"Invalid enum value: {value}") from exc
     if isinstance(annotation, type) and issubclass(annotation, Enum):
         try:
             return annotation(value)
         except ValueError as exc:
+            normalized = normalize_enum_value(value)
+            for item in annotation:
+                if normalize_enum_value(item.value) == normalized or normalize_enum_value(item.name) == normalized:
+                    return item
             raise AgentOutputSchemaError(f"Invalid enum value: {value}") from exc
     return value
+
+
+def normalize_enum_value(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")

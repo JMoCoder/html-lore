@@ -34,7 +34,16 @@ HTML requirements:
 - Use CSS custom properties when useful, but keep CSS simple.
 - Avoid complex animations.
 
+Performance budget:
+- Keep the first-pass HTML concise and production-readable.
+- Target a complete document around 12-22 KB unless the user explicitly asks for a long page.
+- Keep CSS compact, preferably under 260 lines.
+- Avoid large decorative CSS blocks, repeated utility classes, inline SVG art, or duplicated prose.
+- Prioritize clear structure and responsive readability over excessive visual ornamentation.
+
 Output:
-- Return one JSON object matching HtmlDraft.
-- Put the full generated document in `html`.
-- Use notes fields for assumptions and accessibility/responsive observations.
+- Return the complete HTML document only.
+- Start with `<!doctype html>`.
+- Do not return JSON.
+- Do not wrap the HTML in Markdown fences.
+- Do not include explanations before or after the HTML.

@@ -9,6 +9,27 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-06-24
+
+### Added
+
+- Added the AI generation v2 baseline for text-only prompts, optional material
+  files, and optional reference style files.
+- Added generation agent artifacts and stage trace metadata so local task
+  details can show what each agent produced without storing raw uploads,
+  full prompts, reference content, or generated HTML bodies.
+
+### Changed
+
+- Updated the workspace "Create with AI" flow to use natural-language input
+  first, with file and reference style uploads as optional controls.
+- Kept the generation v2 finalizer as runtime assembly only so the HTML coder's
+  output is not rewritten by a final model pass.
+- Improved generation v2 schema tolerance, transient provider retries, and
+  privacy redaction for task logs.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.0.4`.
+
 ## [1.0.3] - 2026-06-22
 
 ### Fixed

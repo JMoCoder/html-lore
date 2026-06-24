@@ -15,7 +15,7 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.3</span></aside>
+<aside class="stat"><span class="badge">1.0.4</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
@@ -24,6 +24,19 @@
 <p>The format is based on Keep a Changelog, and this project uses semantic</p>
 <p>versioning after the initial public release.</p>
 <h2>[Unreleased]</h2>
+<h2>[1.0.4] - 2026-06-24</h2>
+<h3>Added</h3>
+<ul>
+<li>Added the AI generation v2 baseline for text-only prompts, optional material files, and optional reference style files.</li>
+<li>Added generation agent artifacts and stage trace metadata so local task details can show what each agent produced without storing raw uploads, full prompts, reference content, or generated HTML bodies.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>Updated the workspace "Create with AI" flow to use natural-language input first, with file and reference style uploads as optional controls.</li>
+<li>Kept the generation v2 finalizer as runtime assembly only so the HTML coder's output is not rewritten by a final model pass.</li>
+<li>Improved generation v2 schema tolerance, transient provider retries, and privacy redaction for task logs.</li>
+<li>Updated package, app, PWA, demo, and provider user-agent versions to <code>1.0.4</code>.</li>
+</ul>
 <h2>[1.0.3] - 2026-06-22</h2>
 <h3>Fixed</h3>
 <ul>

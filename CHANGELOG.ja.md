@@ -4,6 +4,27 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-06-24
+
+### Added
+
+- text-only prompt、任意の material file、任意の reference style file に対応する
+  AI generation v2 の baseline を追加しました。
+- local task detail で各 agent の出力を確認できるよう、generation agent artifacts
+  と stage trace metadata を追加しました。raw upload、full prompt、reference
+  content、generated HTML body は保存しません。
+
+### Changed
+
+- Workspace の "Create with AI" を natural-language first にし、file upload と
+  reference style upload は optional control として扱うようにしました。
+- generation v2 finalizer は runtime assembly のみを担当し、HTML coder output を
+  最後の model pass で書き換えないようにしました。
+- generation v2 の schema tolerance、provider transient retry、task log の privacy
+  redaction を改善しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.0.4` に更新しました。
+
 ## [1.0.3] - 2026-06-22
 
 ### Fixed

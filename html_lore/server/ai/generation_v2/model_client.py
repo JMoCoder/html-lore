@@ -16,6 +16,9 @@ class GenerationJsonModelClient(Protocol):
     def complete_json(self, *, node: str, schema_name: str, payload: dict[str, Any], attempt: int = 0) -> str:
         ...
 
+    def complete_text(self, *, node: str, payload: dict[str, Any], attempt: int = 0) -> str:
+        ...
+
 
 class ProviderGenerationModelClient:
     def __init__(self, model_client: ModelClient, *, max_prompt_chars: int = 12000, max_tokens: int = 4096) -> None:
@@ -41,6 +44,8 @@ class ProviderGenerationModelClient:
                 "Use exactly the target schema field names where applicable.",
                 "Do not wrap JSON in Markdown fences.",
                 "Do not include private prompt text or raw uploaded source beyond what is necessary in the generated artifact.",
+                "Keep structured fields concise; downstream agents will expand only where their role requires it.",
+                *retry_output_rules(attempt),
             ],
         }
         messages = [
@@ -61,9 +66,52 @@ class ProviderGenerationModelClient:
         response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.max_tokens)
         return extract_json_object(str(response.get("content") or ""))
 
+    def complete_text(self, *, node: str, payload: dict[str, Any], attempt: int = 0) -> str:
+        prompt = str(payload.get("_prompt") or load_agent_prompt(node))
+        state = payload.get("_state") if isinstance(payload.get("_state"), dict) else {}
+        skills = payload.get("_skills") if isinstance(payload.get("_skills"), list) else []
+        user_payload = {
+            "agent": node,
+            "attempt": attempt,
+            "state": state,
+            "output_rules": [
+                "Return the final complete HTML document only.",
+                "Start with <!doctype html>.",
+                "Do not wrap the HTML in Markdown fences.",
+                "Do not return JSON.",
+                "Do not include explanations before or after the HTML.",
+            ],
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are an HTMlore HTML coding agent. "
+                    "Runtime handles workflow state; you produce the final static HTML artifact."
+                ),
+            },
+            {"role": "system", "content": prompt},
+        ]
+        for skill in skills:
+            if isinstance(skill, dict) and skill.get("content"):
+                messages.append({"role": "system", "content": f"Skill: {skill.get('title') or skill.get('id')}\n\n{skill.get('content')}"})
+        messages.append({"role": "user", "content": trim_prompt(json.dumps(user_payload, ensure_ascii=False), self.max_prompt_chars)})
+        response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.max_tokens)
+        return extract_html_document(str(response.get("content") or ""))
+
 
 def build_provider_generation_client(model_client: ModelClient, *, max_prompt_chars: int, max_tokens: int) -> ProviderGenerationModelClient:
     return ProviderGenerationModelClient(model_client, max_prompt_chars=max_prompt_chars, max_tokens=max_tokens)
+
+
+def retry_output_rules(attempt: int) -> list[str]:
+    if int(attempt or 0) <= 0:
+        return []
+    return [
+        "This is a retry after the previous output failed validation.",
+        "Return a smaller strict JSON object that exactly matches the schema.",
+        "Use [] for empty lists and {} for empty objects; do not use null for list/object fields.",
+    ]
 
 
 def agent_payload(*, node: str, schema: type[Any], state: GenerationState, fallback: dict[str, Any], skills: tuple[LoadedSkill, ...]) -> dict[str, Any]:
@@ -272,6 +320,24 @@ def extract_json_object(text: str) -> str:
     end = stripped.rfind("}")
     if start >= 0 and end > start:
         return stripped[start : end + 1]
+    return stripped
+
+
+def extract_html_document(text: str) -> str:
+    stripped = str(text or "").strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`").strip()
+        if stripped.lower().startswith("html"):
+            stripped = stripped[4:].strip()
+    lowered = stripped.lower()
+    start = lowered.find("<!doctype html")
+    if start < 0:
+        start = lowered.find("<html")
+    if start >= 0:
+        stripped = stripped[start:]
+    end = stripped.lower().rfind("</html>")
+    if end >= 0:
+        stripped = stripped[: end + len("</html>")]
     return stripped
 
 

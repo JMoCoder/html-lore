@@ -88,6 +88,7 @@ def sanitize_run(run: dict[str, Any]) -> dict[str, Any]:
         "agent_trace": sanitize_trace_list(run.get("agent_trace"), allowed_keys={"id", "version", "role", "prompt_template", "input_schema", "output_schema"}),
         "prompt_trace": sanitize_trace_list(run.get("prompt_trace"), allowed_keys={"id", "version", "path"}),
         "skill_trace": sanitize_skill_trace(run.get("skill_trace")),
+        "agent_artifacts": sanitize_agent_artifacts(run.get("agent_artifacts")),
         "usage": sanitize_usage(run.get("usage")),
         "budget": sanitize_budget(run.get("budget")),
         "error": sanitize_error(run.get("error")),
@@ -155,6 +156,51 @@ def sanitize_skill_trace(value: Any) -> list[dict[str, Any]]:
         if clean["skill_id"]:
             sanitized.append(clean)
     return sanitized
+
+
+def sanitize_agent_artifacts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for raw in value[-40:]:
+        if not isinstance(raw, dict):
+            continue
+        agent = str(raw.get("agent") or "")[:120]
+        title = str(raw.get("title") or "")[:160]
+        if not agent and not title:
+            continue
+        result.append(
+            {
+                "agent": agent,
+                "stage": str(raw.get("stage") or "")[:80],
+                "title": title,
+                "summary": str(raw.get("summary") or "")[:360],
+                "data": sanitize_artifact_data(raw.get("data")),
+            }
+        )
+    return result
+
+
+def sanitize_artifact_data(value: Any, *, depth: int = 0) -> Any:
+    if depth > 3:
+        return ""
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        for key, raw in list(value.items())[:40]:
+            clean_key = str(key)[:80]
+            if clean_key.lower() in {"html", "content", "reference_content", "prompt", "raw", "raw_output"}:
+                continue
+            result[clean_key] = sanitize_artifact_data(raw, depth=depth + 1)
+        return result
+    if isinstance(value, list):
+        return [sanitize_artifact_data(item, depth=depth + 1) for item in value[:20]]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if value is None:
+        return ""
+    return str(value)[:360]
 
 
 def sanitize_summary(value: Any) -> dict[str, Any]:
@@ -239,12 +285,29 @@ def sanitize_generation_stage_trace(value: Any) -> list[dict[str, Any]]:
                 "status": status,
                 "started_at": str(entry.get("started_at") or "")[:80],
                 "completed_at": str(entry.get("completed_at") or "")[:80],
+                "duration_ms": sanitize_duration(entry.get("duration_ms")),
                 "message": str(entry.get("message") or "")[:240],
                 "error_summary": str(entry.get("error_summary") or "")[:240],
                 "retryable": bool(entry.get("retryable")),
+                "metadata": sanitize_stage_metadata(entry.get("metadata")),
             },
         )
     return sanitized
+
+
+def sanitize_stage_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("output_kind", "output_chars", "section_count", "score", "risk_level", "retry_count", "error_type"):
+        raw = value.get(key)
+        if isinstance(raw, bool):
+            result[key] = raw
+        elif isinstance(raw, (int, float)):
+            result[key] = raw
+        elif isinstance(raw, str):
+            result[key] = raw[:80]
+    return result
 
 
 def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:

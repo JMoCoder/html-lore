@@ -146,6 +146,7 @@ const i18n = {
     aiJobTrace: "Process",
     aiJobChecklist: "Checklist",
     aiJobSkills: "Skills",
+    aiJobArtifacts: "Agent outputs",
     aiRunHtmlGeneration: "Generated from conversation",
     aiRunMaterialGeneration: "Generated from uploaded material",
     aiRunKnowledgeQa: "Knowledge Q&A",
@@ -350,11 +351,14 @@ const i18n = {
     inputFile: "File",
     inputBook: "Book",
     inputTopic: "Topic",
-    newItemPlaceholder: "Paste a link, choose file mode, enter a book, or describe a topic",
+    newItemPlaceholder: "Describe what you want to generate",
     chooseFile: "Choose file",
     noFileSelected: "No file selected",
     fileSelected: "{name}",
     removeFile: "Remove file",
+    chooseReferenceFile: "Upload style reference",
+    referenceFileHint: "Optional style reference. Supports JPG/PNG, HTML, PDF, PPT/PPTX.",
+    removeReferenceFile: "Remove reference file",
     moreSettings: "More",
     chooseFileFirst: "Choose a source file first.",
     create: "Create",
@@ -600,6 +604,7 @@ const i18n = {
     aiJobTrace: "处理过程",
     aiJobChecklist: "检查项",
     aiJobSkills: "技能",
+    aiJobArtifacts: "智能体输出",
     aiRunHtmlGeneration: "根据对话生成",
     aiRunMaterialGeneration: "根据上传资料生成",
     aiRunKnowledgeQa: "知识库问答",
@@ -804,11 +809,14 @@ const i18n = {
     inputFile: "文件",
     inputBook: "书籍",
     inputTopic: "主题",
-    newItemPlaceholder: "粘贴链接、切换文件模式、输入书名，或描述一个主题",
+    newItemPlaceholder: "请文字描述你想生成的内容",
     chooseFile: "选择文件",
     noFileSelected: "未选择文件",
     fileSelected: "{name}",
     removeFile: "移除文件",
+    chooseReferenceFile: "上传参考样式",
+    referenceFileHint: "可选样式参考，支持 JPG/PNG、HTML、PDF、PPT/PPTX。",
+    removeReferenceFile: "移除参考文件",
     moreSettings: "更多",
     chooseFileFirst: "请先选择一个资料文件。",
     create: "创建",
@@ -1054,6 +1062,7 @@ const i18n = {
     aiJobTrace: "プロセス",
     aiJobChecklist: "チェックリスト",
     aiJobSkills: "スキル",
+    aiJobArtifacts: "エージェント出力",
     aiRunHtmlGeneration: "会話から生成",
     aiRunMaterialGeneration: "アップロード資料から生成",
     aiRunKnowledgeQa: "ナレッジ Q&A",
@@ -1258,11 +1267,14 @@ const i18n = {
     inputFile: "ファイル",
     inputBook: "書籍",
     inputTopic: "トピック",
-    newItemPlaceholder: "リンク、ファイルモード、書名、またはトピックを入力",
+    newItemPlaceholder: "生成したい内容を文章で説明してください",
     chooseFile: "ファイルを選択",
     noFileSelected: "ファイル未選択",
     fileSelected: "{name}",
     removeFile: "ファイルを削除",
+    chooseReferenceFile: "参考スタイルをアップロード",
+    referenceFileHint: "任意のスタイル参考。JPG/PNG、HTML、PDF、PPT/PPTX に対応。",
+    removeReferenceFile: "参考ファイルを削除",
     moreSettings: "詳細",
     chooseFileFirst: "先に資料ファイルを選択してください。",
     create: "作成",
@@ -1431,7 +1443,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.0.3",
+  currentVersion: "1.0.4",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1502,6 +1514,7 @@ const state = {
   fileEditorPanelWidth: getInitialFileEditorPanelWidth(),
   fileEditorPanelCollapsed: false,
   pendingMaterialFile: null,
+  pendingReferenceFile: null,
   shares: [],
   sharingItemId: "",
 };
@@ -1528,6 +1541,7 @@ const elements = {
   importEntries: document.querySelectorAll("[data-import-entry]"),
   htmlImportFile: ensureHtmlImportInput(),
   materialGenerateFile: document.querySelector("#material-generate-file"),
+  materialReferenceFile: document.querySelector("#material-reference-file"),
   newGenerateTheme: document.querySelector("#new-generate-theme"),
   newGenerateTargetUse: document.querySelector("#new-generate-target-use"),
   newGenerateStylePreference: document.querySelector("#new-generate-style-preference"),
@@ -1617,7 +1631,6 @@ const elements = {
   contentGrid: document.querySelector("#content-grid"),
   newCard: document.querySelector("#new-card"),
   newItemForm: document.querySelector("#new-item-form"),
-  inputType: document.querySelector("#input-type"),
   newItemInput: document.querySelector("#new-item-input"),
   newPromptResize: document.querySelector("#new-prompt-resize"),
   newGenerationToggle: document.querySelector("#new-generation-toggle"),
@@ -1626,6 +1639,9 @@ const elements = {
   newFileRow: document.querySelector("#new-file-row"),
   newFileName: document.querySelector("#new-file-name"),
   newFileRemove: document.querySelector("#new-file-remove"),
+  newReferenceTrigger: document.querySelector("#new-reference-trigger"),
+  newReferenceName: document.querySelector("#new-reference-name"),
+  newReferenceRemove: document.querySelector("#new-reference-remove"),
   newFeedback: document.querySelector("#new-feedback"),
   agentStatus: document.querySelector("#agent-status"),
   reader: document.querySelector("#reader"),
@@ -2597,45 +2613,13 @@ function openFromHash() {
 
 async function submitNewItem(event) {
   event.preventDefault();
-  if (state.pendingMaterialFile) {
-    await generateNoteFromMaterialFile(state.pendingMaterialFile);
-    return;
-  }
-  if (elements.inputType.value === "file") {
-    setFeedback("chooseFileFirst");
-    openMaterialGeneratePicker();
-    return;
-  }
-
   const input = elements.newItemInput.value.trim();
-  if (!input) {
+  if (!state.pendingMaterialFile && !input) {
     setFeedback("emptyInput");
     return;
   }
 
-  if (!state.agentUrl) {
-    setFeedback("agentNotConfigured");
-    return;
-  }
-
-  setFeedback("submittingJob");
-  try {
-    const response = await apiFetch("/api/jobs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        input_type: elements.inputType.value,
-        input,
-        options: { output_style: "knowledge_note" },
-      }),
-    });
-    if (!response.ok) throw new Error(`Agent returned ${response.status}`);
-    const result = await response.json();
-    setFeedback("queuedJob", { jobId: result.job_id || "" });
-  } catch (error) {
-    setFeedback("agentUnavailable");
-    console.error(error);
-  }
+  await generateNoteFromMaterialFile(state.pendingMaterialFile);
 }
 
 function openHtmlImportPicker() {
@@ -2652,25 +2636,41 @@ function openMaterialGeneratePicker() {
   elements.materialGenerateFile.click();
 }
 
+function openMaterialReferencePicker() {
+  elements.materialReferenceFile.value = "";
+  elements.materialReferenceFile.click();
+}
+
 function setPendingMaterialFile(file) {
   state.pendingMaterialFile = file || null;
   updateNewFileMode();
 }
 
+function setPendingReferenceFile(file) {
+  state.pendingReferenceFile = file || null;
+  updateNewReferenceFile();
+}
+
 async function generateNoteFromMaterialFile(file) {
-  if (!file) return;
   if (!state.agentUrl) {
     setFeedback("agentNotConfigured");
     return;
   }
   setFeedback("generatingMaterialNote");
   const formData = new FormData();
-  formData.append("file", file);
+  if (file) formData.append("file", file);
   formData.append("instruction", elements.newItemInput.value.trim());
   formData.append("theme", elements.newGenerateTheme?.value || "default");
   formData.append("target_use", elements.newGenerateTargetUse?.value || "default");
   formData.append("style_preference", elements.newGenerateStylePreference?.value || "default");
   formData.append("audience", elements.newGenerateAudience?.value || "default");
+  if (state.pendingReferenceFile) {
+    formData.append("reference_style", "file");
+    formData.append("reference_file", state.pendingReferenceFile);
+    formData.append("reference_file_name", state.pendingReferenceFile.name || "");
+    formData.append("reference_file_type", state.pendingReferenceFile.type || "");
+    formData.append("reference_file_size", String(state.pendingReferenceFile.size || 0));
+  }
 
   try {
     const response = await apiFetch("/api/ai/material-jobs", {
@@ -2685,6 +2685,7 @@ async function generateNoteFromMaterialFile(file) {
     elements.newItemInput.value = "";
     resetNewItemInputHeight();
     setPendingMaterialFile(null);
+    setPendingReferenceFile(null);
     setFeedback("queuedJob", { jobId: result.job_id || "" });
   } catch (error) {
     await loadAiRuns();
@@ -2700,6 +2701,19 @@ function updateNewFileMode() {
   if (elements.newFileName) {
     elements.newFileName.textContent = hasFile ? t("fileSelected", { name: state.pendingMaterialFile.name }) : "";
     elements.newFileName.title = state.pendingMaterialFile?.name || "";
+  }
+}
+
+function updateNewReferenceFile() {
+  const hasFile = Boolean(state.pendingReferenceFile);
+  elements.newReferenceTrigger?.classList.toggle("has-file", hasFile);
+  if (elements.newReferenceName) {
+    elements.newReferenceName.hidden = !hasFile;
+    elements.newReferenceName.textContent = hasFile ? t("fileSelected", { name: state.pendingReferenceFile.name }) : "";
+    elements.newReferenceName.title = state.pendingReferenceFile?.name || "";
+  }
+  if (elements.newReferenceRemove) {
+    elements.newReferenceRemove.hidden = !hasFile;
   }
 }
 
@@ -5953,7 +5967,11 @@ function renderAiJobDetails(job) {
     const actor = entry.agent || entry.name || "";
     const status = entry.status || "";
     const message = entry.message || entry.error || "";
-    return `<li><b>${escapeHtml(stage)}</b>${actor ? `<span>${escapeHtml(actor)}</span>` : ""}${status ? `<em>${escapeHtml(status)}</em>` : ""}${message ? `<small>${escapeHtml(message)}</small>` : ""}</li>`;
+    const duration = formatDuration(entry.duration_ms);
+    const metadata = entry.metadata && typeof entry.metadata === "object" ? entry.metadata : {};
+    const outputSummary = formatAiStageMetadata(metadata);
+    const metaText = [duration, outputSummary].filter(Boolean).join(" · ");
+    return `<li><b>${escapeHtml(stage)}</b>${actor ? `<span>${escapeHtml(actor)}</span>` : ""}${status ? `<em>${escapeHtml(status)}</em>` : ""}${metaText ? `<em>${escapeHtml(metaText)}</em>` : ""}${message ? `<small>${escapeHtml(message)}</small>` : ""}</li>`;
   }).join("");
   const checklist = Array.isArray(job.execution_checklist) ? job.execution_checklist.slice(0, 8) : [];
   const checklistRows = checklist.map((item) => {
@@ -5967,14 +5985,66 @@ function renderAiJobDetails(job) {
     const agent = skill.agent || "";
     return `<li><span>${escapeHtml(title)}</span>${agent ? `<em>${escapeHtml(agent)}</em>` : ""}</li>`;
   }).join("");
+  const artifacts = Array.isArray(job.agent_artifacts) ? job.agent_artifacts.slice(-8) : [];
+  const artifactRows = artifacts.map(renderAiAgentArtifact).join("");
   return `
     <div class="ai-job-detail">
       ${currentStage}
       ${traceRows ? `<section><h4>${escapeHtml(t("aiJobTrace"))}</h4><ol class="ai-job-trace">${traceRows}</ol></section>` : ""}
+      ${artifactRows ? `<section><h4>${escapeHtml(t("aiJobArtifacts"))}</h4><ol class="ai-job-artifacts">${artifactRows}</ol></section>` : ""}
       ${checklistRows ? `<section><h4>${escapeHtml(t("aiJobChecklist"))}</h4><ul class="ai-job-checklist">${checklistRows}</ul></section>` : ""}
       ${skillRows ? `<section><h4>${escapeHtml(t("aiJobSkills"))}</h4><ul class="ai-job-checklist">${skillRows}</ul></section>` : ""}
     </div>
   `;
+}
+
+function renderAiAgentArtifact(artifact) {
+  const title = artifact.title || artifact.agent || "";
+  const agent = artifact.agent || "";
+  const summary = artifact.summary || "";
+  const data = artifact.data && typeof artifact.data === "object" ? artifact.data : {};
+  const chips = flattenArtifactData(data).slice(0, 8).map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+  return `
+    <li>
+      <b>${escapeHtml(title)}</b>
+      ${agent ? `<em>${escapeHtml(agent)}</em>` : ""}
+      ${summary ? `<small>${escapeHtml(summary)}</small>` : ""}
+      ${chips ? `<div class="ai-artifact-chips">${chips}</div>` : ""}
+    </li>
+  `;
+}
+
+function flattenArtifactData(data) {
+  const items = [];
+  Object.entries(data || {}).forEach(([key, value]) => {
+    if (value === "" || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      const text = value.map((item) => {
+        if (item && typeof item === "object") return item.title || item.name || item.id || item.code || "";
+        return String(item || "");
+      }).filter(Boolean).slice(0, 3).join(", ");
+      if (text) items.push(`${key}: ${text}`);
+      return;
+    }
+    if (value && typeof value === "object") {
+      const text = Object.entries(value).slice(0, 3).map(([childKey, childValue]) => `${childKey}=${childValue}`).join(", ");
+      if (text) items.push(`${key}: ${text}`);
+      return;
+    }
+    items.push(`${key}: ${value}`);
+  });
+  return items;
+}
+
+function formatAiStageMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object") return "";
+  if (metadata.output_chars) return `${metadata.output_chars} chars`;
+  if (metadata.section_count) return `${metadata.section_count} sections`;
+  if (metadata.score) return `score ${metadata.score}`;
+  if (metadata.risk_level) return String(metadata.risk_level);
+  if (metadata.retry_count) return `retry ${metadata.retry_count}`;
+  if (metadata.error_type) return String(metadata.error_type);
+  return "";
 }
 
 async function cancelAiJob(jobId) {
@@ -6673,7 +6743,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.3-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.4-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
@@ -6880,15 +6950,14 @@ elements.testProvider.addEventListener("click", testProviderConfig);
 elements.aiRunRefresh?.addEventListener("click", loadAiRuns);
 elements.aiConversationRefresh?.addEventListener("click", loadAiConversationManagement);
 elements.newItemForm.addEventListener("submit", submitNewItem);
-elements.inputType.addEventListener("change", () => {
-  updateNewFileMode();
-});
 elements.newGenerationToggle?.addEventListener("click", toggleNewGenerationOptions);
 elements.newItemInput.addEventListener("input", resizeNewItemInput);
 elements.newPromptResize?.addEventListener("pointerdown", startNewPromptResize);
 elements.newPromptResize?.addEventListener("mousedown", startNewPromptResize);
 elements.newFileTrigger?.addEventListener("click", openMaterialGeneratePicker);
 elements.newFileRemove?.addEventListener("click", () => setPendingMaterialFile(null));
+elements.newReferenceTrigger?.addEventListener("click", openMaterialReferencePicker);
+elements.newReferenceRemove?.addEventListener("click", () => setPendingReferenceFile(null));
 elements.readerClose.addEventListener("click", closeReader);
 elements.readerEdit.addEventListener("click", () => {
   if (state.currentReaderItemId) openMetadataEditor(state.currentReaderItemId);
@@ -6984,6 +7053,7 @@ elements.importEntries.forEach((button) => {
 });
 elements.htmlImportFile.addEventListener("change", (event) => importHtmlFile(event.target.files?.[0]));
 elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFile(event.target.files?.[0]));
+elements.materialReferenceFile?.addEventListener("change", (event) => setPendingReferenceFile(event.target.files?.[0]));
 window.addEventListener("hashchange", openFromHash);
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (state.themeMode === "system") applyTheme();

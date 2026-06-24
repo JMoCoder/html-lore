@@ -15,12 +15,25 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.3</span></aside>
+<aside class="stat"><span class="badge">1.0.4</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
 <p>Languages: <a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.0.4] - 2026-06-24</h2>
+<h3>Added</h3>
+<ul>
+<li>text-only prompt、任意の material file、任意の reference style file に対応する AI generation v2 の baseline を追加しました。</li>
+<li>local task detail で各 agent の出力を確認できるよう、generation agent artifacts と stage trace metadata を追加しました。raw upload、full prompt、reference content、generated HTML body は保存しません。</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>Workspace の "Create with AI" を natural-language first にし、file upload と reference style upload は optional control として扱うようにしました。</li>
+<li>generation v2 finalizer は runtime assembly のみを担当し、HTML coder output を最後の model pass で書き換えないようにしました。</li>
+<li>generation v2 の schema tolerance、provider transient retry、task log の privacy redaction を改善しました。</li>
+<li>パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを <code>1.0.4</code> に更新しました。</li>
+</ul>
 <h2>[1.0.3] - 2026-06-22</h2>
 <h3>Fixed</h3>
 <ul>

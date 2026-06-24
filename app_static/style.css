@@ -1947,6 +1947,7 @@ textarea {
 }
 
 .ai-job-trace,
+.ai-job-artifacts,
 .ai-job-checklist {
   display: grid;
   gap: 5px;
@@ -1956,12 +1957,14 @@ textarea {
 }
 
 .ai-job-trace li,
+.ai-job-artifacts li,
 .ai-job-checklist li {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .ai-job-trace b,
+.ai-job-artifacts b,
 .ai-job-checklist span {
   font-weight: 700;
 }
@@ -1969,6 +1972,8 @@ textarea {
 .ai-job-trace span,
 .ai-job-trace em,
 .ai-job-trace small,
+.ai-job-artifacts em,
+.ai-job-artifacts small,
 .ai-job-checklist em {
   margin-left: 5px;
   color: var(--muted);
@@ -1976,10 +1981,30 @@ textarea {
   font-style: normal;
 }
 
-.ai-job-trace small {
+.ai-job-trace small,
+.ai-job-artifacts small {
   display: block;
   margin: 2px 0 0;
   line-height: 1.35;
+}
+
+.ai-artifact-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.ai-artifact-chips span {
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 @keyframes ai-job-pulse {
@@ -2099,7 +2124,7 @@ textarea {
 
 .new-form {
   display: grid;
-  grid-template-columns: 42px 150px minmax(0, 1fr) 112px;
+  grid-template-columns: 42px minmax(0, 1fr) 42px 112px;
   gap: 10px;
   align-items: start;
 }
@@ -2130,7 +2155,7 @@ textarea {
   max-height: 220px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px 48px 10px 12px;
+  padding: 10px 12px;
   background: var(--panel);
   color: var(--text);
   line-height: 1.45;
@@ -2152,7 +2177,7 @@ textarea {
 
 .new-prompt-resize {
   position: absolute;
-  right: 42px;
+  right: 0;
   bottom: -4px;
   left: 0;
   z-index: 2;
@@ -2193,26 +2218,23 @@ textarea {
 }
 
 .new-upload-button {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  z-index: 3;
-  width: 32px;
-  height: 32px;
-  min-height: 32px;
-  border: 0;
-  border-radius: 7px;
-  background: var(--panel);
-  box-shadow: -5px -5px 10px var(--panel);
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  color: var(--accent);
 }
 
 .new-upload-button .button-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .new-upload-button:hover,
-.new-upload-button.has-file,
+.new-upload-button.has-file {
+  border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
 .new-generation-toggle:hover,
 .new-generation-toggle[aria-expanded="true"] {
   border-color: var(--line);
@@ -2230,7 +2252,7 @@ textarea {
 }
 
 .new-file-row {
-  grid-column: 3 / -1;
+  grid-column: 2 / -1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2271,7 +2293,7 @@ textarea {
 }
 
 .new-generation-drawer.is-open {
-  max-height: 180px;
+  max-height: 260px;
   opacity: 1;
   transform: translateY(0);
 }
@@ -2305,6 +2327,50 @@ textarea {
   color: var(--text);
 }
 
+.new-reference-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.new-reference-button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.new-reference-button:hover,
+.new-reference-button.has-file {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
+}
+
+.new-reference-hint,
+.new-reference-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-reference-name {
+  color: var(--text);
+}
+
+.new-reference-name[hidden],
+.new-reference-row .new-file-remove[hidden] {
+  display: none;
+}
+
 .new-form button[type="submit"],
 .card-footer button,
 .card-footer a,
@@ -2330,7 +2396,7 @@ textarea {
 
 @container (max-width: 760px) {
   .new-form {
-    grid-template-columns: 42px minmax(120px, 1fr) 112px;
+    grid-template-columns: 42px minmax(0, 1fr) 42px 112px;
   }
 
   .new-prompt-box {
@@ -2353,7 +2419,7 @@ textarea {
 
 @container (max-width: 520px) {
   .new-form {
-    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
   }
 
   .new-form button[type="submit"] {

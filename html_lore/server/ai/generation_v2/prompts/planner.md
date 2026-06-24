@@ -29,3 +29,7 @@ Output:
 - Return one JSON object matching PlanDraft.
 - Checklist items should be concrete and owned by downstream agents.
 - Verification targets should be observable in the final result.
+- Keep `section_plan` to 4-7 sections unless the user explicitly asks for a long document.
+- Keep checklist to 5-8 items and use these downstream owner names when applicable: RequirementAnalyst, ContentWriter, StyleDesigner, HTMLCoder, Verifier, SafetyReviewer.
+- Use valid enum values for checklist status, preferably `pending` for downstream work and `completed` only for work already finished.
+- Keep each string field concise; the ContentWriter will write full prose later.

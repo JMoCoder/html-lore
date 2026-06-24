@@ -16,3 +16,8 @@ class FakeGenerationModelClient:
             return "{invalid json"
         public_payload = {key: value for key, value in payload.items() if not str(key).startswith("_")}
         return json.dumps(public_payload, ensure_ascii=False)
+
+    def complete_text(self, *, node: str, payload: dict[str, Any], attempt: int = 0) -> str:
+        public_payload = {key: value for key, value in payload.items() if not str(key).startswith("_")}
+        html = str(public_payload.get("html") or "")
+        return html or "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><title>Generated HTML Note</title></head><body></body></html>"

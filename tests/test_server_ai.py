@@ -3649,10 +3649,107 @@ def test_ai_material_job_v2_completes_with_stage_trace(tmp_path: Path) -> None:
         assert job["current_stage"] == "completed"
         assert any(event["agent"] == "Verifier" for event in fetched["stage_trace"])
         assert any(entry["agent"] == "HTMLCoder" for entry in fetched["skill_trace"])
+        assert any(entry["agent"] == "Planner" and entry["data"].get("section_plan") for entry in fetched["agent_artifacts"])
+        html_artifact = next(entry for entry in fetched["agent_artifacts"] if entry["agent"] == "HTMLCoder")
+        assert html_artifact["data"]["html_chars"] > 0
+        assert "html" not in html_artifact["data"]
         assert jobs["jobs"][0]["generation_engine"] == "v2"
+        assert any(entry["agent"] == "ContentWriter" for entry in jobs["jobs"][0]["agent_artifacts"])
         assert (content_dir / job["item_id"]).exists()
         assert "Very private v2 source body" not in json.dumps(jobs, ensure_ascii=False)
         assert "Very private v2 source body" not in raw_jobs
+    finally:
+        server.close()
+
+
+def test_ai_material_job_v2_accepts_reference_style_file(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-generation-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        ai_generation_model="fake-generation-model",
+        document_parser="basic",
+    )
+    try:
+        queued = server.multipart(
+            "/api/ai/material-jobs",
+            fields={
+                "instruction": "Create a concise knowledge note.",
+                "theme": "default",
+                "target_use": "default",
+                "style_preference": "default",
+                "reference_style": "file",
+            },
+            file_field="file",
+            filename="private-material.md",
+            content=b"# Material Topic\n\nVery private v2 source body.",
+            content_type="text/markdown",
+            extra_files=[
+                {
+                    "field": "reference_file",
+                    "filename": "style-reference.html",
+                    "content": b"<style>body{color:#123456;font-family:Inter, sans-serif}.cards{display:grid}</style><h1>Reference</h1>",
+                    "content_type": "text/html",
+                },
+            ],
+        )
+
+        job = wait_for_ai_job(server, queued["job_id"])
+        run = server.request("GET", f"/api/ai/runs/{job['run_id']}")["run"]
+        raw_jobs = (meta_dir / "ai" / "jobs.json").read_text(encoding="utf-8")
+
+        assert job["status"] == "completed"
+        assert job["generation_engine"] == "v2"
+        assert run["spec"]["reference_style"] == "file"
+        assert run["spec"]["reference_file_name"] == "style-reference.html"
+        assert run["material"]["reference_file_name"] == "style-reference.html"
+        assert any(entry["agent"] == "StyleDesigner" and entry["id"] == "html_page_design" for entry in run["skill_trace"])
+        assert "Very private v2 source body" not in raw_jobs
+        assert "#123456" not in raw_jobs
+    finally:
+        server.close()
+
+
+def test_ai_material_job_v2_accepts_text_prompt_without_file(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-generation-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        ai_generation_model="fake-generation-model",
+        document_parser="basic",
+    )
+    try:
+        queued = server.multipart(
+            "/api/ai/material-jobs",
+            fields={
+                "instruction": "Create a public HTML page about private prompt topic alpha.",
+                "theme": "default",
+                "target_use": "website",
+                "style_preference": "business",
+            },
+        )
+
+        job = wait_for_ai_job(server, queued["job_id"])
+        run = server.request("GET", f"/api/ai/runs/{job['run_id']}")["run"]
+        raw_jobs = (meta_dir / "ai" / "jobs.json").read_text(encoding="utf-8")
+
+        assert job["status"] == "completed"
+        assert job["generation_engine"] == "v2"
+        assert job["item_id"].startswith("generated/")
+        assert run["spec"]["filename"] == "prompt.txt"
+        assert run["spec"]["target_use"] == "website"
+        assert run["spec"]["style_preference"] == "business"
+        assert "private prompt topic alpha" not in raw_jobs
     finally:
         server.close()
 

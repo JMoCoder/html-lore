@@ -28,3 +28,7 @@ Output:
 - Return one JSON object matching ContentDraft.
 - Use the user's language when practical.
 - Make content complete enough that HTMLCoder can render it without rewriting the argument.
+- Write 4-8 sections unless the plan explicitly requires a different length.
+- Keep each section body focused and readable; use bullets for scannable details instead of very long paragraphs.
+- Use [] for empty callouts, tables, quotes, references, or omitted items.
+- Do not include Markdown fences, HTML tags, or CSS.

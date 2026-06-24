@@ -210,8 +210,28 @@ class ApiServer:
         with self.opener.open(request, timeout=5) as response:
             return response.read().decode("utf-8")
 
-    def multipart(self, path: str, *, fields: dict[str, str], file_field: str, filename: str, content: bytes, content_type: str) -> Any:
-        return json.loads(self.multipart_text(path, fields=fields, file_field=file_field, filename=filename, content=content, content_type=content_type))
+    def multipart(
+        self,
+        path: str,
+        *,
+        fields: dict[str, str],
+        file_field: str = "",
+        filename: str = "",
+        content: bytes = b"",
+        content_type: str = "",
+        extra_files: list[dict[str, Any]] | None = None,
+    ) -> Any:
+        return json.loads(
+            self.multipart_text(
+                path,
+                fields=fields,
+                file_field=file_field,
+                filename=filename,
+                content=content,
+                content_type=content_type,
+                extra_files=extra_files,
+            ),
+        )
 
     def multipart_error(self, path: str, *, fields: dict[str, str], file_field: str, filename: str, content: bytes, content_type: str) -> tuple[int, Any]:
         try:
@@ -220,7 +240,17 @@ class ApiServer:
             return exc.code, json.loads(exc.read().decode("utf-8"))
         raise AssertionError("Expected HTTP error response.")
 
-    def multipart_text(self, path: str, *, fields: dict[str, str], file_field: str, filename: str, content: bytes, content_type: str) -> str:
+    def multipart_text(
+        self,
+        path: str,
+        *,
+        fields: dict[str, str],
+        file_field: str = "",
+        filename: str = "",
+        content: bytes = b"",
+        content_type: str = "",
+        extra_files: list[dict[str, Any]] | None = None,
+    ) -> str:
         boundary = "----html-lore-test-boundary"
         chunks: list[bytes] = []
         for name, value in fields.items():
@@ -232,16 +262,28 @@ class ApiServer:
                     b"\r\n",
                 ],
             )
-        chunks.extend(
-            [
-                f"--{boundary}\r\n".encode("utf-8"),
-                f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'.encode("utf-8"),
-                f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
-                content,
-                b"\r\n",
-                f"--{boundary}--\r\n".encode("utf-8"),
-            ],
-        )
+        files = []
+        if file_field:
+            files.append(
+                {
+                    "field": file_field,
+                    "filename": filename,
+                    "content": content,
+                    "content_type": content_type,
+                },
+            )
+        files.extend(extra_files or [])
+        for file in files:
+            chunks.extend(
+                [
+                    f"--{boundary}\r\n".encode("utf-8"),
+                    f'Content-Disposition: form-data; name="{file["field"]}"; filename="{file["filename"]}"\r\n'.encode("utf-8"),
+                    f"Content-Type: {file['content_type']}\r\n\r\n".encode("utf-8"),
+                    file["content"],
+                    b"\r\n",
+                ],
+            )
+        chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
         body = b"".join(chunks)
         return self.request_text(
             "POST",

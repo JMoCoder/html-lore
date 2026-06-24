@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from html_lore.server.ai.generation_v2.agents.html_coder import HTMLCoderAgent
 from html_lore.server.ai.generation_v2.graph import HtmlGenerationV2Graph
 from html_lore.server.ai.generation_v2.fake_model import FakeGenerationModelClient
 from html_lore.server.ai.generation_v2.material_runner import generate_note_from_material_v2
-from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, extract_json_object, public_generation_state_for_agent
+from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
+from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
 from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, NoteMetadataProposal, ParsedDocument, StageTraceEvent
 from html_lore.server.ai.generation_v2.skills.loader import load_default_skills_for_agent
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
@@ -33,6 +35,7 @@ def test_generation_v2_state_serializes_enums() -> None:
     assert data["job_id"] == "job-1"
     assert data["stage_trace"][0]["stage"] == "parsing"
     assert data["stage_trace"][0]["status"] == "completed"
+    assert data["stage_trace"][0]["duration_ms"] >= 0
     assert data["completed_steps"] == ["parsing"]
 
 
@@ -71,7 +74,27 @@ def test_generation_v2_graph_runs_fake_agent_flow() -> None:
     assert result.create_note_proposal is not None
     assert result.create_note_proposal.target_collection == "inbox"
     assert "<!doctype html>" in result.create_note_proposal.html
+    assert result.create_note_proposal.html == result.html_draft.html
     assert "finalizing" in result.completed_steps
+    assert [artifact.agent for artifact in result.agent_artifacts] == [
+        "RequirementAnalyst",
+        "Planner",
+        "ContentWriter",
+        "StyleDesigner",
+        "HTMLCoder",
+        "Verifier",
+        "SafetyReviewer",
+        "Finalizer",
+    ]
+    html_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "HTMLCoder")
+    assert html_artifact.data["html_chars"] == len(result.html_draft.html)
+    assert "html" not in html_artifact.data
+    planner_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "Planner")
+    assert planner_artifact.data["section_plan"]
+    html_trace = next(event for event in result.stage_trace if event.agent == "HTMLCoder" and event.status == "completed")
+    assert html_trace.duration_ms >= 0
+    assert html_trace.metadata["output_kind"] == "html"
+    assert html_trace.metadata["output_chars"] == len(result.html_draft.html)
     checklist_status = {item.owner: item.status for item in result.execution_checklist}
     assert checklist_status["ContentWriter"] == ChecklistStatus.COMPLETED
     assert checklist_status["StyleDesigner"] == ChecklistStatus.COMPLETED
@@ -144,6 +167,10 @@ def test_generation_v2_agent_schema_failure_retries_same_node() -> None:
     assert not result.failed_steps
     assert result.plan_draft is not None
     assert result.same_node_retries["Planner"] == 1
+    retry_events = [event for event in result.stage_trace if event.agent == "Planner" and event.status == "retrying"]
+    assert len(retry_events) == 1
+    assert retry_events[0].duration_ms >= 0
+    assert retry_events[0].metadata["error_type"] == "AgentOutputSchemaError"
 
 
 def test_generation_v2_agent_schema_failure_stops_after_retry_limit() -> None:
@@ -219,6 +246,25 @@ def test_generation_v2_provider_model_client_extracts_json_and_includes_schema()
     assert "RequirementBrief" in chat_client.messages[-1]["content"]
 
 
+def test_generation_v2_provider_model_client_returns_raw_html_text() -> None:
+    html = "<!doctype html><html><head><title>Done</title></head><body><main>Done</main></body></html>"
+    chat_client = RecordingChatClient(f"```html\n{html}\n```")
+    client = ProviderGenerationModelClient(chat_client, max_prompt_chars=4000, max_tokens=512)
+
+    raw = client.complete_text(
+        node="HTMLCoder",
+        payload={
+            "_prompt": "Code HTML.",
+            "_state": {"content_draft": {"title": "Done"}},
+            "_skills": [],
+        },
+    )
+
+    assert raw == html
+    assert "Do not return JSON" in chat_client.messages[-1]["content"]
+    assert "final complete HTML document only" in chat_client.messages[-1]["content"]
+
+
 def test_generation_v2_verifier_state_keeps_html_visible_in_compact_view() -> None:
     html = "<!doctype html><html><body><main>" + ("<p>Generated paragraph.</p>" * 600) + "</main></body></html>"
     state = GenerationState(
@@ -239,6 +285,81 @@ def test_generation_v2_verifier_state_keeps_html_visible_in_compact_view() -> No
 
 def test_generation_v2_extract_json_object_from_plain_text() -> None:
     assert extract_json_object("Here is JSON:\n{\"ok\":true}\nDone.") == '{"ok":true}'
+
+
+def test_generation_v2_extract_html_document_from_plain_text_and_fence() -> None:
+    html = "<!doctype html><html><head><title>Done</title></head><body><main>Done</main></body></html>"
+
+    assert extract_html_document(f"Here is HTML:\n```html\n{html}\n```\nDone.") == html
+    assert extract_html_document(f"prefix\n{html}\nsuffix") == html
+
+
+def test_generation_v2_schema_loader_accepts_normalized_enum_values() -> None:
+    item = dataclass_from_dict({"id": "verify", "title": "Verify", "owner": "Verifier", "status": "DONE"}, ChecklistItem)
+
+    assert item.status == ChecklistStatus.DONE
+
+
+def test_generation_v2_schema_loader_treats_null_collections_as_defaults() -> None:
+    draft = dataclass_from_dict(
+        {
+            "title": "Draft",
+            "sections": None,
+            "key_points": None,
+            "callouts": None,
+            "tables": None,
+            "quotes": None,
+        },
+        ContentDraft,
+    )
+
+    assert draft.sections == []
+    assert draft.key_points == []
+    assert draft.callouts == []
+    assert draft.tables == []
+    assert draft.quotes == []
+
+
+def test_generation_v2_retry_output_rules_are_only_added_after_first_attempt() -> None:
+    assert retry_output_rules(0) == []
+    assert any("retry" in rule.lower() for rule in retry_output_rules(1))
+
+
+def test_generation_v2_html_coder_accepts_raw_complete_html() -> None:
+    html = "<!doctype html><html><head><title>Generated</title></head><body><main>Generated</main></body></html>"
+    state = GenerationState(
+        input=GenerationInput(instruction="Create HTML."),
+        content_draft=ContentDraft(title="Generated", summary="Summary", sections=[ContentSection(id="a", title="A", body="Body")]),
+    )
+
+    output = HTMLCoderAgent(model_client=FakeGenerationModelClient()).invoke_structured(state)
+
+    assert isinstance(output, HtmlDraft)
+    assert output.html.startswith("<!doctype html>")
+    assert "</html>" in output.html
+
+    class RawHtmlClient(FakeGenerationModelClient):
+        def complete_text(self, *, node: str, payload: dict, attempt: int = 0) -> str:
+            return html
+
+    output = HTMLCoderAgent(model_client=RawHtmlClient()).invoke_structured(state)
+
+    assert output.html == html
+
+
+def test_generation_v2_html_coder_rejects_incomplete_html() -> None:
+    state = GenerationState(input=GenerationInput(instruction="Create HTML."))
+
+    class BadHtmlClient(FakeGenerationModelClient):
+        def complete_text(self, *, node: str, payload: dict, attempt: int = 0) -> str:
+            return "<main>Missing document wrapper</main>"
+
+    try:
+        HTMLCoderAgent(model_client=BadHtmlClient()).invoke_structured(state)
+    except AgentOutputSchemaError as exc:
+        assert "complete HTML document" in str(exc)
+    else:
+        raise AssertionError("AgentOutputSchemaError was expected.")
 
 
 def test_generation_model_profile_defaults_to_quality_model(tmp_path) -> None:
@@ -373,6 +494,39 @@ def test_document_parser_uses_markitdown_for_excel(monkeypatch) -> None:
     assert any(warning.code == "markitdown_used" for warning in parsed.warnings)
 
 
+def test_document_parser_phase_one_file_type_matrix(monkeypatch) -> None:
+    class MatrixMarkItDown:
+        def convert(self, path: str) -> object:
+            return type("Result", (), {"text_content": f"Converted {Path(path).suffix.lower()} material"})()
+
+    monkeypatch.setattr(document_parser, "MarkItDown", MatrixMarkItDown)
+
+    cases = [
+        ("brief.md", b"# Brief\n\nMarkdown body.", "text/markdown", "basic", "# Brief Markdown body.", ""),
+        ("page.html", b"<h1>HTML Brief</h1><p>Body.</p>", "text/html", "basic", "HTML Brief Body.", ""),
+        ("notes.txt", b"Plain source body.", "text/plain", "basic", "Plain source body.", ""),
+        ("report.pdf", b"%PDF fake", "application/pdf", "markitdown", "Converted .pdf material", "markitdown_used"),
+        ("proposal.docx", b"docx bytes", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "markitdown", "Converted .docx material", "markitdown_used"),
+        ("legacy.doc", b"doc bytes", "application/msword", "markitdown", "Converted .doc material", "markitdown_used"),
+        ("deck.pptx", b"pptx bytes", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "markitdown", "Converted .pptx material", "markitdown_used"),
+        ("legacy.ppt", b"ppt bytes", "application/vnd.ms-powerpoint", "markitdown", "Converted .ppt material", "markitdown_used"),
+        ("budget.xlsx", b"xlsx bytes", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "markitdown", "Converted .xlsx material", "markitdown_used"),
+        ("budget.xls", b"xls bytes", "application/vnd.ms-excel", "markitdown", "Converted .xls material", "markitdown_used"),
+        ("reference.jpg", b"jpg bytes", "image/jpeg", "markitdown", "Converted .jpg material", "markitdown_used"),
+        ("reference.png", b"png bytes", "image/png", "markitdown", "Converted .png material", "markitdown_used"),
+    ]
+
+    for filename, content, content_type, expected_parser, expected_text, expected_warning in cases:
+        parsed = parse_document(filename=filename, content=content, content_type=content_type)
+
+        assert expected_text in parsed.plain_text
+        assert parsed.source_files[0].filename == filename
+        if expected_parser == "basic":
+            assert not any(warning.code.startswith("markitdown") for warning in parsed.warnings), filename
+        else:
+            assert any(warning.code == expected_warning for warning in parsed.warnings), filename
+
+
 def test_document_parser_uses_markitdown_for_local_image(monkeypatch) -> None:
     class ImageMarkItDown:
         def convert(self, _path: str) -> object:
@@ -449,6 +603,20 @@ def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
         job_id,
         [ChecklistItem(id="draft-content", title="Draft content", owner="Content Writer", status=ChecklistStatus.PENDING)],
     )
+    store.jobs.update(
+        job_id,
+        {
+            "agent_artifacts": [
+                {
+                    "agent": "HTMLCoder",
+                    "stage": "coding_html",
+                    "title": "HTML draft",
+                    "summary": "100 chars",
+                    "data": {"html_chars": 100, "html": "<!doctype html><html>secret</html>"},
+                }
+            ]
+        },
+    )
 
     public_job = AIJobStore(settings).get(job_id)
 
@@ -456,7 +624,12 @@ def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
     assert public_job["status"] == "running"
     assert public_job["current_stage"] == "parsing"
     assert public_job["stage_trace"][0]["agent"] == "Ingest"
+    assert "duration_ms" in public_job["stage_trace"][0]
+    assert "metadata" in public_job["stage_trace"][0]
     assert public_job["execution_checklist"][0]["id"] == "draft-content"
+    assert public_job["agent_artifacts"][0]["agent"] == "HTMLCoder"
+    assert public_job["agent_artifacts"][0]["data"]["html_chars"] == 100
+    assert "html" not in public_job["agent_artifacts"][0]["data"]
 
 
 def test_generation_store_saves_v2_run_fields(tmp_path) -> None:
@@ -477,6 +650,15 @@ def test_generation_store_saves_v2_run_fields(tmp_path) -> None:
             "current_stage": "completed",
             "stage_trace": [{"stage": "completed", "agent": "Write Gateway", "status": "completed"}],
             "execution_checklist": [{"id": "verify", "title": "Verify", "owner": "Verifier", "status": "done"}],
+            "agent_artifacts": [
+                {
+                    "agent": "ContentWriter",
+                    "stage": "writing_content",
+                    "title": "Draft",
+                    "summary": "Safe summary",
+                    "data": {"summary": "Safe summary", "content": "private raw content"},
+                }
+            ],
         },
     )
     fetched = AIRunStore(settings).get("run-1")
@@ -485,6 +667,8 @@ def test_generation_store_saves_v2_run_fields(tmp_path) -> None:
     assert fetched["generation_engine"] == "v2"
     assert fetched["stage_trace"][0]["stage"] == "completed"
     assert fetched["execution_checklist"][0]["status"] == "completed"
+    assert fetched["agent_artifacts"][0]["agent"] == "ContentWriter"
+    assert "content" not in fetched["agent_artifacts"][0]["data"]
 
 
 def test_write_gateway_writes_generated_note_and_rebuilds(tmp_path) -> None:
@@ -642,6 +826,9 @@ def test_material_generation_v2_provider_failure_returns_sanitized_failed_run(tm
 
     class FailingGenerationModel:
         def complete_json(self, *, node, schema_name, payload, attempt=0):
+            raise RuntimeError("provider unavailable")
+
+        def complete_text(self, *, node, payload, attempt=0):
             raise RuntimeError("provider unavailable")
 
     try:

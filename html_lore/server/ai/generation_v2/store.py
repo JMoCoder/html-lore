@@ -32,6 +32,7 @@ class GenerationStore:
                 "current_stage": current_stage.value,
                 "stage_trace": [],
                 "execution_checklist": [],
+                "agent_artifacts": [],
             },
         )
 
@@ -78,6 +79,7 @@ class GenerationStore:
             "current_stage": state.current_step,
             "stage_trace": normalize_for_json([asdict(event) for event in state.stage_trace]),
             "skill_trace": normalize_for_json([asdict(event) for event in state.skill_trace]),
+            "agent_artifacts": normalize_for_json([asdict(event) for event in state.agent_artifacts]),
             "execution_checklist": public_execution_checklist(state.execution_checklist),
         }
 

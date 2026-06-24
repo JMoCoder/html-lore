@@ -239,6 +239,9 @@ def sanitize_ai_job(job: dict[str, Any], *, include_private: bool = False) -> di
     skill_trace = sanitize_skill_trace(job.get("skill_trace"))
     if skill_trace:
         sanitized["skill_trace"] = skill_trace
+    agent_artifacts = sanitize_agent_artifacts(job.get("agent_artifacts"))
+    if agent_artifacts:
+        sanitized["agent_artifacts"] = agent_artifacts
     if include_private:
         sanitized["payload"] = sanitize_private_payload(payload)
     return sanitized
@@ -248,7 +251,7 @@ def ai_job_updates_from_run(run: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(run, dict):
         return {}
     updates: dict[str, Any] = {}
-    for key in ("generation_engine", "current_stage", "stage_trace", "execution_checklist", "skill_trace"):
+    for key in ("generation_engine", "current_stage", "stage_trace", "execution_checklist", "skill_trace", "agent_artifacts"):
         if key in run:
             updates[key] = run[key]
     return updates
@@ -326,11 +329,73 @@ def sanitize_stage_trace(value: Any) -> list[dict[str, Any]]:
                 "status": status,
                 "started_at": str(raw.get("started_at") or "")[:80],
                 "completed_at": str(raw.get("completed_at") or "")[:80],
+                "duration_ms": sanitize_int(raw.get("duration_ms")),
                 "message": str(raw.get("message") or "")[:240],
                 "error_summary": str(raw.get("error_summary") or "")[:240],
                 "retryable": bool(raw.get("retryable")),
+                "metadata": sanitize_stage_metadata(raw.get("metadata")),
             },
         )
+    return result
+
+
+def sanitize_agent_artifacts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for raw in value[-40:]:
+        if not isinstance(raw, dict):
+            continue
+        agent = str(raw.get("agent") or "")[:120]
+        title = str(raw.get("title") or "")[:160]
+        if not agent and not title:
+            continue
+        result.append(
+            {
+                "agent": agent,
+                "stage": sanitize_generation_stage(raw.get("stage")),
+                "title": title,
+                "summary": str(raw.get("summary") or "")[:360],
+                "data": sanitize_artifact_data(raw.get("data")),
+            }
+        )
+    return result
+
+
+def sanitize_artifact_data(value: Any, *, depth: int = 0) -> Any:
+    if depth > 3:
+        return ""
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        for key, raw in list(value.items())[:40]:
+            clean_key = str(key)[:80]
+            if clean_key.lower() in {"html", "content", "reference_content", "prompt", "raw", "raw_output"}:
+                continue
+            result[clean_key] = sanitize_artifact_data(raw, depth=depth + 1)
+        return result
+    if isinstance(value, list):
+        return [sanitize_artifact_data(item, depth=depth + 1) for item in value[:20]]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if value is None:
+        return ""
+    return str(value)[:360]
+
+
+def sanitize_stage_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("output_kind", "output_chars", "section_count", "score", "risk_level", "retry_count", "error_type"):
+        raw = value.get(key)
+        if isinstance(raw, bool):
+            result[key] = raw
+        elif isinstance(raw, (int, float)):
+            result[key] = raw
+        elif isinstance(raw, str):
+            result[key] = raw[:80]
     return result
 
 
