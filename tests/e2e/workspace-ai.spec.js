@@ -330,47 +330,37 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   expect(materialRequest.postData).toContain("name=\"reference_file\"");
   expect(materialRequest.postData).toContain("style-reference.pdf");
   expect(materialRequest.postData).toContain("name=\"reference_file_name\"");
-  await page.locator("#ai-panel-open").click();
-  await page.locator("#ai-more-toggle").click();
   await page.locator("#ai-job-toggle").click();
   await expect(page.locator("#ai-job-list")).toContainText("Generation history");
   await expect(page.locator("#ai-job-list")).toContainText("Failed note");
   await expect(page.locator("#ai-job-list")).toContainText("material.md");
-  await page.locator(".ai-job-row", { hasText: "material.md" }).click();
-  await expect(page.locator("#ai-job-list")).toContainText("Process");
-  await expect(page.locator("#ai-job-list")).toContainText("Agent outputs");
-  await expect(page.locator("#ai-job-list")).toContainText("HTML draft");
-  await expect(page.locator("#ai-job-list")).toContainText("html_chars: 2048");
-  await expect(page.locator("#ai-job-list")).toContainText("StyleDesigner");
-  await expect(page.locator("#ai-job-list")).toContainText("HTML page design");
+  await expect(page.locator("#ai-job-list")).not.toContainText("Process");
+  await expect(page.locator("#ai-job-list")).not.toContainText("Agent outputs");
+  await expect(page.locator("#ai-job-list")).not.toContainText("HTML draft");
+  await expect(page.locator("#ai-job-list")).not.toContainText("completed");
   await expect(page.locator("#ai-chat-log")).not.toContainText("AI job completed");
   await expect(page.locator("#ai-job-list").getByRole("button", { name: "Retry" })).toBeVisible();
   await page.locator("#ai-job-list").getByRole("button", { name: "Retry" }).click();
   await expect(page.locator("#ai-chat-log")).toContainText("Retrying AI job");
-
-  await page.locator("#settings-open").click();
-  await page.locator("[data-settings-tab='ai']").click();
+  await page.locator("#ai-job-list .ai-job-row", { hasText: "material.md" }).getByRole("button", { name: "Details" }).click();
+  await expect(page.locator("[data-settings-tab='ai-generation-history']")).toHaveClass(/active/);
+  await expect(page.locator("[data-settings-section='ai-generation-history']")).toHaveClass(/active/);
+  await expect(page.locator("[data-settings-section='ai-generation-history']")).toContainText("AI generation history");
+  await expect(page.locator("#ai-generation-list")).toContainText("material.md");
+  await expect(page.locator("#ai-generation-list")).toContainText("Failed note");
+  await page.locator("#ai-generation-list .ai-generation-row", { hasText: "material.md" }).getByRole("button", { name: "Details" }).click();
+  await expect(page.locator("#ai-generation-detail")).toBeVisible();
+  await expect(page.locator("#ai-generation-detail")).toContainText("LangGraph workflow");
+  await expect(page.locator("#ai-generation-detail")).toContainText("StyleDesigner");
+  await page.locator("#ai-generation-detail-close").click();
+  await expect(page.locator("#ai-generation-detail")).toBeHidden();
+  await page.locator("[data-settings-tab='ai-runs']").click();
   await expect(page.locator("#ai-run-list")).toContainText("Generated from uploaded material");
   await expect(page.locator("#ai-run-list")).toContainText("Completed");
   await expect(page.locator("#ai-run-list")).toContainText("1.3s");
-  await expect(page.locator("#ai-run-list")).toContainText("Completed:");
+  await expect(page.locator("#ai-run-list")).toContainText("Generated:");
   await expect(page.locator("#ai-run-list")).toContainText("3 steps");
   await expect(page.locator("#ai-run-list")).toContainText("Not cancellable");
-  await expect(page.locator("#ai-run-list")).not.toContainText("Important uploaded source");
-
-  const requestsBeforeRefresh = runsRequested;
-  showRefreshedRun = true;
-  await page.locator("#ai-run-refresh").click();
-  await expect.poll(() => runsRequested).toBeGreaterThan(requestsBeforeRefresh);
-  await expect(page.locator("#ai-run-list")).toContainText("Knowledge Q&A");
-
-  await page.locator("#ai-run-list .ai-run-row", { hasText: "Knowledge Q&A" }).getByRole("button", { name: "Details" }).click();
-  await expect(page.locator("#ai-run-list")).toContainText("Spec");
-  await expect(page.locator("#ai-run-list")).toContainText("source_mode");
-  await expect(page.locator("#ai-run-list")).toContainText("Input tokens: 120");
-  await expect(page.locator("#ai-run-list")).toContainText("Budget");
-  await expect(page.locator("#ai-run-list")).toContainText("prompt_chars");
-  await expect(page.locator("#ai-run-list")).toContainText("RetrieverNode");
   await expect(page.locator("#ai-run-list")).not.toContainText("Important uploaded source should stay hidden");
 });
 
@@ -454,17 +444,17 @@ test("workspace material generation failure refreshes AI run history", async ({ 
   await page.locator("#new-item-form button[type='submit']").click();
 
   await expect(page.locator("#new-feedback")).toContainText("Material note generation failed.");
-  await expect.poll(() => runsRequested).toBeGreaterThan(0);
 
   await page.locator("#settings-open").click();
-  await page.locator("[data-settings-tab='ai']").click();
+  await page.locator("[data-settings-tab='ai-generation-history']").click();
+  await expect(page.locator("#ai-generation-list")).toContainText("No generation history yet.");
+  await page.locator("[data-settings-tab='ai-runs']").click();
   await expect(page.locator("#ai-run-list")).toContainText("Generated from uploaded material");
   await expect(page.locator("#ai-run-list")).toContainText("Failed");
-  await expect(page.locator("#ai-run-list")).toContainText("Error:");
+  await expect(page.locator("#ai-run-list")).toContainText("80ms");
   await expect(page.locator("#ai-run-list")).toContainText("Retryable");
   await expect(page.locator("#ai-run-list")).toContainText("Not cancellable");
-  await expect(page.locator("#ai-run-list")).toContainText("80ms");
-  await expect(page.locator("#ai-run-list")).not.toContainText("private uploaded source text");
+  await expect(page.locator("#ai-run-list")).not.toContainText("private source");
 });
 
 test("workspace text-only create mode uses the AI generation endpoint", async ({ page }) => {
@@ -839,6 +829,24 @@ test("workspace AI restores latest context conversation and can start a fresh on
     created_at: "2026-06-07T02:00:00.000Z",
     updated_at: "2026-06-07T02:05:00.000Z",
   };
+  const globalContextKey = 'global:{"collection":"","favorite":null,"include_archived":false,"library":"all","q":"","scope":"global","sort":"newest","tag_match":"any","tags":[]}';
+  const globalConversation = {
+    id: "conversation-global",
+    title: "Workspace Overview",
+    context_key: globalContextKey,
+    context_snapshot: {
+      scope: "global",
+      item_ids: ["notes/mcp.html", "notes/docker.html"],
+      items: [
+        { id: "notes/mcp.html", title: "MCP Security" },
+        { id: "notes/docker.html", title: "Docker Notes" },
+      ],
+      requested: { scope: "global", library: "all" },
+    },
+    message_count: 2,
+    created_at: "2026-06-07T00:30:00.000Z",
+    updated_at: "2026-06-07T00:35:00.000Z",
+  };
   const messagesByConversation = {
     "conversation-old": [
       { role: "user", content: "Summarize this note.", sources: [] },
@@ -852,6 +860,7 @@ test("workspace AI restores latest context conversation and can start a fresh on
   const latestRequests = [];
   const conversationCreates = [];
   const conversationListRequests = [];
+  const deletedConversationIds = new Set();
   let deletedConversationId = "";
 
   await page.route("**/api/auth/status", async (route) => {
@@ -900,7 +909,14 @@ test("workspace AI restores latest context conversation and can start a fresh on
     const url = new URL(route.request().url());
     const contextKey = url.searchParams.get("context_key") || "";
     conversationListRequests.push(contextKey);
-    const conversations = contextKey === oldConversation.context_key ? [oldConversation] : [historyConversation, oldConversation];
+    const conversations = (
+      contextKey === oldConversation.context_key
+        ? [oldConversation]
+        : contextKey === globalContextKey
+          ? [globalConversation]
+          : [historyConversation, oldConversation, globalConversation]
+    )
+      .filter((conversation) => !deletedConversationIds.has(conversation.id));
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({ conversations, count: conversations.length }),
@@ -909,6 +925,7 @@ test("workspace AI restores latest context conversation and can start a fresh on
   await page.route("**/api/ai/conversations/*", async (route) => {
     if (route.request().method() === "DELETE") {
       deletedConversationId = decodeURIComponent(route.request().url().split("/api/ai/conversations/")[1] || "");
+      deletedConversationIds.add(deletedConversationId);
       await route.fulfill({ contentType: "application/json", body: JSON.stringify({ id: deletedConversationId, deleted: true }) });
       return;
     }
@@ -949,16 +966,25 @@ test("workspace AI restores latest context conversation and can start a fresh on
   });
 
   await page.goto("/workspace/", { waitUntil: "domcontentloaded" });
+  await page.locator("#ai-panel-open").click();
+  await page.locator("#ai-history-toggle").click();
+  await expect(page.locator("#ai-history-list")).toContainText("Workspace Overview");
+  await expect(page.locator("#ai-history-list")).not.toContainText("MCP Security");
+  expect(conversationListRequests.at(-1)).toBe(globalContextKey);
+  await page.locator("#ai-history-toggle").click();
+  await page.locator("#ai-panel-close").click();
+
   await page.locator(".item-card", { hasText: "MCP Security" }).getByRole("button", { name: "Read" }).click();
-  await page.locator("#reader-ai-panel-open").click();
+  await page.locator("#ai-panel-open").click();
 
   await expect(page.locator("#ai-chat-log")).toContainText("Summarize this note.");
   await expect(page.locator("#ai-chat-log")).toContainText("MCP security summary.");
   await expect.poll(() => latestRequests.includes(oldConversation.context_key)).toBe(true);
 
-  await page.locator("#ai-more-toggle").click();
   await page.locator("#ai-new-chat").click();
   await expect(page.locator("#ai-chat-log .ai-message")).toHaveCount(0);
+  await expect(page.locator(".ai-conversation-actions #ai-history-toggle")).toBeVisible();
+  await expect.poll(() => conversationListRequests.includes(oldConversation.context_key)).toBe(true);
 
   await page.locator("#reader-close").click();
   await page.locator(".item-card", { hasText: "MCP Security" }).getByRole("button", { name: "Read" }).click();
@@ -970,24 +996,20 @@ test("workspace AI restores latest context conversation and can start a fresh on
   expect(conversationCreates[0]).toMatchObject({ source_mode: "local_only", context: { item_id: "notes/mcp.html" } });
   await expect(page.locator("#ai-chat-log")).toContainText("Fresh answer from new conversation.");
 
-  await page.locator("#ai-more-toggle").click();
   await page.locator("#ai-history-toggle").click();
   await expect(page.locator("#ai-history-list")).toContainText("MCP Security");
-  await expect(page.locator("#ai-history-list")).toContainText("Docker Notes");
-  expect(conversationListRequests.at(-1)).toBe("");
-  await page.locator("#ai-history-list .ai-history-row", { hasText: "Docker Notes" }).click();
-  await expect(page.locator("#ai-chat-log")).toContainText("Show Docker risks.");
-  await expect(page.locator("#ai-chat-log")).toContainText("Docker risk summary.");
-  await page.locator("#ai-more-toggle").click();
-  await expect(page.locator("#ai-history-list")).toBeHidden();
-  await expect(page.locator("#ai-more-menu")).toBeVisible();
-  await page.locator("#ai-more-toggle").click();
-  await expect(page.locator("#ai-more-menu")).toBeHidden();
+  await expect(page.locator("#ai-history-list")).not.toContainText("Docker Notes");
+  expect(conversationListRequests.at(-1)).toBe(oldConversation.context_key);
+  page.once("dialog", async (dialog) => dialog.accept());
+  await page.locator("#ai-history-list .ai-history-row", { hasText: "MCP Security" }).getByRole("button", { name: "Delete" }).click();
+  await expect.poll(() => deletedConversationId).toBe("conversation-old");
+  await expect(page.locator("#ai-history-list")).toBeVisible();
+  await expect(page.locator("#ai-history-list")).toContainText("No conversation history");
 
   await page.locator("#settings-open").click();
   await page.locator("[data-settings-tab='ai-conversations']").click();
   await expect(page.locator("#ai-conversation-list")).toContainText("Docker Notes");
-  await expect(page.locator("#ai-conversation-list")).toContainText("MCP Security");
+  await expect(page.locator("#ai-conversation-list")).not.toContainText("MCP Security");
   await page.locator("#ai-conversation-list .ai-conversation-row", { hasText: "Docker Notes" }).getByRole("button", { name: "Open" }).click();
   await expect(page.locator("#ai-chat-log")).toContainText("Show Docker risks.");
   await expect(page.locator("#ai-chat-log")).toContainText("Docker risk summary.");
@@ -1103,35 +1125,25 @@ test("workspace AI renders markdown hierarchy and aligns the more menu", async (
   expect(markdownState.headings[1]).toMatchObject({ tag: "h4" });
   expect(markdownState.headings[0].fontSize).toBeGreaterThan(markdownState.headings[1].fontSize);
 
-  await page.locator("#ai-more-toggle").click();
-  await expect(page.locator("#ai-more-menu")).toBeVisible();
-  const menuMetrics = await page.evaluate(() => {
-    const menu = document.querySelector("#ai-more-menu").getBoundingClientRect();
-    const composer = document.querySelector("#ai-composer").getBoundingClientRect();
-    return {
-      width: menu.width,
-      rightInset: Math.round(composer.right - menu.right),
-      bottomDelta: Math.round(composer.top - menu.bottom),
-    };
-  });
-  expect(menuMetrics.width).toBeLessThanOrEqual(150);
-  expect(menuMetrics.rightInset).toBe(14);
-  expect(Math.abs(menuMetrics.bottomDelta)).toBeLessThanOrEqual(1);
-  await expect(page.locator("#ai-more-menu .ai-more-menu-item.active")).toHaveCount(0);
+  await expect(page.locator("#ai-more-toggle")).toHaveCount(0);
+  await expect(page.locator("#ai-new-chat")).toBeVisible();
 
   await page.locator("#ai-job-toggle").click();
   await expect(page.locator("#ai-job-list")).toBeVisible();
   const jobListMetrics = await page.evaluate(() => {
     const list = document.querySelector("#ai-job-list").getBoundingClientRect();
-    const panel = document.querySelector("#ai-panel").getBoundingClientRect();
+    const toggle = document.querySelector("#ai-job-toggle").getBoundingClientRect();
     return {
-      leftOverflow: Math.round(panel.left - list.left),
-      rightOverflow: Math.round(list.right - panel.right),
+      leftOverflow: Math.round(0 - list.left),
+      rightOverflow: Math.round(list.right - window.innerWidth),
       width: Math.round(list.width),
-      panelWidth: Math.round(panel.width),
+      toggleRightDelta: Math.round(toggle.right - list.right),
+      topDelta: Math.round(list.top - toggle.bottom),
     };
   });
   expect(jobListMetrics.leftOverflow).toBeLessThanOrEqual(0);
   expect(jobListMetrics.rightOverflow).toBeLessThanOrEqual(0);
-  expect(jobListMetrics.width).toBeLessThan(jobListMetrics.panelWidth);
+  expect(jobListMetrics.width).toBeLessThanOrEqual(420);
+  expect(Math.abs(jobListMetrics.toggleRightDelta)).toBeLessThanOrEqual(60);
+  expect(Math.abs(jobListMetrics.topDelta - 8)).toBeLessThanOrEqual(2);
 });

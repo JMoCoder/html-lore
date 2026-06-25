@@ -13,6 +13,7 @@ from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistSt
 from html_lore.server.ai.generation_v2.skills.loader import load_default_skills_for_agent
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
 from html_lore.server.ai.generation_v2.store import GenerationStore
+from html_lore.server.ai.api import sync_v2_job_from_run
 from html_lore.server.ai.generation_v2.tools import document_parser
 from html_lore.server.ai.generation_v2.tools.document_parser import parse_document, parse_document_basic
 from html_lore.server.ai.generation_v2.tools.html_safety import scan_html_safety
@@ -89,8 +90,10 @@ def test_generation_v2_graph_runs_fake_agent_flow() -> None:
     html_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "HTMLCoder")
     assert html_artifact.data["html_chars"] == len(result.html_draft.html)
     assert "html" not in html_artifact.data
+    assert html_artifact.quality_score > 0
     planner_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "Planner")
     assert planner_artifact.data["section_plan"]
+    assert planner_artifact.quality_score > 0
     html_trace = next(event for event in result.stage_trace if event.agent == "HTMLCoder" and event.status == "completed")
     assert html_trace.duration_ms >= 0
     assert html_trace.metadata["output_kind"] == "html"
@@ -191,13 +194,14 @@ def test_generation_v2_agent_schema_failure_stops_after_retry_limit() -> None:
 
 
 class RecordingChatClient:
-    def __init__(self, content: str) -> None:
+    def __init__(self, content: str, *, usage: dict | None = None) -> None:
         self.content = content
+        self.usage = usage or {}
         self.messages = []
 
     def chat(self, *, messages, temperature=0.2, max_tokens=1024):
         self.messages = messages
-        return {"content": self.content, "model": "fake", "usage": {}}
+        return {"content": self.content, "model": "fake", "usage": self.usage}
 
 
 class AlwaysReviseVerifierClient(FakeGenerationModelClient):
@@ -226,7 +230,10 @@ def test_generation_v2_stops_when_validation_revisions_do_not_converge() -> None
 
 
 def test_generation_v2_provider_model_client_extracts_json_and_includes_schema() -> None:
-    chat_client = RecordingChatClient('```json\n{"user_goal":"Create a note","target_use":"default"}\n```')
+    chat_client = RecordingChatClient(
+        '```json\n{"user_goal":"Create a note","target_use":"default"}\n```',
+        usage={"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20},
+    )
     client = ProviderGenerationModelClient(chat_client, max_prompt_chars=4000, max_tokens=512)
 
     raw = client.complete_json(
@@ -244,6 +251,8 @@ def test_generation_v2_provider_model_client_extracts_json_and_includes_schema()
     assert raw == '{"user_goal":"Create a note","target_use":"default"}'
     assert "target_schema" in chat_client.messages[-1]["content"]
     assert "RequirementBrief" in chat_client.messages[-1]["content"]
+    assert client.consume_last_usage("RequirementAnalyst") == {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
+    assert client.consume_last_usage("RequirementAnalyst") == {}
 
 
 def test_generation_v2_provider_model_client_returns_raw_html_text() -> None:
@@ -612,6 +621,11 @@ def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
                     "stage": "coding_html",
                     "title": "HTML draft",
                     "summary": "100 chars",
+                    "input_summary": "content draft and style brief",
+                    "output_summary": "passed: doctype, style, script-free",
+                    "quality_score": 0.9,
+                    "usage": {"retry_count": 1, "output_chars": 100, "cost": 0.1, "prompt": "private prompt"},
+                    "warnings": ["render assumption"],
                     "data": {"html_chars": 100, "html": "<!doctype html><html>secret</html>"},
                 }
             ]
@@ -628,6 +642,13 @@ def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
     assert "metadata" in public_job["stage_trace"][0]
     assert public_job["execution_checklist"][0]["id"] == "draft-content"
     assert public_job["agent_artifacts"][0]["agent"] == "HTMLCoder"
+    assert public_job["agent_artifacts"][0]["input_summary"] == "content draft and style brief"
+    assert public_job["agent_artifacts"][0]["output_summary"] == "passed: doctype, style, script-free"
+    assert public_job["agent_artifacts"][0]["quality_score"] == 0.9
+    assert public_job["agent_artifacts"][0]["usage"]["retry_count"] == 1
+    assert "cost" not in public_job["agent_artifacts"][0]["usage"]
+    assert "prompt" not in public_job["agent_artifacts"][0]["usage"]
+    assert public_job["agent_artifacts"][0]["warnings"] == ["render assumption"]
     assert public_job["agent_artifacts"][0]["data"]["html_chars"] == 100
     assert "html" not in public_job["agent_artifacts"][0]["data"]
 
@@ -669,6 +690,87 @@ def test_generation_store_saves_v2_run_fields(tmp_path) -> None:
     assert fetched["execution_checklist"][0]["status"] == "completed"
     assert fetched["agent_artifacts"][0]["agent"] == "ContentWriter"
     assert "content" not in fetched["agent_artifacts"][0]["data"]
+
+
+def test_ai_job_checklist_status_can_be_inferred_from_stage_trace(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024,
+    )
+    store = GenerationStore(settings)
+    job = store.create_job(kind="material_html_generation", label="source.md")
+    job_id = job["job_id"]
+    store.jobs.update(
+        job_id,
+        {
+            "stage_trace": [
+                {"stage": "writing_content", "agent": "ContentWriter", "status": "completed"},
+                {"stage": "designing_style", "agent": "StyleDesigner", "status": "completed"},
+            ],
+            "execution_checklist": [
+                {"id": "content", "title": "Draft content", "owner": "ContentWriter", "status": "pending"},
+                {"id": "style", "title": "Prepare style", "owner": "Designer", "status": "pending"},
+                {"id": "verify", "title": "Verify quality", "owner": "Verifier", "status": "pending"},
+            ],
+        },
+    )
+
+    public_job = AIJobStore(settings).get(job_id)
+    statuses = {item["id"]: item["status"] for item in public_job["execution_checklist"]}
+
+    assert statuses["content"] == "completed"
+    assert statuses["style"] == "completed"
+    assert statuses["verify"] == "pending"
+
+
+def test_v2_material_job_sync_keeps_agent_artifacts_in_job_detail(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024,
+    )
+    store = GenerationStore(settings)
+    job = store.create_job(kind="material_html_generation", label="source.md")
+    run = {
+        "id": "run-sync",
+        "status": "completed",
+        "current_stage": "completed",
+        "stage_trace": [{"stage": "coding_html", "agent": "HTMLCoder", "status": "completed"}],
+        "execution_checklist": [{"id": "code", "title": "Code", "owner": "HTMLCoder", "status": "completed"}],
+        "skill_trace": [{"id": "html_quality", "title": "HTML quality", "agent": "HTMLCoder"}],
+        "agent_artifacts": [
+            {
+                "agent": "HTMLCoder",
+                "stage": "coding_html",
+                "title": "HTML draft",
+                "summary": "100 chars",
+                "input_summary": "content draft and style brief",
+                "output_summary": "passed: doctype, style, script-free",
+                "quality_score": 0.9,
+                "usage": {"retry_count": 0, "output_chars": 100},
+                "warnings": [],
+                "data": {"html_chars": 100},
+            }
+        ],
+        "item_id": "generated/source.html",
+        "retryable": False,
+        "cancellable": False,
+    }
+
+    sync_v2_job_from_run(settings, str(job["job_id"]), run, status="completed")
+
+    public_job = store.jobs.get(str(job["job_id"]))
+
+    assert public_job["status"] == "completed"
+    assert public_job["item_id"] == "generated/source.html"
+    assert public_job["agent_artifacts"][0]["agent"] == "HTMLCoder"
+    assert public_job["agent_artifacts"][0]["input_summary"] == "content draft and style brief"
+    assert public_job["agent_artifacts"][0]["usage"]["output_chars"] == 100
 
 
 def test_write_gateway_writes_generated_note_and_rebuilds(tmp_path) -> None:

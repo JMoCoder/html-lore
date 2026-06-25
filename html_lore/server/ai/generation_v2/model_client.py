@@ -25,6 +25,7 @@ class ProviderGenerationModelClient:
         self.model_client = model_client
         self.max_prompt_chars = max(2000, int(max_prompt_chars or 12000))
         self.max_tokens = max(512, int(max_tokens or 4096))
+        self._last_usage_by_node: dict[str, dict[str, Any]] = {}
 
     def complete_json(self, *, node: str, schema_name: str, payload: dict[str, Any], attempt: int = 0) -> str:
         schema = payload.get("_schema")
@@ -64,6 +65,7 @@ class ProviderGenerationModelClient:
                 messages.append({"role": "system", "content": f"Skill: {skill.get('title') or skill.get('id')}\n\n{skill.get('content')}"})
         messages.append({"role": "user", "content": trim_prompt(json.dumps(user_payload, ensure_ascii=False), self.max_prompt_chars)})
         response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.max_tokens)
+        self._record_usage(node, response.get("usage"))
         return extract_json_object(str(response.get("content") or ""))
 
     def complete_text(self, *, node: str, payload: dict[str, Any], attempt: int = 0) -> str:
@@ -97,11 +99,40 @@ class ProviderGenerationModelClient:
                 messages.append({"role": "system", "content": f"Skill: {skill.get('title') or skill.get('id')}\n\n{skill.get('content')}"})
         messages.append({"role": "user", "content": trim_prompt(json.dumps(user_payload, ensure_ascii=False), self.max_prompt_chars)})
         response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.max_tokens)
+        self._record_usage(node, response.get("usage"))
         return extract_html_document(str(response.get("content") or ""))
+
+    def consume_last_usage(self, node: str) -> dict[str, Any]:
+        return dict(self._last_usage_by_node.pop(str(node or ""), {}))
+
+    def _record_usage(self, node: str, usage: Any) -> None:
+        normalized = normalize_provider_usage(usage)
+        if normalized:
+            self._last_usage_by_node[str(node or "")] = normalized
 
 
 def build_provider_generation_client(model_client: ModelClient, *, max_prompt_chars: int, max_tokens: int) -> ProviderGenerationModelClient:
     return ProviderGenerationModelClient(model_client, max_prompt_chars=max_prompt_chars, max_tokens=max_tokens)
+
+
+def normalize_provider_usage(usage: Any) -> dict[str, int]:
+    if not isinstance(usage, dict):
+        return {}
+    mapping = {
+        "prompt_tokens": "input_tokens",
+        "completion_tokens": "output_tokens",
+        "input_tokens": "input_tokens",
+        "output_tokens": "output_tokens",
+        "total_tokens": "total_tokens",
+    }
+    normalized: dict[str, int] = {}
+    for source_key, target_key in mapping.items():
+        raw = usage.get(source_key)
+        if isinstance(raw, bool):
+            continue
+        if isinstance(raw, (int, float)):
+            normalized[target_key] = int(raw)
+    return normalized
 
 
 def retry_output_rules(attempt: int) -> list[str]:

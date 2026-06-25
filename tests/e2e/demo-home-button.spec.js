@@ -45,22 +45,27 @@ test("workspace logo returns to the workspace home", async ({ page }) => {
   await expect(page.locator(".cover h1")).toHaveCount(0);
 });
 
-test("topbar settings sits after lucky while sidebar footer keeps homepage and GitHub actions", async ({ page }) => {
+test("topbar keeps settings, generation queue, and AI actions grouped on the right", async ({ page }) => {
   await expect(page.locator("#profile-status")).toHaveCount(0);
   await expect(page.locator("#settings-open")).toBeVisible();
+  await expect(page.locator("#ai-job-toggle")).toBeVisible();
+  await expect(page.locator("#ai-panel-open")).toBeVisible();
   await expect(page.locator(".project-link")).toBeVisible();
   await expect(page.locator(".github-link")).toBeVisible();
   await expect(page.locator(".sidebar-tools #settings-open")).toHaveCount(0);
-  await expect(page.locator(".topbar-control-group #settings-open")).toHaveCount(1);
+  await expect(page.locator(".topbar-control-group #settings-open")).toHaveCount(0);
+  await expect(page.locator(".topbar-search-group #settings-open")).toHaveCount(1);
+  await expect(page.locator(".topbar-search-group #ai-job-toggle")).toHaveCount(1);
   await expect(page.locator(".project-link")).toHaveAttribute("href", /html_lore\/$/);
   await expect(page.locator(".github-link")).toHaveAttribute("href", /github\.com\/JMoCoder\/html_lore/);
 
   await expect
     .poll(async () => {
       const settings = await page.locator("#settings-open").boundingBox();
-      const lucky = await page.locator("#lucky-button").boundingBox();
-      if (!settings || !lucky) return false;
-      return lucky.x < settings.x;
+      const queue = await page.locator("#ai-job-toggle").boundingBox();
+      const ai = await page.locator("#ai-panel-open").boundingBox();
+      if (!settings || !queue || !ai) return false;
+      return settings.x < queue.x && queue.x < ai.x;
     })
     .toBe(true);
 });
@@ -93,17 +98,10 @@ test("AI panel sends with Enter and keeps Shift Enter for new lines", async ({ p
   await expect(page.locator("#ai-generate-note")).toBeDisabled();
   await expect(page.locator(".ai-source-options")).toContainText("Expand");
   await expect(page.locator(".ai-source-options")).toContainText("Research");
-  await page.locator("#ai-more-toggle").click();
-  await expect(page.locator("#ai-more-menu")).toBeVisible();
-  const menuMetrics = await page.locator("#ai-more-menu .ai-more-menu-item").evaluateAll((items) => items.map((item) => {
-    const style = getComputedStyle(item);
-    return {
-      background: style.backgroundColor,
-      color: style.color,
-    };
-  }));
-  expect(menuMetrics.every((item) => item.background === "rgba(0, 0, 0, 0)" || item.background === "transparent")).toBe(true);
-  const moreButtonMetrics = await page.locator("#ai-more-toggle").evaluate((button) => {
+  await expect(page.locator("#ai-more-toggle")).toHaveCount(0);
+  await expect(page.locator("#ai-new-chat")).toBeVisible();
+  await expect(page.locator(".ai-conversation-actions #ai-history-toggle")).toBeVisible();
+  const newChatButtonMetrics = await page.locator("#ai-new-chat").evaluate((button) => {
     const icon = button.querySelector(".button-icon");
     const buttonBox = button.getBoundingClientRect();
     const iconBox = icon.getBoundingClientRect();
@@ -112,9 +110,8 @@ test("AI panel sends with Enter and keeps Shift Enter for new lines", async ({ p
       dy: Math.abs((buttonBox.top + buttonBox.height / 2) - (iconBox.top + iconBox.height / 2)),
     };
   });
-  expect(moreButtonMetrics.dx).toBeLessThan(1);
-  expect(moreButtonMetrics.dy).toBeLessThan(1);
-  await page.locator("#ai-more-toggle").click();
+  expect(newChatButtonMetrics.dx).toBeLessThan(1);
+  expect(newChatButtonMetrics.dy).toBeLessThan(1);
   await page.locator("#ai-chat-input").fill("First line");
   await page.keyboard.press("Shift+Enter");
   await page.keyboard.type("Second line");
@@ -124,6 +121,7 @@ test("AI panel sends with Enter and keeps Shift Enter for new lines", async ({ p
   await expect(page.locator(".ai-message.user")).toContainText("First line");
   await expect(page.locator(".ai-message.pending")).toContainText("Replying");
   await expect(page.locator("#ai-chat-input")).toHaveValue("");
+  await expect(page.locator(".ai-conversation-actions #ai-history-toggle")).toBeVisible();
   await expect(page.locator(".ai-message.pending")).toHaveCount(0);
   await expect(page.locator(".ai-message.assistant").last()).toContainText("AI response placeholder");
 });

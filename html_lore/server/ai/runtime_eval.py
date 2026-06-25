@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime
 from typing import Any
 import uuid
 
@@ -408,7 +409,7 @@ def public_agent_run(result: AgentRunResult, *, conversation_id: str = "", engin
         "status": result.status,
         "started_at": trace_time(result, first=True),
         "completed_at": trace_time(result, first=False),
-        "duration_ms": 0,
+        "duration_ms": trace_duration_ms(result),
         "conversation_id": conversation_id,
         "spec": {"engine": engine},
         "graph": engine,
@@ -633,6 +634,23 @@ def trace_time(result: AgentRunResult, *, first: bool) -> str:
         return ""
     event = result.trace[0] if first else result.trace[-1]
     return str(event.get("at") or "")
+
+
+def trace_duration_ms(result: AgentRunResult) -> int:
+    if not result.trace:
+        return 0
+    start = parse_trace_time(trace_time(result, first=True))
+    end = parse_trace_time(trace_time(result, first=False))
+    if start is None or end is None:
+        return 0
+    return max(0, int((end - start).total_seconds() * 1000))
+
+
+def parse_trace_time(value: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value or ""))
+    except ValueError:
+        return None
 
 
 def tool_output(result: AgentRunResult, tool_id: str) -> dict[str, Any]:

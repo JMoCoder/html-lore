@@ -389,6 +389,11 @@ class AgentArtifact:
     stage: GenerationStage = GenerationStage.QUEUED
     title: str = ""
     summary: str = ""
+    input_summary: str = ""
+    output_summary: str = ""
+    quality_score: float = 0.0
+    usage: dict[str, Any] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
     data: dict[str, Any] = field(default_factory=dict)
 
 

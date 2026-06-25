@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,14 +67,16 @@ def runs_path(settings: ServerSettings) -> Path | None:
 def sanitize_run(run: dict[str, Any]) -> dict[str, Any]:
     status = str(run.get("status") or "")
     kind = str(run.get("kind") or "")
+    started_at = str(run.get("started_at") or "")
+    completed_at = str(run.get("completed_at") or "")
     return {
         "id": str(run.get("id") or ""),
         "kind": kind,
         "operation": run_operation(kind),
         "status": status,
-        "started_at": str(run.get("started_at") or ""),
-        "completed_at": str(run.get("completed_at") or ""),
-        "duration_ms": sanitize_duration(run.get("duration_ms")),
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "duration_ms": sanitize_duration(run.get("duration_ms")) or duration_between(started_at, completed_at),
         "conversation_id": str(run.get("conversation_id") or ""),
         "spec": run.get("spec") if isinstance(run.get("spec"), dict) else {},
         "graph": str(run.get("graph") or ""),
@@ -226,13 +229,32 @@ def sanitize_duration(value: Any) -> int:
         return 0
 
 
+def duration_between(started_at: str, completed_at: str) -> int:
+    try:
+        start = datetime.fromisoformat(str(started_at or ""))
+        end = datetime.fromisoformat(str(completed_at or ""))
+    except ValueError:
+        return 0
+    return max(0, int((end - start).total_seconds() * 1000))
+
+
 def sanitize_usage(value: Any) -> dict[str, int]:
     if not isinstance(value, dict):
         return {}
     result: dict[str, int] = {}
-    for key in ("input_tokens", "output_tokens", "total_tokens"):
+    key_map = {
+        "input_tokens": ("input_tokens", "prompt_tokens"),
+        "output_tokens": ("output_tokens", "completion_tokens"),
+        "total_tokens": ("total_tokens",),
+    }
+    for key, aliases in key_map.items():
+        raw = 0
+        for alias in aliases:
+            if value.get(alias) not in (None, ""):
+                raw = value.get(alias)
+                break
         try:
-            number = int(value.get(key) or 0)
+            number = int(raw or 0)
         except (TypeError, ValueError):
             number = 0
         if number > 0:

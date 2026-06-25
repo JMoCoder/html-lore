@@ -72,19 +72,21 @@ class GenerationStore:
         return self.runs.add(data)
 
     def public_state_summary(self, state: GenerationState) -> dict[str, Any]:
+        stage_trace = normalize_for_json([asdict(event) for event in state.stage_trace])
         return {
             "job_id": state.job_id,
             "run_id": state.run_id,
             "generation_engine": GenerationEngine.V2.value,
             "current_stage": state.current_step,
-            "stage_trace": normalize_for_json([asdict(event) for event in state.stage_trace]),
+            "stage_trace": stage_trace,
             "skill_trace": normalize_for_json([asdict(event) for event in state.skill_trace]),
             "agent_artifacts": normalize_for_json([asdict(event) for event in state.agent_artifacts]),
-            "execution_checklist": public_execution_checklist(state.execution_checklist),
+            "execution_checklist": public_execution_checklist(state.execution_checklist, stage_trace=stage_trace),
         }
 
 
-def public_execution_checklist(checklist: list[ChecklistItem] | list[dict[str, Any]]) -> list[dict[str, Any]]:
+def public_execution_checklist(checklist: list[ChecklistItem] | list[dict[str, Any]], *, stage_trace: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    inferred_status = checklist_status_from_trace(stage_trace or [])
     result: list[dict[str, Any]] = []
     for item in checklist:
         data = normalize_for_json(asdict(item)) if isinstance(item, ChecklistItem) else normalize_for_json(item)
@@ -92,5 +94,43 @@ def public_execution_checklist(checklist: list[ChecklistItem] | list[dict[str, A
             continue
         if data.get("status") == "done":
             data["status"] = "completed"
+        owner = str(data.get("owner") or "")
+        status = str(data.get("status") or "")
+        if status in {"", "pending", "running"}:
+            inferred = inferred_checklist_status(owner, inferred_status)
+            if inferred:
+                data["status"] = inferred
         result.append(data)
     return result
+
+
+def checklist_status_from_trace(stage_trace: list[dict[str, Any]]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for event in stage_trace:
+        if not isinstance(event, dict):
+            continue
+        agent = str(event.get("agent") or "").strip()
+        status = str(event.get("status") or "").strip().lower()
+        if not agent or status not in {"completed", "failed", "warning"}:
+            continue
+        result[normalize_owner(agent)] = status
+    return result
+
+
+def inferred_checklist_status(owner: str, trace_status: dict[str, str]) -> str:
+    normalized = normalize_owner(owner)
+    if not normalized:
+        return ""
+    if normalized in trace_status:
+        return trace_status[normalized]
+    if normalized == "writer":
+        return trace_status.get("contentwriter", "")
+    if normalized == "designer":
+        return trace_status.get("styledesigner", "")
+    if normalized == "coder":
+        return trace_status.get("htmlcoder", "")
+    return ""
+
+
+def normalize_owner(value: str) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())

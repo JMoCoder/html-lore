@@ -15,12 +15,29 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.4</span></aside>
+<aside class="stat"><span class="badge">1.0.5</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
 <p>Languages: <a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.0.5] - 2026-06-25</h2>
+<h3>Added</h3>
+<ul>
+<li>LangGraph の stage status、agent の input/output summary、token usage、lightweight quality score、warning、stage metadata を表示する AI generation workflow detail modal を追加しました。</li>
+<li>生成ジョブ更新用の SSE endpoint を追加し、polling fallback も維持しました。</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>AI generation history と workspace generation queue を改善し、完了ジョブは open、失敗ジョブは retry、実行中/待機中ジョブは queue position と status を表示します。</li>
+<li>AI run history の layout を改善し、list row から内部 agent id を隠し、過去 trace の timestamp から duration を補完するようにしました。</li>
+<li>AI creation、generation history、conversation history、settings pages の live workspace と static demo UI を同期しました。</li>
+<li>パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを <code>1.0.5</code> に更新しました。</li>
+</ul>
+<h3>Security</h3>
+<ul>
+<li>公開 job/run detail は脱敏済み summary のみを表示し、raw prompt、uploaded source text、reference file content、generated HTML body、API key、cost estimate は表示しません。</li>
+</ul>
 <h2>[1.0.4] - 2026-06-24</h2>
 <h3>Added</h3>
 <ul>

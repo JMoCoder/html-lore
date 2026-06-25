@@ -46,6 +46,7 @@ HTMlore 是一个自托管 HTML 知识库工作台，用于保存、浏览、阅
 - 知识库问答运行时已拆分为 planner、search planner、answer、verifier、reviewer 等阶段，并暴露 agent/prompt trace，便于后续统一多智能体后端架构演进与排障。
 - AI 回复支持严格模式与内容拓展模式。严格模式只基于当前资料库上下文回答；内容拓展模式预留外部来源检索，启用时必须返回明确来源。
 - AI 运行记录、轻量异步生成历史、失败的对话生成任务重试，以及设置页中的全局 AI 会话管理。
+- AI 生成历史支持 LangGraph 工作流详情、SSE 实时更新、阶段摘要、token 用量、轻量质量评分和脱敏运行元数据。
 - 从 AI 对话生成 HTML 笔记的 beta 能力，采用 PM/UX/Coder/QA/Reviewer 分阶段图结构。
 - 上传 HTML、Markdown 或纯文本资料生成 HTML 笔记的 beta 能力，先进行安全文本抽取，再复用 HTML 生成图结构。
 - 关键词检索已落地，支持短问题查询拓展、多笔记证据均衡和检索覆盖诊断；已支持本地轻量向量索引，在 embedding 模型或向量索引未配置时自动回退到关键词检索。

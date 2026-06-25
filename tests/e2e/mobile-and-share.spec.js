@@ -82,7 +82,7 @@ test("reader keeps tags visible with both sidebars open on laptop width", async 
   await page.goto("/demo/?lang=zh-CN", { waitUntil: "domcontentloaded" });
 
   await page.locator(".item-card", { hasText: "龙湖重庆停车场资产评估报告" }).getByRole("button", { name: "Read" }).click();
-  await page.locator("#reader-ai-panel-open").click();
+  await page.locator("#ai-panel-open").click();
 
   await expect(page.locator("#reader")).toBeVisible();
   await expect(page.locator("body")).toHaveClass(/ai-panel-open/);

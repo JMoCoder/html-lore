@@ -4,6 +4,32 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-06-25
+
+### Added
+
+- LangGraph の stage status、agent の input/output summary、token usage、
+  lightweight quality score、warning、stage metadata を表示する AI generation
+  workflow detail modal を追加しました。
+- 生成ジョブ更新用の SSE endpoint を追加し、polling fallback も維持しました。
+
+### Changed
+
+- AI generation history と workspace generation queue を改善し、完了ジョブは
+  open、失敗ジョブは retry、実行中/待機中ジョブは queue position と status を表示します。
+- AI run history の layout を改善し、list row から内部 agent id を隠し、過去 trace
+  の timestamp から duration を補完するようにしました。
+- AI creation、generation history、conversation history、settings pages の live
+  workspace と static demo UI を同期しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.0.5` に更新しました。
+
+### Security
+
+- 公開 job/run detail は脱敏済み summary のみを表示し、raw prompt、uploaded
+  source text、reference file content、generated HTML body、API key、cost
+  estimate は表示しません。
+
 ## [1.0.4] - 2026-06-24
 
 ### Added

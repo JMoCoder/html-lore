@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -7,7 +9,7 @@ from typing import Annotated
 try:
     from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 except ModuleNotFoundError as exc:  # pragma: no cover - import guard for static-only installs
     raise RuntimeError(
         "The backend server requires the agent extra: pip install 'html-lore[agent]'",
@@ -474,6 +476,32 @@ def create_app() -> FastAPI:
             return service.job(job_id)
         except AIJobError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/api/ai/jobs/{job_id}/events")
+    async def ai_job_events(job_id: str, _: ApiAuth, service: Annotated[AIConversationService, Depends(get_ai_conversation_service)]) -> StreamingResponse:
+        async def stream():
+            last_payload = ""
+            while True:
+                try:
+                    payload = service.job(job_id)
+                    data = json.dumps(payload, ensure_ascii=False)
+                    if data != last_payload:
+                        last_payload = data
+                        yield f"event: job\ndata: {data}\n\n"
+                    status = str(payload.get("job", {}).get("status") or "").lower()
+                    if status in {"completed", "failed", "cancelled"}:
+                        break
+                except AIJobError as exc:
+                    error_data = json.dumps({"detail": str(exc)}, ensure_ascii=False)
+                    yield f"event: error\ndata: {error_data}\n\n"
+                    break
+                await asyncio.sleep(1.0)
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.post("/api/ai/jobs/{job_id}/retry")
     def retry_ai_job(job_id: str, _: ApiAuth, __: AiRateLimit, service: Annotated[AIConversationService, Depends(get_ai_conversation_service)]) -> dict:

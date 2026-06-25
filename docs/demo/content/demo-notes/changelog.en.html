@@ -15,7 +15,7 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.4</span></aside>
+<aside class="stat"><span class="badge">1.0.5</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
@@ -24,6 +24,23 @@
 <p>The format is based on Keep a Changelog, and this project uses semantic</p>
 <p>versioning after the initial public release.</p>
 <h2>[Unreleased]</h2>
+<h2>[1.0.5] - 2026-06-25</h2>
+<h3>Added</h3>
+<ul>
+<li>Added a large AI generation workflow detail modal for LangGraph stage status, agent input/output summaries, token usage, lightweight quality scores, warnings, and stage metadata.</li>
+<li>Added an SSE endpoint for generation job updates with polling fallback so task details can refresh while background generation is running.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>Improved AI generation history and the workspace generation queue: completed jobs show an open action, failed jobs show retry, and running/pending jobs show queue position and status.</li>
+<li>Improved AI run history layout, removed internal agent ids from list rows, and backfilled run duration from historical trace timestamps.</li>
+<li>Synced the live workspace and static demo UI for AI creation, generation history, conversation history, and settings pages.</li>
+<li>Updated package, app, PWA, demo, and provider user-agent versions to <code>1.0.5</code>.</li>
+</ul>
+<h3>Security</h3>
+<ul>
+<li>Public job and run details continue to expose only redacted summaries, not raw prompts, uploaded source text, reference file content, generated HTML bodies, API keys, or cost estimates.</li>
+</ul>
 <h2>[1.0.4] - 2026-06-24</h2>
 <h3>Added</h3>
 <ul>

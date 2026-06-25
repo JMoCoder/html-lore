@@ -9,6 +9,34 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-06-25
+
+### Added
+
+- Added a large AI generation workflow detail modal for LangGraph stage status,
+  agent input/output summaries, token usage, lightweight quality scores,
+  warnings, and stage metadata.
+- Added an SSE endpoint for generation job updates with polling fallback so
+  task details can refresh while background generation is running.
+
+### Changed
+
+- Improved AI generation history and the workspace generation queue: completed
+  jobs show an open action, failed jobs show retry, and running/pending jobs show
+  queue position and status.
+- Improved AI run history layout, removed internal agent ids from list rows, and
+  backfilled run duration from historical trace timestamps.
+- Synced the live workspace and static demo UI for AI creation, generation
+  history, conversation history, and settings pages.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.0.5`.
+
+### Security
+
+- Public job and run details continue to expose only redacted summaries, not raw
+  prompts, uploaded source text, reference file content, generated HTML bodies,
+  API keys, or cost estimates.
+
 ## [1.0.4] - 2026-06-24
 
 ### Added

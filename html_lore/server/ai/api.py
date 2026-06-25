@@ -77,6 +77,28 @@ class AIService:
         return vector_maintenance_for_config(ItemService(self.settings), self.store.get()).smoke_test_embedding()
 
 
+def sync_v2_job_from_run(settings: ServerSettings, job_id: str, run: object, *, status: str, item_id: str = "") -> None:
+    if not job_id or not isinstance(run, dict):
+        return
+    values: dict[str, object] = {
+        "status": status,
+        "run_id": str(run.get("id") or ""),
+        "current_stage": str(run.get("current_stage") or ""),
+        "stage_trace": run.get("stage_trace") if isinstance(run.get("stage_trace"), list) else [],
+        "execution_checklist": run.get("execution_checklist") if isinstance(run.get("execution_checklist"), list) else [],
+        "skill_trace": run.get("skill_trace") if isinstance(run.get("skill_trace"), list) else [],
+        "agent_artifacts": run.get("agent_artifacts") if isinstance(run.get("agent_artifacts"), list) else [],
+        "message": "AI generation completed." if status == "completed" else str(run.get("error", {}).get("message") or "AI generation failed."),
+        "retryable": bool(run.get("retryable", status == "failed")),
+        "cancellable": bool(run.get("cancellable", False)),
+    }
+    if item_id or run.get("item_id"):
+        values["item_id"] = item_id or str(run.get("item_id") or "")
+    if status == "failed" and isinstance(run.get("error"), dict):
+        values["error"] = run.get("error")
+    AIJobStore(settings).update(job_id, values)
+
+
 class AIConversationService:
     def __init__(
         self,
@@ -270,8 +292,12 @@ class AIConversationService:
                     )
             except (HtmlGenerationError, MaterialGenerationError) as exc:
                 self._store_failed_run(exc)
+                if self.settings.ai_generation_engine == "v2":
+                    self._sync_v2_job_from_run(str(job["job_id"]), getattr(exc, "run", None), status="failed")
                 raise
             run = self.run_store.add(result["run"])
+            if self.settings.ai_generation_engine == "v2":
+                self._sync_v2_job_from_run(str(job["job_id"]), run, status=str(run.get("status") or "completed"), item_id=str(result.get("item", {}).get("id") or ""))
             return {"run": run, "item": result["item"]}
 
         ai_job_queue.enqueue(settings=self.settings, job=job, task=task)
@@ -378,6 +404,9 @@ class AIConversationService:
         run = getattr(exc, "run", None)
         if isinstance(run, dict) and run:
             self.run_store.add(run)
+
+    def _sync_v2_job_from_run(self, job_id: str, run: object, *, status: str, item_id: str = "") -> None:
+        sync_v2_job_from_run(self.settings, job_id, run, status=status, item_id=item_id)
 
     def _generation_v2_model_client(self):
         from dataclasses import replace

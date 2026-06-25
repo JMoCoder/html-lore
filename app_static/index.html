@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600;900&family=Noto+Serif+JP:wght@600;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.0.4">
+  <link rel="stylesheet" href="style.css?v=1.0.5">
 </head>
 <body>
   <section class="login-screen" id="login-screen" hidden>
@@ -168,12 +168,6 @@
                 <path d="M17 16h4"></path>
               </svg>
             </button>
-            <button class="settings-toggle topbar-settings-toggle" type="button" id="settings-open" aria-label="Settings" title="Settings" data-i18n-attr="aria-label:settings,title:settings">
-              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .3 1.7 1.7 0 0 0-.8 1.45V21a2 2 0 0 1-4 0v-.09a1.7 1.7 0 0 0-.8-1.45 1.7 1.7 0 0 0-1-.3 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.3-1 1.7 1.7 0 0 0-1.45-.8H3a2 2 0 0 1 0-4h.09a1.7 1.7 0 0 0 1.45-.8 1.7 1.7 0 0 0 .3-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.3 1.7 1.7 0 0 0 .8-1.45V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 .8 1.45 1.7 1.7 0 0 0 1 .3 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.06.34.16.68.3 1 .28.48.8.8 1.45.8H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.45.8 1.7 1.7 0 0 0-.3 1Z"></path>
-              </svg>
-            </button>
           </div>
           <div class="topbar-search-group">
             <label class="search">
@@ -183,6 +177,13 @@
               </svg>
               <input id="search-input" type="search" autocomplete="off" data-i18n-attr="aria-label:search,placeholder:searchPlaceholder">
             </label>
+            <button class="settings-toggle topbar-settings-toggle" type="button" id="settings-open" aria-label="Settings" title="Settings" data-i18n-attr="aria-label:settings,title:settings">
+              <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .3 1.7 1.7 0 0 0-.8 1.45V21a2 2 0 0 1-4 0v-.09a1.7 1.7 0 0 0-.8-1.45 1.7 1.7 0 0 0-1-.3 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.3-1 1.7 1.7 0 0 0-1.45-.8H3a2 2 0 0 1 0-4h.09a1.7 1.7 0 0 0 1.45-.8 1.7 1.7 0 0 0 .3-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.3 1.7 1.7 0 0 0 .8-1.45V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 .8 1.45 1.7 1.7 0 0 0 1 .3 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.06.34.16.68.3 1 .28.48.8.8 1.45.8H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.45.8 1.7 1.7 0 0 0-.3 1Z"></path>
+              </svg>
+            </button>
+            <button class="topbar-job-toggle" type="button" id="ai-job-toggle" aria-label="AI job queue" title="AI job queue" data-i18n-attr="aria-label:aiJobQueue,title:aiJobQueue"></button>
             <button class="ai-panel-toggle" type="button" id="ai-panel-open" aria-label="Open AI assistant" title="Open AI assistant" data-i18n-attr="aria-label:openGlobalAi,title:openGlobalAi">
               <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"></path>
@@ -190,6 +191,7 @@
                 <path d="M5 13l.8 1.8L8 16l-2.2.8L5 19l-.8-2.2L2 16l2.2-1.2L5 13Z"></path>
               </svg>
             </button>
+            <div class="ai-job-list topbar-job-list" id="ai-job-list" hidden></div>
           </div>
         </div>
       </header>
@@ -346,8 +348,10 @@
           <button type="button" class="settings-tab" data-settings-tab="shares" data-i18n="shareManagement"></button>
           <div class="settings-divider" aria-hidden="true"></div>
           <button type="button" class="settings-tab" data-settings-tab="ai" data-i18n="aiProviders"></button>
-          <button type="button" class="settings-tab" data-settings-tab="ai-assistant" data-i18n="aiKnowledgeAssistant"></button>
+          <button type="button" class="settings-tab" data-settings-tab="ai-runs" data-i18n="aiRunHistory"></button>
           <button type="button" class="settings-tab" data-settings-tab="ai-conversations" data-i18n="aiConversationHistoryAll"></button>
+          <button type="button" class="settings-tab" data-settings-tab="ai-generation-history" data-i18n="aiGenerationHistory"></button>
+          <button type="button" class="settings-tab" data-settings-tab="ai-assistant" data-i18n="aiKnowledgeAssistant"></button>
           <div class="settings-divider" aria-hidden="true"></div>
           <button type="button" class="settings-tab" data-settings-tab="terms" data-i18n="userAgreement"></button>
           <button type="button" class="settings-tab" data-settings-tab="about" data-i18n="aboutProject"></button>
@@ -460,11 +464,61 @@
               <p class="settings-feedback" id="settings-feedback"></p>
             </form>
 
-            <div class="ai-run-history">
-              <div class="section-heading">
-                <h3 data-i18n="aiRunHistory"></h3>
-                <p data-i18n="aiRunHistoryIntro"></p>
+          </section>
+
+          <section class="settings-section" data-settings-section="ai-generation-history">
+            <div class="section-heading">
+              <h3 data-i18n="aiGenerationHistory"></h3>
+              <p data-i18n="aiGenerationHistoryIntro"></p>
+            </div>
+            <div class="settings-form">
+              <div class="settings-actions ai-run-actions">
+                <button type="button" class="secondary-button" id="ai-generation-refresh" data-i18n="refreshAiJobs"></button>
               </div>
+              <div class="ai-generation-list" id="ai-generation-list"></div>
+              <p class="settings-feedback" id="ai-generation-feedback"></p>
+            </div>
+          </section>
+
+          <section class="metadata-editor ai-generation-detail" id="ai-generation-detail" aria-label="AI generation details" data-i18n-attr="aria-label:aiGenerationDetailTitle" hidden>
+            <div class="ai-generation-detail-dialog">
+              <header class="ai-generation-detail-header">
+                <div>
+                  <p class="ai-generation-detail-eyebrow" data-i18n="aiGenerationDetailEyebrow"></p>
+                  <h2 id="ai-generation-detail-title"></h2>
+                  <div class="ai-generation-detail-meta" id="ai-generation-detail-meta"></div>
+                </div>
+                <div class="ai-generation-detail-actions">
+                  <button type="button" class="secondary-button ai-generation-detail-open-button" id="ai-generation-detail-open" data-i18n="aiGenerationHistoryOpenItem" hidden></button>
+                  <button type="button" class="secondary-button" id="ai-generation-detail-retry" data-i18n="aiJobRetry" hidden></button>
+                  <button type="button" class="icon-button" id="ai-generation-detail-close" aria-label="Close" title="Close" data-i18n-attr="aria-label:close,title:close">×</button>
+                </div>
+              </header>
+              <div class="ai-generation-detail-status" id="ai-generation-detail-status"></div>
+              <div class="ai-generation-detail-body">
+                <aside class="ai-generation-stage-list" id="ai-generation-stage-list"></aside>
+                <main class="ai-generation-stage-panel" id="ai-generation-stage-panel"></main>
+              </div>
+              <div class="ai-generation-detail-footer">
+                <section>
+                  <h3 data-i18n="aiJobChecklist"></h3>
+                  <div id="ai-generation-detail-checklist"></div>
+                </section>
+                <section>
+                  <h3 data-i18n="aiJobSkills"></h3>
+                  <div id="ai-generation-detail-skills"></div>
+                </section>
+              </div>
+              <p class="settings-feedback" id="ai-generation-detail-feedback"></p>
+            </div>
+          </section>
+
+          <section class="settings-section" data-settings-section="ai-runs">
+            <div class="section-heading">
+              <h3 data-i18n="aiRunHistory"></h3>
+              <p data-i18n="aiRunHistoryIntro"></p>
+            </div>
+            <div class="settings-form">
               <div class="settings-actions ai-run-actions">
                 <button type="button" class="secondary-button" id="ai-run-refresh" data-i18n="refreshAiRuns"></button>
               </div>
@@ -681,12 +735,14 @@
         <button class="icon-button" type="button" id="ai-panel-close" aria-label="Close AI assistant" data-i18n-attr="aria-label:closeGlobalAi">×</button>
       </header>
 
-      <div class="ai-context-card">
-        <span data-i18n="aiCurrentContext"></span>
-        <strong id="ai-context-label"></strong>
-      </div>
+        <div class="ai-context-card">
+          <span data-i18n="aiCurrentContext"></span>
+          <strong id="ai-context-label"></strong>
+        </div>
 
-      <div class="ai-chat-log" id="ai-chat-log" aria-live="polite"></div>
+      <div class="ai-chat-log-shell">
+        <div class="ai-chat-log" id="ai-chat-log" aria-live="polite"></div>
+      </div>
 
       <div class="ai-composer" id="ai-composer">
         <div class="ai-composer-resize" id="ai-composer-resize" role="separator" aria-orientation="horizontal" aria-label="Resize AI input area" data-i18n-attr="aria-label:resizeAiComposer"></div>
@@ -702,17 +758,12 @@
               <span data-i18n="aiDeepResearch"></span>
             </label>
           </div>
-          <div class="ai-more-menu-wrap">
-            <button type="button" class="icon-action ai-more-toggle" id="ai-more-toggle" aria-label="More AI actions" title="More AI actions" data-i18n-attr="aria-label:aiMoreActions,title:aiMoreActions"></button>
-            <div class="ai-more-menu" id="ai-more-menu" hidden>
-              <button type="button" class="ai-more-menu-item ai-new-chat" id="ai-new-chat" aria-label="New AI conversation" title="New AI conversation" data-i18n-attr="aria-label:aiNewConversation,title:aiNewConversation"></button>
-              <button type="button" class="ai-more-menu-item ai-history-toggle" id="ai-history-toggle" aria-label="AI conversation history" title="AI conversation history" data-i18n-attr="aria-label:aiConversationHistory,title:aiConversationHistory"></button>
-              <button type="button" class="ai-more-menu-item ai-job-toggle" id="ai-job-toggle" aria-label="AI job queue" title="AI job queue" data-i18n-attr="aria-label:aiJobQueue,title:aiJobQueue"></button>
-            </div>
+          <div class="ai-conversation-actions">
+            <button type="button" class="icon-action ai-history-toggle" id="ai-history-toggle" aria-label="AI conversation history" title="AI conversation history" data-i18n-attr="aria-label:aiConversationHistory,title:aiConversationHistory"></button>
+            <button type="button" class="icon-action ai-new-chat" id="ai-new-chat" aria-label="New AI conversation" title="New AI conversation" data-i18n-attr="aria-label:aiNewConversation,title:aiNewConversation"></button>
           </div>
         </div>
         <div class="ai-history-list" id="ai-history-list" hidden></div>
-        <div class="ai-job-list" id="ai-job-list" hidden></div>
 
         <form class="ai-chat-form" id="ai-chat-form">
           <div class="ai-chat-input-box">
@@ -987,6 +1038,6 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=1.0.4" type="module"></script>
+  <script src="app.js?v=1.0.5" type="module"></script>
 </body>
 </html>

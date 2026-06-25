@@ -131,8 +131,11 @@ def test_ai_run_store_sanitizes_list_and_detail(tmp_path: Path) -> None:
             "id": "run-secret-test",
             "kind": "knowledge_qa",
             "status": "completed",
+            "started_at": "2026-06-25T00:00:00+00:00",
+            "completed_at": "2026-06-25T00:00:03+00:00",
+            "duration_ms": 0,
             "spec": {"source_mode": "local_only"},
-            "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
             "node_trace": [{"node": "RetrieverNode", "status": "ok"}],
             "prompt": "Do not expose this prompt.",
             "source_text": "Private uploaded source text.",
@@ -145,7 +148,10 @@ def test_ai_run_store_sanitizes_list_and_detail(tmp_path: Path) -> None:
     raw = json.dumps({"listed": listed, "fetched": fetched}, ensure_ascii=False)
 
     assert listed[0]["id"] == "run-secret-test"
+    assert fetched["usage"]["input_tokens"] == 10
+    assert fetched["usage"]["output_tokens"] == 5
     assert fetched["usage"]["total_tokens"] == 15
+    assert fetched["duration_ms"] == 3000
     assert fetched["node_trace"] == [{"node": "RetrieverNode", "status": "ok"}]
     assert "prompt" not in fetched
     assert "source_text" not in fetched

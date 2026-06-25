@@ -46,6 +46,7 @@ HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書�
 - ナレッジベース Q&A ランタイムは planner、search planner、answer、verifier、reviewer の段階に分割され、agent/prompt trace も公開されます。今後の統一マルチエージェント backend への拡張とデバッグのためです。
 - AI 回答の strict / content expansion モード。strict は選択中のノートブックコンテキストだけで回答し、expansion は外部検索アダプター設定時に明示的な外部ソースを扱います。
 - AI 実行履歴、軽量非同期の生成履歴、失敗した会話生成ジョブの再試行、Settings 内のグローバル会話管理。
+- AI 生成履歴では LangGraph workflow detail、SSE update、stage summary、token usage、軽量 quality score、脱敏済み run metadata を確認できます。
 - AI 会話から HTML ノートを生成する beta 機能。PM/UX/Coder/QA/Reviewer の段階的グラフを使います。
 - HTML、Markdown、テキスト資料アップロードから HTML ノートを生成する beta 機能。安全なテキスト抽出後に HTML 生成グラフを再利用します。
 - キーワード検索を実装済みで、短い質問のクエリ拡張、複数ノート間の証拠バランス、検索カバレッジ診断に対応します。軽量ローカル vector index をサポートし、embedding model または vector index が未設定の場合はキーワード検索へ自動フォールバックします。

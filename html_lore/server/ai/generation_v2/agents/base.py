@@ -118,10 +118,15 @@ class GenerationAgent:
             return None
         title = self.name
         summary = ""
+        output_summary = ""
+        quality_score = 0.0
+        warnings: list[str] = []
         data: dict[str, Any] = {}
         if self.name == "RequirementAnalyst":
             title = "Requirement analysis"
             summary = short_text(getattr(output, "user_goal", "") or getattr(output, "source_summary", ""), 220)
+            output_summary = summarize_list("success criteria", getattr(output, "success_criteria", [])) or summarize_list("must include", getattr(output, "must_include", []))
+            warnings = safe_string_list(getattr(output, "uncertainty", []), limit=4)
             data = {
                 "target_use": str(getattr(output, "target_use", "") or ""),
                 "audience": short_text(getattr(output, "audience", ""), 160),
@@ -135,6 +140,8 @@ class GenerationAgent:
         elif self.name == "Planner":
             title = "Plan"
             summary = short_text(getattr(output, "page_goal", "") or getattr(output, "information_architecture", ""), 220)
+            output_summary = summarize_count("sections", getattr(output, "section_plan", [])) or short_text(getattr(output, "content_strategy", ""), 180)
+            warnings = safe_string_list(getattr(output, "risk_points", []), limit=4)
             data = {
                 "page_goal": short_text(getattr(output, "page_goal", ""), 260),
                 "information_architecture": short_text(getattr(output, "information_architecture", ""), 360),
@@ -147,6 +154,8 @@ class GenerationAgent:
         elif self.name == "ContentWriter":
             title = str(getattr(output, "title", "") or "Content draft")
             summary = short_text(getattr(output, "summary", ""), 260)
+            output_summary = summarize_count("sections", getattr(output, "sections", [])) or summarize_list("key points", getattr(output, "key_points", []))
+            warnings = safe_string_list(getattr(output, "omitted_items", []), limit=4)
             data = {
                 "title": short_text(getattr(output, "title", ""), 180),
                 "subtitle": short_text(getattr(output, "subtitle", ""), 180),
@@ -159,6 +168,12 @@ class GenerationAgent:
         elif self.name == "StyleDesigner":
             title = "Style brief"
             summary = short_text(getattr(output, "style_goal", ""), 260)
+            output_summary = first_non_empty(
+                short_text(getattr(output, "layout_system", ""), 160),
+                short_text(getattr(output, "visual_hierarchy", ""), 160),
+                summarize_count("palette tokens", getattr(output, "color_palette", [])),
+            )
+            warnings = safe_string_list(getattr(output, "avoid_styles", []), limit=4)
             data = {
                 "style_goal": short_text(getattr(output, "style_goal", ""), 360),
                 "design_mode": str(getattr(output, "design_mode", "") or ""),
@@ -175,6 +190,14 @@ class GenerationAgent:
             html = str(getattr(output, "html", "") or "")
             title = "HTML draft"
             summary = f"{len(html)} chars, static HTML"
+            output_summary = summarize_bool_checks(
+                {
+                    "doctype": "<!doctype html" in html.lower(),
+                    "style": "<style" in html.lower(),
+                    "script-free": "<script" not in html.lower(),
+                }
+            )
+            warnings = safe_string_list(getattr(output, "render_assumptions", []), limit=4)
             data = {
                 "html_chars": len(html),
                 "has_doctype": "<!doctype html" in html.lower(),
@@ -187,6 +210,12 @@ class GenerationAgent:
         elif self.name == "Verifier":
             title = "Verification"
             summary = f"score {getattr(output, 'score', 0)}"
+            quality_score = safe_float(getattr(output, "score", 0))
+            output_summary = "passed" if bool(getattr(output, "ok", False)) else "needs attention"
+            warnings = [
+                *safe_string_list(getattr(output, "missing_parts", []), limit=3),
+                *safe_string_list(getattr(output, "unsupported_claims", []), limit=3),
+            ][:4]
             data = {
                 "ok": bool(getattr(output, "ok", False)),
                 "score": getattr(output, "score", 0),
@@ -200,6 +229,8 @@ class GenerationAgent:
         elif self.name == "SafetyReviewer":
             title = "Safety review"
             summary = str(getattr(output, "risk_level", "") or "")
+            output_summary = "passed" if bool(getattr(output, "ok", False)) else "blocked or warning"
+            warnings = safe_string_list(getattr(output, "warnings", []), limit=4)
             data = {
                 "ok": bool(getattr(output, "ok", False)),
                 "risk_level": str(getattr(output, "risk_level", "") or ""),
@@ -211,6 +242,10 @@ class GenerationAgent:
         elif self.name == "Finalizer":
             title = "Final proposal"
             summary = short_text(getattr(output, "title", ""), 220)
+            output_summary = first_non_empty(
+                short_text(getattr(output, "safety_summary", ""), 180),
+                f"ready for {str(getattr(output, 'target_collection', '') or 'inbox')}",
+            )
             data = {
                 "title": short_text(getattr(output, "title", ""), 180),
                 "target_collection": str(getattr(output, "target_collection", "") or ""),
@@ -223,12 +258,20 @@ class GenerationAgent:
         else:
             summary = output.__class__.__name__
             data = {"output_kind": output.__class__.__name__}
+        quality_score = quality_score_for_agent(self.name, output, default=quality_score)
+        usage = build_usage_summary(self.name, state, output)
+        usage.update(consume_model_usage(self.model_client, self.name))
         sensitive_phrases = sensitive_phrases_for_state(state)
         return AgentArtifact(
             agent=self.name,
             stage=self.stage,
             title=redact_sensitive_text(short_text(title, 160), sensitive_phrases),
             summary=redact_sensitive_text(summary, sensitive_phrases),
+            input_summary=redact_sensitive_text(build_input_summary_for_agent(state, self.name), sensitive_phrases),
+            output_summary=redact_sensitive_text(short_text(output_summary, 260), sensitive_phrases),
+            quality_score=quality_score,
+            usage=usage,
+            warnings=safe_string_list(redact_artifact_data(warnings, sensitive_phrases), limit=6, item_limit=180),
             data=normalize_for_json(redact_artifact_data(data, sensitive_phrases)),
         )
 
@@ -302,6 +345,192 @@ def first_non_empty(*values: str) -> str:
 def short_text(value: str, limit: int = 280) -> str:
     cleaned = " ".join(str(value or "").split())
     return cleaned[:limit]
+
+
+def safe_float(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def summarize_count(label: str, values: Any) -> str:
+    if isinstance(values, list) and values:
+        return f"{len(values)} {label}"
+    return ""
+
+
+def summarize_list(label: str, values: Any) -> str:
+    items = safe_string_list(values, limit=3, item_limit=60)
+    return f"{label}: {', '.join(items)}" if items else ""
+
+
+def summarize_bool_checks(values: dict[str, bool]) -> str:
+    passed = [key for key, value in values.items() if value]
+    failed = [key for key, value in values.items() if not value]
+    parts = []
+    if passed:
+        parts.append(f"passed: {', '.join(passed)}")
+    if failed:
+        parts.append(f"attention: {', '.join(failed)}")
+    return "; ".join(parts)
+
+
+def build_input_summary_for_agent(state: GenerationState, agent_name: str) -> str:
+    parsed = state.parsed_document
+    style_ref = state.parsed_style_reference
+    source_bits: list[str] = []
+    if state.input.filename:
+        source_bits.append(f"source file {state.input.filename}")
+    if parsed and parsed.plain_text:
+        source_bits.append(f"{len(parsed.plain_text)} source chars")
+    if style_ref and state.input.reference_file_name:
+        source_bits.append(f"style reference {state.input.reference_file_name}")
+    if state.input.instruction:
+        source_bits.append("user instruction")
+    if agent_name == "RequirementAnalyst":
+        return ", ".join(source_bits) or "generation request"
+    if agent_name == "Planner":
+        return "requirement brief and parsed document"
+    if agent_name == "ContentWriter":
+        return "plan draft, requirement brief, parsed document"
+    if agent_name == "StyleDesigner":
+        return "requirement brief, plan draft, style reference"
+    if agent_name == "HTMLCoder":
+        return "content draft and style brief"
+    if agent_name == "Verifier":
+        return "HTML draft, plan, content, and style brief"
+    if agent_name == "SafetyReviewer":
+        return "HTML draft and validation report"
+    if agent_name == "Finalizer":
+        return "validated HTML and metadata proposal"
+    return "workflow state"
+
+
+def build_usage_summary(agent_name: str, state: GenerationState, output: Any) -> dict[str, Any]:
+    usage: dict[str, Any] = {
+        "revision_round": int(state.revision_round or 0),
+        "retry_count": int(state.same_node_retries.get(agent_name, 0)),
+    }
+    if hasattr(output, "html"):
+        usage["output_chars"] = len(str(getattr(output, "html") or ""))
+    elif hasattr(output, "sections"):
+        usage["section_count"] = len(getattr(output, "sections") or [])
+    elif hasattr(output, "section_plan"):
+        usage["section_count"] = len(getattr(output, "section_plan") or [])
+    return usage
+
+
+def consume_model_usage(model_client: Any, agent_name: str) -> dict[str, Any]:
+    consume = getattr(model_client, "consume_last_usage", None)
+    if not callable(consume):
+        return {}
+    usage = consume(agent_name)
+    if not isinstance(usage, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("input_tokens", "output_tokens", "total_tokens"):
+        raw = usage.get(key)
+        if isinstance(raw, bool):
+            continue
+        if isinstance(raw, (int, float)):
+            result[key] = int(raw)
+    return result
+
+
+def quality_score_for_agent(agent_name: str, output: Any, *, default: float = 0.0) -> float:
+    if output is None:
+        return 0.0
+    if agent_name == "Verifier":
+        score = safe_float(getattr(output, "score", default))
+        return clamp_score(score / 100 if score > 1 else score)
+    if agent_name == "RequirementAnalyst":
+        return field_presence_score(
+            output,
+            [
+                "user_goal",
+                "source_summary",
+                "target_use",
+                "output_type",
+                "must_include",
+                "success_criteria",
+                "audience",
+                "style_preferences",
+            ],
+        )
+    if agent_name == "Planner":
+        return field_presence_score(
+            output,
+            [
+                "page_goal",
+                "information_architecture",
+                "content_strategy",
+                "visual_strategy",
+                "section_plan",
+                "verification_targets",
+                "risk_points",
+            ],
+        )
+    if agent_name == "ContentWriter":
+        return field_presence_score(output, ["title", "summary", "sections", "key_points", "references_used"])
+    if agent_name == "StyleDesigner":
+        return field_presence_score(
+            output,
+            ["style_goal", "color_palette", "layout_system", "component_style", "visual_hierarchy", "responsive_rules"],
+        )
+    if agent_name == "HTMLCoder":
+        html = str(getattr(output, "html", "") or "")
+        checks = [
+            bool(html.strip()),
+            "<!doctype html" in html.lower(),
+            "<html" in html.lower(),
+            "<style" in html.lower(),
+            "<script" not in html.lower(),
+            bool(getattr(output, "accessibility_notes", None)),
+            bool(getattr(output, "responsive_notes", None)),
+        ]
+        return clamp_score(sum(1 for item in checks if item) / len(checks))
+    if agent_name == "SafetyReviewer":
+        ok = bool(getattr(output, "ok", False))
+        risk_level = str(getattr(output, "risk_level", "") or "").lower()
+        issues = getattr(output, "issues", []) or []
+        blocked = getattr(output, "blocked_items", []) or []
+        score = 1.0 if ok else 0.55
+        if risk_level in {"high", "critical"}:
+            score -= 0.35
+        elif risk_level in {"medium"}:
+            score -= 0.15
+        if issues:
+            score -= 0.1
+        if blocked:
+            score -= 0.25
+        return clamp_score(score)
+    if agent_name == "Finalizer":
+        return field_presence_score(output, ["title", "html", "target_collection", "tags", "source_files", "safety_summary"])
+    return clamp_score(default)
+
+
+def field_presence_score(output: Any, fields: list[str]) -> float:
+    if not fields:
+        return 0.0
+    passed = 0
+    for field_name in fields:
+        value = getattr(output, field_name, None)
+        if isinstance(value, str) and value.strip():
+            passed += 1
+        elif isinstance(value, (list, tuple, dict)) and value:
+            passed += 1
+        elif value not in (None, "", [], {}, ()):
+            passed += 1
+    return clamp_score(passed / len(fields))
+
+
+def clamp_score(value: float) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, round(score, 2)))
 
 
 def sensitive_phrases_for_state(state: GenerationState) -> list[str]:

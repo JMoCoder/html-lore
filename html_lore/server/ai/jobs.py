@@ -233,7 +233,7 @@ def sanitize_ai_job(job: dict[str, Any], *, include_private: bool = False) -> di
     stage_trace = sanitize_stage_trace(job.get("stage_trace"))
     if stage_trace:
         sanitized["stage_trace"] = stage_trace
-    checklist = sanitize_execution_checklist(job.get("execution_checklist"))
+    checklist = sanitize_execution_checklist(job.get("execution_checklist"), stage_trace=stage_trace)
     if checklist:
         sanitized["execution_checklist"] = checklist
     skill_trace = sanitize_skill_trace(job.get("skill_trace"))
@@ -356,9 +356,42 @@ def sanitize_agent_artifacts(value: Any) -> list[dict[str, Any]]:
                 "stage": sanitize_generation_stage(raw.get("stage")),
                 "title": title,
                 "summary": str(raw.get("summary") or "")[:360],
+                "input_summary": str(raw.get("input_summary") or "")[:360],
+                "output_summary": str(raw.get("output_summary") or "")[:360],
+                "quality_score": sanitize_float(raw.get("quality_score")),
+                "usage": sanitize_artifact_usage(raw.get("usage")),
+                "warnings": sanitize_string_list(raw.get("warnings"), limit=8, item_limit=180),
                 "data": sanitize_artifact_data(raw.get("data")),
             }
         )
+    return result
+
+
+def sanitize_float(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def sanitize_string_list(value: Any, *, limit: int = 8, item_limit: int = 180) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item or "")[:item_limit] for item in value[:limit] if str(item or "").strip()]
+
+
+def sanitize_artifact_usage(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("input_tokens", "output_tokens", "total_tokens", "duration_ms", "retry_count", "revision_round", "output_chars", "section_count"):
+        raw = value.get(key)
+        if isinstance(raw, bool):
+            continue
+        if isinstance(raw, (int, float)):
+            result[key] = raw
+        elif isinstance(raw, str):
+            result[key] = raw[:80]
     return result
 
 
@@ -399,9 +432,10 @@ def sanitize_stage_metadata(value: Any) -> dict[str, Any]:
     return result
 
 
-def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:
+def sanitize_execution_checklist(value: Any, *, stage_trace: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
     if not isinstance(value, list):
         return []
+    inferred_status = checklist_status_from_trace(stage_trace or [])
     result: list[dict[str, str]] = []
     for raw in value[:80]:
         if not isinstance(raw, dict):
@@ -413,6 +447,8 @@ def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:
         status = str(raw.get("status") or "pending")[:40]
         if status == "done":
             status = "completed"
+        if status in {"", "pending", "running"}:
+            status = inferred_checklist_status(str(raw.get("owner") or ""), inferred_status) or status
         result.append(
             {
                 "id": item_id,
@@ -422,6 +458,34 @@ def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:
             },
         )
     return result
+
+
+def checklist_status_from_trace(stage_trace: list[dict[str, Any]]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for event in stage_trace:
+        if not isinstance(event, dict):
+            continue
+        agent = str(event.get("agent") or "").strip()
+        status = str(event.get("status") or "").strip().lower()
+        if agent and status in {"completed", "failed", "warning"}:
+            result[normalize_checklist_owner(agent)] = status
+    return result
+
+
+def inferred_checklist_status(owner: str, trace_status: dict[str, str]) -> str:
+    normalized = normalize_checklist_owner(owner)
+    if not normalized:
+        return ""
+    aliases = {
+        "writer": "contentwriter",
+        "designer": "styledesigner",
+        "coder": "htmlcoder",
+    }
+    return trace_status.get(normalized) or trace_status.get(aliases.get(normalized, ""), "")
+
+
+def normalize_checklist_owner(value: str) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
 
 
 def sanitize_skill_trace(value: Any) -> list[dict[str, str]]:

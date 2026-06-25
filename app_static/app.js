@@ -56,7 +56,6 @@ const i18n = {
     aiDeepResearchSoon: "Research is planned for the AI generation workflow.",
     staticDemoUnavailable: "Demo mode only previews the interface. This action is unavailable.",
     aiPanelComingSoon: "Conversation and note generation are in development.",
-    aiMoreActions: "More AI actions",
     aiNewConversation: "New conversation",
     aiConversationHistory: "Conversation history",
     aiConversationHistoryEmpty: "No conversation history yet.",
@@ -129,8 +128,38 @@ const i18n = {
     requiresWriter: "Requires metadata writer",
     visible: "Visible",
     aiProviders: "AI providers",
-    aiRunHistory: "Recent AI runs",
+    aiRunHistory: "AI runs",
     aiRunHistoryIntro: "Review recent AI generation runs without exposing prompts, source text, or API keys.",
+    aiGenerationHistory: "AI generation history",
+    aiGenerationHistoryIntro: "Review generated note jobs, open finished notes, retry failures, or manage history.",
+    aiGenerationHistoryDetails: "Details",
+    aiGenerationHistoryMore: "More",
+    aiGenerationHistoryMorePlaceholder: "More generation details will be designed here.",
+    aiGenerationHistoryOpenItem: "Open note",
+    aiGenerationHistoryDeleteConfirm: "Delete or cancel this generation job?",
+    aiGenerationHistoryGeneratedAt: "Generated: {date}",
+    aiGenerationDetailTitle: "AI generation details",
+    aiGenerationDetailEyebrow: "LangGraph workflow",
+    aiGenerationDetailCurrentStage: "Current stage",
+    aiGenerationDetailStarted: "Started",
+    aiGenerationDetailUpdated: "Updated",
+    aiGenerationDetailCompleted: "Completed",
+    aiGenerationDetailMessage: "Message",
+    aiGenerationDetailError: "Error",
+    aiGenerationDetailSummary: "Summary",
+    aiGenerationDetailCurrentAction: "Current action",
+    aiGenerationDetailInputSummary: "Input summary",
+    aiGenerationDetailOutputSummary: "Output summary",
+    aiGenerationDetailQualityScore: "Quality score",
+    aiGenerationDetailUsage: "Usage",
+    aiGenerationDetailWarnings: "Warnings",
+    aiGenerationDetailMetadata: "Metadata",
+    aiGenerationDetailNoStage: "No workflow stage has been recorded yet.",
+    aiGenerationDetailNoData: "No detailed record yet.",
+    aiGenerationDetailLoading: "Loading generation details...",
+    aiGenerationDetailLoadFailed: "Generation details could not be loaded.",
+    aiGenerationDetailCreated: "Created",
+    refreshAiJobs: "Refresh generation history",
     aiRunHistoryEmpty: "No AI runs yet.",
     aiRunHistoryUnavailable: "AI run history requires the backend server.",
     aiRunHistoryFailed: "AI run history could not be loaded.",
@@ -155,12 +184,14 @@ const i18n = {
     aiRunStatusFailed: "Failed",
     aiRunStatusRunning: "Running",
     aiRunStatusPending: "Pending",
+    aiRunStatusRetrying: "Retrying",
+    aiRunStatusWarning: "Warning",
     aiGenerationStageParsing: "Parsing",
     aiGenerationStageAnalyzing: "Analyzing",
     aiGenerationStagePlanning: "Planning",
     aiGenerationStageWriting: "Writing",
     aiGenerationStageDesigning: "Designing",
-    aiGenerationStageCoding: "Coding",
+    aiGenerationStageCoding: "Writing code",
     aiGenerationStageVerifying: "Verifying",
     aiGenerationStageSafety: "Safety review",
     aiGenerationStageFinalizing: "Finalizing",
@@ -168,8 +199,10 @@ const i18n = {
     aiRunNodeCount: "{count} steps",
     aiRunDuration: "{duration}",
     aiRunCompletedAt: "Completed: {date}",
+    aiRunGeneratedAt: "Generated: {date}",
     aiRunItem: "Item: {id}",
     aiRunError: "Error: {message}",
+    aiRunErrorLabel: "Error:",
     aiRunRetryable: "Retryable",
     aiRunNotCancellable: "Not cancellable",
     aiRunDetails: "Details",
@@ -356,7 +389,7 @@ const i18n = {
     noFileSelected: "No file selected",
     fileSelected: "{name}",
     removeFile: "Remove file",
-    chooseReferenceFile: "Upload style reference",
+    chooseReferenceFile: "Upload style",
     referenceFileHint: "Optional style reference. Supports JPG/PNG, HTML, PDF, PPT/PPTX.",
     removeReferenceFile: "Remove reference file",
     moreSettings: "More",
@@ -514,7 +547,6 @@ const i18n = {
     aiDeepResearchSoon: "研究功能将随 AI 生成工作流后续开放。",
     staticDemoUnavailable: "Demo 模式仅用于界面预览，当前操作不可用。",
     aiPanelComingSoon: "对话与生成 HTML 笔记功能开发中。",
-    aiMoreActions: "更多 AI 功能",
     aiNewConversation: "新建对话",
     aiConversationHistory: "对话历史",
     aiConversationHistoryEmpty: "暂无对话历史。",
@@ -587,8 +619,38 @@ const i18n = {
     requiresWriter: "需要元数据写入服务",
     visible: "显示",
     aiProviders: "AI 服务商配置",
-    aiRunHistory: "最近 AI 运行记录",
+    aiRunHistory: "AI 运行记录",
     aiRunHistoryIntro: "查看最近的 AI 生成记录，不展示提示词、来源正文或 API Key。",
+    aiGenerationHistory: "AI 生成历史",
+    aiGenerationHistoryIntro: "查看生成笔记任务，打开已完成笔记，重试失败任务，或管理历史记录。",
+    aiGenerationHistoryDetails: "详情",
+    aiGenerationHistoryMore: "更多",
+    aiGenerationHistoryMorePlaceholder: "更多生成详情将在这里设计。",
+    aiGenerationHistoryOpenItem: "打开笔记",
+    aiGenerationHistoryDeleteConfirm: "确认删除或取消这条生成任务？",
+    aiGenerationHistoryGeneratedAt: "生成时间：{date}",
+    aiGenerationDetailTitle: "AI 生成详情",
+    aiGenerationDetailEyebrow: "LangGraph 工作流",
+    aiGenerationDetailCurrentStage: "当前阶段",
+    aiGenerationDetailStarted: "开始",
+    aiGenerationDetailUpdated: "更新",
+    aiGenerationDetailCompleted: "完成",
+    aiGenerationDetailMessage: "消息",
+    aiGenerationDetailError: "错误",
+    aiGenerationDetailSummary: "摘要",
+    aiGenerationDetailCurrentAction: "当前动作",
+    aiGenerationDetailInputSummary: "输入摘要",
+    aiGenerationDetailOutputSummary: "输出摘要",
+    aiGenerationDetailQualityScore: "质量评分",
+    aiGenerationDetailUsage: "用量统计",
+    aiGenerationDetailWarnings: "警告",
+    aiGenerationDetailMetadata: "元数据",
+    aiGenerationDetailNoStage: "暂无工作流阶段记录。",
+    aiGenerationDetailNoData: "暂无详细记录。",
+    aiGenerationDetailLoading: "正在加载生成详情...",
+    aiGenerationDetailLoadFailed: "无法加载生成详情。",
+    aiGenerationDetailCreated: "创建",
+    refreshAiJobs: "刷新生成历史",
     aiRunHistoryEmpty: "暂无 AI 运行记录。",
     aiRunHistoryUnavailable: "AI 运行记录需要连接后端服务。",
     aiRunHistoryFailed: "无法加载 AI 运行记录。",
@@ -613,12 +675,14 @@ const i18n = {
     aiRunStatusFailed: "失败",
     aiRunStatusRunning: "运行中",
     aiRunStatusPending: "等待中",
+    aiRunStatusRetrying: "重试中",
+    aiRunStatusWarning: "警告",
     aiGenerationStageParsing: "解析资料",
     aiGenerationStageAnalyzing: "分析需求",
     aiGenerationStagePlanning: "规划方案",
     aiGenerationStageWriting: "撰写内容",
     aiGenerationStageDesigning: "设计样式",
-    aiGenerationStageCoding: "生成 HTML",
+    aiGenerationStageCoding: "撰写代码",
     aiGenerationStageVerifying: "验证质量",
     aiGenerationStageSafety: "安全审查",
     aiGenerationStageFinalizing: "整理交付",
@@ -626,8 +690,10 @@ const i18n = {
     aiRunNodeCount: "{count} 个步骤",
     aiRunDuration: "{duration}",
     aiRunCompletedAt: "完成时间：{date}",
+    aiRunGeneratedAt: "生成时间：{date}",
     aiRunItem: "条目：{id}",
     aiRunError: "错误：{message}",
+    aiRunErrorLabel: "错误：",
     aiRunRetryable: "可重试",
     aiRunNotCancellable: "不可取消",
     aiRunDetails: "详情",
@@ -814,7 +880,7 @@ const i18n = {
     noFileSelected: "未选择文件",
     fileSelected: "{name}",
     removeFile: "移除文件",
-    chooseReferenceFile: "上传参考样式",
+    chooseReferenceFile: "上传样式",
     referenceFileHint: "可选样式参考，支持 JPG/PNG、HTML、PDF、PPT/PPTX。",
     removeReferenceFile: "移除参考文件",
     moreSettings: "更多",
@@ -972,7 +1038,6 @@ const i18n = {
     aiDeepResearchSoon: "調査機能は AI 生成ワークフローで後日提供予定です。",
     staticDemoUnavailable: "Demo mode はインターフェースのプレビュー専用です。この操作は利用できません。",
     aiPanelComingSoon: "会話と HTML ノート生成は開発中です。",
-    aiMoreActions: "その他の AI 操作",
     aiNewConversation: "新規会話",
     aiConversationHistory: "会話履歴",
     aiConversationHistoryEmpty: "会話履歴はまだありません。",
@@ -1045,8 +1110,38 @@ const i18n = {
     requiresWriter: "メタデータ書き込みサービスが必要",
     visible: "表示",
     aiProviders: "AI プロバイダー設定",
-    aiRunHistory: "最近の AI 実行",
+    aiRunHistory: "AI 実行記録",
     aiRunHistoryIntro: "プロンプト、元テキスト、API Key を表示せず、最近の AI 生成実行を確認します。",
+    aiGenerationHistory: "AI 生成履歴",
+    aiGenerationHistoryIntro: "生成ノートのジョブを確認し、完了したノートを開き、失敗を再試行し、履歴を管理します。",
+    aiGenerationHistoryDetails: "詳細",
+    aiGenerationHistoryMore: "その他",
+    aiGenerationHistoryMorePlaceholder: "生成詳細はここで設計します。",
+    aiGenerationHistoryOpenItem: "ノートを開く",
+    aiGenerationHistoryDeleteConfirm: "この生成ジョブを削除またはキャンセルしますか？",
+    aiGenerationHistoryGeneratedAt: "生成時刻: {date}",
+    aiGenerationDetailTitle: "AI 生成詳細",
+    aiGenerationDetailEyebrow: "LangGraph ワークフロー",
+    aiGenerationDetailCurrentStage: "現在の段階",
+    aiGenerationDetailStarted: "開始",
+    aiGenerationDetailUpdated: "更新",
+    aiGenerationDetailCompleted: "完了",
+    aiGenerationDetailMessage: "メッセージ",
+    aiGenerationDetailError: "エラー",
+    aiGenerationDetailSummary: "概要",
+    aiGenerationDetailCurrentAction: "現在の動作",
+    aiGenerationDetailInputSummary: "入力概要",
+    aiGenerationDetailOutputSummary: "出力概要",
+    aiGenerationDetailQualityScore: "品質スコア",
+    aiGenerationDetailUsage: "使用量",
+    aiGenerationDetailWarnings: "警告",
+    aiGenerationDetailMetadata: "メタデータ",
+    aiGenerationDetailNoStage: "ワークフロー段階はまだ記録されていません。",
+    aiGenerationDetailNoData: "詳細記録はまだありません。",
+    aiGenerationDetailLoading: "生成詳細を読み込み中...",
+    aiGenerationDetailLoadFailed: "生成詳細を読み込めませんでした。",
+    aiGenerationDetailCreated: "作成",
+    refreshAiJobs: "生成履歴を更新",
     aiRunHistoryEmpty: "AI 実行はまだありません。",
     aiRunHistoryUnavailable: "AI 実行履歴にはバックエンドサーバーが必要です。",
     aiRunHistoryFailed: "AI 実行履歴を読み込めませんでした。",
@@ -1071,12 +1166,14 @@ const i18n = {
     aiRunStatusFailed: "失敗",
     aiRunStatusRunning: "実行中",
     aiRunStatusPending: "待機中",
+    aiRunStatusRetrying: "再試行中",
+    aiRunStatusWarning: "警告",
     aiGenerationStageParsing: "解析",
     aiGenerationStageAnalyzing: "分析",
     aiGenerationStagePlanning: "計画",
     aiGenerationStageWriting: "執筆",
     aiGenerationStageDesigning: "デザイン",
-    aiGenerationStageCoding: "HTML 生成",
+    aiGenerationStageCoding: "コード作成",
     aiGenerationStageVerifying: "検証",
     aiGenerationStageSafety: "安全確認",
     aiGenerationStageFinalizing: "仕上げ",
@@ -1084,8 +1181,10 @@ const i18n = {
     aiRunNodeCount: "{count} ステップ",
     aiRunDuration: "{duration}",
     aiRunCompletedAt: "完了時刻: {date}",
+    aiRunGeneratedAt: "生成時刻: {date}",
     aiRunItem: "項目: {id}",
     aiRunError: "エラー: {message}",
+    aiRunErrorLabel: "エラー:",
     aiRunRetryable: "再試行可能",
     aiRunNotCancellable: "キャンセル不可",
     aiRunDetails: "詳細",
@@ -1272,7 +1371,7 @@ const i18n = {
     noFileSelected: "ファイル未選択",
     fileSelected: "{name}",
     removeFile: "ファイルを削除",
-    chooseReferenceFile: "参考スタイルをアップロード",
+    chooseReferenceFile: "スタイルをアップロード",
     referenceFileHint: "任意のスタイル参考。JPG/PNG、HTML、PDF、PPT/PPTX に対応。",
     removeReferenceFile: "参考ファイルを削除",
     moreSettings: "詳細",
@@ -1443,7 +1542,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.0.4",
+  currentVersion: "1.0.5",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1459,15 +1558,22 @@ const state = {
   aiJobs: [],
   aiJobsOpen: false,
   expandedAiJobIds: new Set(),
-  aiMoreOpen: false,
+  expandedAiGenerationJobIds: new Set(),
+  aiGenerationJobNotices: {},
   aiHistoryOpen: false,
   aiHistory: [],
   aiHistoryLoaded: false,
+  aiHistoryContextKey: "",
   aiConversations: [],
   aiConversationLoadingKey: "",
   aiSuppressedContextKeys: new Set(),
   aiJobsLoaded: false,
   aiJobsPollTimer: 0,
+  aiGenerationDetailJob: null,
+  aiGenerationDetailJobId: "",
+  aiGenerationDetailStageIndex: 0,
+  aiGenerationDetailEventSource: null,
+  aiGenerationDetailPollTimer: 0,
   aiKnownCompletedJobIds: new Set(),
   aiSubmittedJobIds: new Set(),
   selectedAiRunId: "",
@@ -1588,6 +1694,21 @@ const elements = {
   aiRunRefresh: document.querySelector("#ai-run-refresh"),
   aiRunList: document.querySelector("#ai-run-list"),
   aiRunFeedback: document.querySelector("#ai-run-feedback"),
+  aiGenerationRefresh: document.querySelector("#ai-generation-refresh"),
+  aiGenerationList: document.querySelector("#ai-generation-list"),
+  aiGenerationFeedback: document.querySelector("#ai-generation-feedback"),
+  aiGenerationDetail: document.querySelector("#ai-generation-detail"),
+  aiGenerationDetailTitle: document.querySelector("#ai-generation-detail-title"),
+  aiGenerationDetailMeta: document.querySelector("#ai-generation-detail-meta"),
+  aiGenerationDetailStatus: document.querySelector("#ai-generation-detail-status"),
+  aiGenerationStageList: document.querySelector("#ai-generation-stage-list"),
+  aiGenerationStagePanel: document.querySelector("#ai-generation-stage-panel"),
+  aiGenerationDetailChecklist: document.querySelector("#ai-generation-detail-checklist"),
+  aiGenerationDetailSkills: document.querySelector("#ai-generation-detail-skills"),
+  aiGenerationDetailFeedback: document.querySelector("#ai-generation-detail-feedback"),
+  aiGenerationDetailOpen: document.querySelector("#ai-generation-detail-open"),
+  aiGenerationDetailRetry: document.querySelector("#ai-generation-detail-retry"),
+  aiGenerationDetailClose: document.querySelector("#ai-generation-detail-close"),
   aiConversationRefresh: document.querySelector("#ai-conversation-refresh"),
   aiConversationList: document.querySelector("#ai-conversation-list"),
   aiConversationFeedback: document.querySelector("#ai-conversation-feedback"),
@@ -1623,8 +1744,6 @@ const elements = {
   aiHistoryToggle: document.querySelector("#ai-history-toggle"),
   aiHistoryList: document.querySelector("#ai-history-list"),
   aiJobToggle: document.querySelector("#ai-job-toggle"),
-  aiMoreToggle: document.querySelector("#ai-more-toggle"),
-  aiMoreMenu: document.querySelector("#ai-more-menu"),
   aiJobList: document.querySelector("#ai-job-list"),
   luckyButton: document.querySelector("#lucky-button"),
   searchInput: document.querySelector("#search-input"),
@@ -2011,6 +2130,10 @@ async function refreshManifestAndWorkspace() {
 function buildApiUrl(path) {
   if (!state.agentUrl) return path;
   return `${state.agentUrl.replace(/\/$/, "")}${path}`;
+}
+
+function buildApiEventUrl(path) {
+  return withApiAccessToken(buildApiUrl(path));
 }
 
 function getApiHeaders(headers = {}) {
@@ -2401,6 +2524,7 @@ function openReader(item) {
   elements.readerFrame.src = getReaderContentUrl(item);
   renderReaderActions(item);
   renderAiContext();
+  invalidateAiHistoryIfContextChanged();
   window.location.hash = `/${item.id}`;
 }
 
@@ -2477,6 +2601,7 @@ function closeReader() {
     history.pushState("", document.title, window.location.pathname + window.location.search);
   }
   renderAiContext();
+  invalidateAiHistoryIfContextChanged();
 }
 
 function returnToWorkspace() {
@@ -2492,6 +2617,7 @@ function returnToWorkspace() {
     history.pushState("", document.title, window.location.pathname + window.location.search);
   }
   renderAiContext();
+  invalidateAiHistoryIfContextChanged();
 }
 
 function goHome() {
@@ -2546,6 +2672,7 @@ function openSettings(tab = "basic", updateHash = true) {
   setSettingsTab(tab, false);
   elements.settingsPage.hidden = false;
   maybeRefreshAiRuns();
+  maybeRefreshAiGenerationHistory();
   maybeRefreshAiConversations();
   if (updateHash) {
     updateSettingsHash(state.activeSettingsTab);
@@ -2585,6 +2712,7 @@ function setSettingsTab(tab, updateHash = true) {
   renderSettingsTabs();
   if (!elements.settingsPage.hidden) {
     maybeRefreshAiRuns();
+    maybeRefreshAiGenerationHistory();
     maybeRefreshAiConversations();
   }
   if (updateHash) {
@@ -3137,9 +3265,12 @@ function renderReaderActions(item) {
   elements.readerArchive.innerHTML = archiveIcon();
   elements.readerArchive.setAttribute("aria-label", archiveLabel);
   elements.readerArchive.setAttribute("title", archiveLabel);
-  elements.readerAiPanelOpen.innerHTML = archived ? trashIcon() : aiSparkIcon();
-  setIconButtonLabel(elements.readerAiPanelOpen, archived ? "permanentDeleteAction" : "openGlobalAi");
-  elements.readerAiPanelOpen.classList.toggle("danger", archived);
+  if (elements.readerAiPanelOpen) {
+    elements.readerAiPanelOpen.hidden = !archived;
+    elements.readerAiPanelOpen.innerHTML = trashIcon();
+    setIconButtonLabel(elements.readerAiPanelOpen, "permanentDeleteAction");
+    elements.readerAiPanelOpen.classList.toggle("danger", archived);
+  }
   renderReaderShareState();
 }
 
@@ -4390,6 +4521,8 @@ function startSidebarResize(event) {
   elements.body.classList.add("sidebar-resizing");
   const startX = event.clientX;
   const startWidth = state.sidebarWidth;
+  const moveEventName = event.type === "mousedown" ? "mousemove" : "pointermove";
+  const upEventName = event.type === "mousedown" ? "mouseup" : "pointerup";
   const onMove = (moveEvent) => {
     state.sidebarWidth = clampSidebarWidth(startWidth + moveEvent.clientX - startX);
     applySidebarWidth();
@@ -4397,14 +4530,14 @@ function startSidebarResize(event) {
   const onUp = () => {
     elements.body.classList.remove("sidebar-resizing");
     setStored("sidebar-width", String(state.sidebarWidth));
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener(moveEventName, onMove);
+    window.removeEventListener(upEventName, onUp);
     window.removeEventListener("pointercancel", onUp);
     window.removeEventListener("blur", onUp);
     event.currentTarget?.removeEventListener?.("lostpointercapture", onUp);
   };
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
+  window.addEventListener(moveEventName, onMove);
+  window.addEventListener(upEventName, onUp);
   window.addEventListener("pointercancel", onUp);
   window.addEventListener("blur", onUp);
   event.currentTarget?.addEventListener?.("lostpointercapture", onUp, { once: true });
@@ -4434,7 +4567,6 @@ function openAiPanel() {
 
 function closeAiPanel() {
   state.aiPanelOpen = false;
-  state.aiMoreOpen = false;
   state.aiHistoryOpen = false;
   resetAiConversationSession();
   applyAiPanelState();
@@ -4456,10 +4588,9 @@ function applyAiPanelState() {
   elements.body.style.setProperty("--ai-panel-width", `${state.aiPanelWidth}px`);
   elements.body.classList.toggle("ai-panel-open", state.aiPanelOpen);
   elements.aiPanelOpen.classList.toggle("active", state.aiPanelOpen);
-  elements.readerAiPanelOpen.classList.toggle("active", state.aiPanelOpen);
   if (elements.aiSendButton && !elements.aiSendButton.innerHTML.trim()) elements.aiSendButton.innerHTML = enterArrowIcon();
   applyAiComposerHeight();
-  renderAiMoreMenu();
+  renderAiToolbarActions();
   applySidebarWidth();
 }
 
@@ -4629,7 +4760,9 @@ function stripAssistantSourceFooter(text, sources = []) {
 
 function updateAiPanelConversationState() {
   const hasMessages = Boolean(elements.aiChatLog?.children.length);
+  const hasHistory = state.aiHistoryLoaded && Array.isArray(state.aiHistory) && state.aiHistory.length > 0 && state.aiHistoryContextKey === getAiHistoryContextKey();
   elements.aiPanel?.classList.toggle("has-ai-messages", hasMessages);
+  elements.aiPanel?.classList.toggle("has-ai-history", hasHistory || state.aiHistoryOpen);
   if (elements.aiContextCard) elements.aiContextCard.hidden = hasMessages;
 }
 
@@ -4910,6 +5043,22 @@ function getAiContextKey(payload = buildAiContextPayload()) {
   })}`;
 }
 
+function getAiHistoryContextKey() {
+  return getAiContextKey(buildAiContextPayload());
+}
+
+function invalidateAiHistoryIfContextChanged() {
+  const contextKey = getAiHistoryContextKey();
+  if (state.aiHistoryContextKey === contextKey) return;
+  state.aiHistory = [];
+  state.aiHistoryLoaded = false;
+  state.aiHistoryContextKey = contextKey;
+  state.aiHistoryOpen = false;
+  renderAiHistory();
+  updateAiPanelConversationState();
+  renderAiToolbarActions();
+}
+
 function compactJson(value) {
   if (Array.isArray(value)) return `[${value.map((item) => compactJson(item)).join(",")}]`;
   if (value && typeof value === "object") {
@@ -4991,9 +5140,9 @@ function startNewAiConversation() {
   resetAiConversationSession();
   state.aiConversationLoadedKey = contextKey;
   state.aiHistoryOpen = false;
-  state.aiMoreOpen = false;
   renderAiHistory();
-  renderAiMoreMenu();
+  renderAiToolbarActions();
+  loadAiHistory({ keepClosed: true }).catch((error) => console.error(error));
 }
 
 function setAiContentExpansion(enabled) {
@@ -5222,23 +5371,25 @@ function startAiPanelResize(event) {
   if (event.pointerId !== undefined) event.currentTarget?.setPointerCapture?.(event.pointerId);
   elements.body.classList.add("ai-panel-resizing");
   const panelBox = elements.aiPanel.getBoundingClientRect();
-  const pointerOffset = event.clientX - panelBox.left;
+  const startX = event.clientX;
   const startWidth = panelBox.width;
+  const moveEventName = event.type === "mousedown" ? "mousemove" : "pointermove";
+  const upEventName = event.type === "mousedown" ? "mouseup" : "pointerup";
   const onMove = (moveEvent) => {
-    state.aiPanelWidth = clampAiPanelWidth(startWidth + panelBox.left - moveEvent.clientX + pointerOffset);
+    state.aiPanelWidth = clampAiPanelWidth(startWidth + startX - moveEvent.clientX);
     applyAiPanelState();
   };
   const onUp = () => {
     elements.body.classList.remove("ai-panel-resizing");
     setStored("ai-panel-width", String(state.aiPanelWidth));
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener(moveEventName, onMove);
+    window.removeEventListener(upEventName, onUp);
     window.removeEventListener("pointercancel", onUp);
     window.removeEventListener("blur", onUp);
     event.currentTarget?.removeEventListener?.("lostpointercapture", onUp);
   };
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
+  window.addEventListener(moveEventName, onMove);
+  window.addEventListener(upEventName, onUp);
   window.addEventListener("pointercancel", onUp);
   window.addEventListener("blur", onUp);
   event.currentTarget?.addEventListener?.("lostpointercapture", onUp, { once: true });
@@ -5527,8 +5678,13 @@ function renderAiConfig() {
 }
 
 function maybeRefreshAiRuns() {
-  if (state.activeSettingsTab !== "ai") return;
+  if (state.activeSettingsTab !== "ai-runs") return;
   loadAiRuns();
+}
+
+function maybeRefreshAiGenerationHistory() {
+  if (state.activeSettingsTab !== "ai-generation-history") return;
+  loadAiGenerationHistory();
 }
 
 function maybeRefreshAiConversations() {
@@ -5550,6 +5706,7 @@ async function loadAiJobs() {
     const wasLoaded = state.aiJobsLoaded;
     state.aiJobs = Array.isArray(data.jobs) ? data.jobs : [];
     renderAiJobs();
+    if (state.activeSettingsTab === "ai-generation-history") renderAiGenerationHistory();
     if (!wasLoaded) {
       state.aiJobs.filter((job) => job.status === "completed").forEach((job) => state.aiKnownCompletedJobIds.add(job.job_id));
     }
@@ -5578,101 +5735,89 @@ async function loadAiJobs() {
 function toggleAiJobs() {
   state.aiJobsOpen = !state.aiJobsOpen;
   state.aiHistoryOpen = false;
-  state.aiMoreOpen = false;
   renderAiHistory();
   renderAiJobs();
-  renderAiMoreMenu();
+  renderAiToolbarActions();
   if (state.aiJobsOpen) loadAiJobs();
 }
 
 function toggleAiHistory() {
   state.aiHistoryOpen = !state.aiHistoryOpen;
   state.aiJobsOpen = false;
-  state.aiMoreOpen = false;
   renderAiJobs();
   renderAiHistory();
-  renderAiMoreMenu();
+  renderAiToolbarActions();
   if (state.aiHistoryOpen) loadAiHistory();
-}
-
-function toggleAiMoreMenu(event) {
-  event?.stopPropagation();
-  const shouldOpen = !state.aiMoreOpen || state.aiJobsOpen || state.aiHistoryOpen;
-  state.aiJobsOpen = false;
-  state.aiHistoryOpen = false;
-  state.aiMoreOpen = shouldOpen;
-  renderAiJobs();
-  renderAiHistory();
-  renderAiMoreMenu();
-}
-
-function closeAiMoreMenu() {
-  if (!state.aiMoreOpen) return;
-  state.aiMoreOpen = false;
-  renderAiMoreMenu();
 }
 
 function closeAiHistoryPanel() {
   if (!state.aiHistoryOpen) return;
   state.aiHistoryOpen = false;
   renderAiHistory();
-  renderAiMoreMenu();
+  renderAiToolbarActions();
+}
+
+function handleAiHistoryOutsideClick(event) {
+  if (!state.aiHistoryOpen) return;
+  const path = event.composedPath?.() || [];
+  if (path.includes(elements.aiHistoryList) || path.includes(elements.aiHistoryToggle)) return;
+  const target = event.target;
+  if (elements.aiHistoryList?.contains(target) || elements.aiHistoryToggle?.contains(target)) return;
+  closeAiHistoryPanel();
 }
 
 function closeAiJobsPanel() {
   if (!state.aiJobsOpen) return;
   state.aiJobsOpen = false;
   renderAiJobs();
-  renderAiMoreMenu();
+  renderAiToolbarActions();
 }
 
-function handleAiMoreOutsideClick(event) {
-  if (!state.aiMoreOpen) return;
-  const target = event.target;
-  if (elements.aiMoreToggle?.contains(target) || elements.aiMoreMenu?.contains(target)) return;
-  closeAiMoreMenu();
-}
-
-function renderAiMoreMenu() {
-  if (!elements.aiMoreToggle || !elements.aiMoreMenu) return;
+function renderAiToolbarActions() {
   const activeCount = activeAiJobCount();
-  elements.aiMoreToggle.innerHTML = `${moreIcon()}${activeCount > 0 ? `<span>${activeCount}</span>` : ""}`;
-  elements.aiMoreToggle.classList.toggle("active", state.aiMoreOpen);
-  elements.aiMoreMenu.hidden = !state.aiMoreOpen;
   if (elements.aiHistoryToggle) {
-    elements.aiHistoryToggle.innerHTML = `${historyIcon()}<span>${escapeHtml(t("aiConversationHistory"))}</span>`;
+    elements.aiHistoryToggle.innerHTML = historyIcon();
     elements.aiHistoryToggle.classList.toggle("active", state.aiHistoryOpen);
     elements.aiHistoryToggle.setAttribute("aria-expanded", String(state.aiHistoryOpen));
   }
   if (elements.aiNewChat) {
-    elements.aiNewChat.innerHTML = `${plusIcon()}<span>${escapeHtml(t("aiNewConversation"))}</span>`;
+    elements.aiNewChat.innerHTML = plusIcon();
     elements.aiNewChat.classList.remove("active");
   }
   if (elements.aiJobToggle) {
-    elements.aiJobToggle.innerHTML = `${queueIcon()}<span>${escapeHtml(t("aiJobQueue"))}</span>${activeCount > 0 ? `<em>${activeCount}</em>` : ""}`;
+    elements.aiJobToggle.innerHTML = `${queueIcon()}${activeCount > 0 ? `<span>${activeCount}</span>` : ""}`;
     elements.aiJobToggle.classList.toggle("active", state.aiJobsOpen);
     elements.aiJobToggle.setAttribute("aria-expanded", String(state.aiJobsOpen));
   }
 }
 
-async function loadAiHistory() {
+async function loadAiHistory(options = {}) {
+  const contextKey = getAiHistoryContextKey();
+  state.aiHistoryContextKey = contextKey;
   if (!elements.aiHistoryList || !state.agentUrl) {
     state.aiHistory = [];
+    state.aiHistoryLoaded = true;
     renderAiHistory();
+    updateAiPanelConversationState();
     return;
   }
   try {
-    const response = await apiFetch("/api/ai/conversations?limit=20", { cache: "no-store" });
+    const params = new URLSearchParams({ limit: "20" });
+    if (contextKey) params.set("context_key", contextKey);
+    const response = await apiFetch(`/api/ai/conversations?${params.toString()}`, { cache: "no-store" });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || `Agent returned ${response.status}`);
     state.aiHistory = Array.isArray(data.conversations) ? data.conversations : [];
     state.aiHistoryLoaded = true;
+    if (options.keepClosed) state.aiHistoryOpen = false;
     renderAiHistory();
+    updateAiPanelConversationState();
   } catch (error) {
     console.error(error);
     state.aiHistoryLoaded = true;
     state.aiHistory = null;
     renderAiHistory();
+    updateAiPanelConversationState();
   }
 }
 
@@ -5733,7 +5878,7 @@ function renderAiConversationManagementRow(conversation) {
     </div>
   `;
   row.querySelector("[data-ai-conversation-open]")?.addEventListener("click", () => openAiConversationContext(conversation));
-  row.querySelector("[data-ai-conversation-delete]")?.addEventListener("click", () => deleteAiConversation(conversation.id || ""));
+  row.querySelector("[data-ai-conversation-delete]")?.addEventListener("click", () => deleteAiConversation(conversation.id || "", { refreshManagement: true }));
   return row;
 }
 
@@ -5780,24 +5925,26 @@ function openAiConversationContext(conversation) {
   loadAiConversation(conversation).catch((error) => console.error(error));
 }
 
-async function deleteAiConversation(conversationId) {
+async function deleteAiConversation(conversationId, options = {}) {
   if (!conversationId || !state.agentUrl) return;
   if (!window.confirm(t("deleteConversationConfirm"))) return;
   try {
     const response = await apiFetch(`/api/ai/conversations/${encodeURIComponent(conversationId)}`, { method: "DELETE" });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || `Agent returned ${response.status}`);
-    elements.aiConversationFeedback.textContent = t("aiConversationDeleted");
+    if (elements.aiConversationFeedback) elements.aiConversationFeedback.textContent = t("aiConversationDeleted");
     if (state.aiConversationId === conversationId) resetAiConversationSession();
-    await loadAiConversationManagement();
+    await loadAiHistory({ keepClosed: !state.aiHistoryOpen });
+    if (options.refreshManagement !== false) await loadAiConversationManagement();
   } catch (error) {
-    elements.aiConversationFeedback.textContent = error?.message || t("aiConversationHistoryFailed");
+    if (elements.aiConversationFeedback) elements.aiConversationFeedback.textContent = error?.message || t("aiConversationHistoryFailed");
     console.error(error);
   }
 }
 
 function renderAiHistory() {
   if (!elements.aiHistoryList) return;
+  updateAiPanelConversationState();
   elements.aiHistoryList.hidden = !state.aiHistoryOpen;
   if (!state.aiHistoryOpen) return;
   const header = renderAiPopoverHeader(t("aiConversationHistory"), closeAiHistoryPanel);
@@ -5817,16 +5964,18 @@ function renderAiHistory() {
 }
 
 function renderAiHistoryRow(conversation) {
-  const row = document.createElement("button");
-  row.type = "button";
+  const row = document.createElement("div");
   row.className = "ai-history-row";
   row.classList.toggle("active", conversation.id === state.aiConversationId);
   const contextLabel = getConversationContextLabel(conversation);
   row.innerHTML = `
-    <strong>${escapeHtml(conversation.title || t("aiConversation"))}</strong>
-    <span>${escapeHtml(contextLabel)} · ${escapeHtml(formatDateTime(conversation.updated_at || conversation.created_at))} · ${escapeHtml(String(conversation.message_count || 0))}</span>
+    <button type="button" class="ai-history-row-main">
+      <strong>${escapeHtml(conversation.title || t("aiConversation"))}</strong>
+      <span>${escapeHtml(contextLabel)} · ${escapeHtml(formatDateTime(conversation.updated_at || conversation.created_at))} · ${escapeHtml(String(conversation.message_count || 0))}</span>
+    </button>
+    <button type="button" class="ai-history-delete" aria-label="${escapeHtml(t("deleteConversation"))}" title="${escapeHtml(t("deleteConversation"))}">${trashIcon()}</button>
   `;
-  row.addEventListener("click", async () => {
+  row.querySelector(".ai-history-row-main")?.addEventListener("click", async () => {
     try {
       state.aiHistoryOpen = false;
       renderAiHistory();
@@ -5835,21 +5984,38 @@ function renderAiHistoryRow(conversation) {
       console.error(error);
     }
   });
+  row.querySelector(".ai-history-delete")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    deleteAiConversation(conversation.id || "", { refreshManagement: false }).catch((error) => console.error(error));
+  });
   return row;
 }
 
 function renderAiJobs() {
   if (!elements.aiJobList || !elements.aiJobToggle) return;
-  renderAiMoreMenu();
+  renderAiToolbarActions();
   elements.aiJobList.hidden = !state.aiJobsOpen;
   if (!state.aiJobsOpen) return;
   const header = renderAiPopoverHeader(t("aiJobQueue"), closeAiJobsPanel);
   if (state.aiJobs.length === 0) {
-    elements.aiJobList.replaceChildren(header, emptyState(t("aiJobQueueEmpty")));
+    elements.aiJobList.replaceChildren(header, emptyState(t("aiJobQueueEmpty")), renderAiJobMoreButton());
     return;
   }
-  const orderedJobs = [...state.aiJobs].sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
-  elements.aiJobList.replaceChildren(header, ...orderedJobs.map(renderAiJobRow));
+  const orderedJobs = getOrderedAiJobs(state.aiJobs).slice(0, 5);
+  elements.aiJobList.replaceChildren(header, ...orderedJobs.map(renderAiJobRow), renderAiJobMoreButton());
+}
+
+function getOrderedAiJobs(jobs) {
+  return [...(Array.isArray(jobs) ? jobs : [])].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+}
+
+function renderAiJobMoreButton() {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "ai-job-more-button";
+  button.textContent = t("aiGenerationHistoryMore");
+  button.addEventListener("click", openAiGenerationHistorySettings);
+  return button;
 }
 
 function renderAiPopoverHeader(label, onClose) {
@@ -5879,63 +6045,404 @@ function renderAiJobRow(job) {
   const row = document.createElement("div");
   row.className = "ai-job-row";
   const jobId = String(job.job_id || "");
-  const hasDetails = hasAiJobDetails(job);
-  const expanded = hasDetails && state.expandedAiJobIds.has(jobId);
   const statusClass = `status-${String(job.status || "pending").toLowerCase().replace(/[^a-z0-9-]/g, "") || "pending"}`;
   row.classList.add(statusClass);
-  if (hasDetails) {
-    row.classList.add("has-details");
-    row.setAttribute("role", "button");
-    row.setAttribute("tabindex", "0");
-    row.setAttribute("aria-expanded", String(expanded));
-  }
   const label = job.label || getAiRunKindLabel(job);
   const isActive = ["pending", "running"].includes(job.status);
-  const isCompleted = job.status === "completed";
   const isFailed = job.status === "failed";
-  const itemMeta = job.item_id ? `<span>${escapeHtml(t("aiRunItem", { id: job.item_id }))}</span>` : "";
-  const timeMeta = isCompleted ? `<span>${escapeHtml(formatDateTime(job.completed_at || job.updated_at))}</span>` : "";
-  const stageMeta = job.current_stage ? `<span>${escapeHtml(formatAiGenerationStage(job.current_stage))}</span>` : "";
-  const messageText = isCompleted ? "" : (job.error?.message || job.message || "");
-  const message = messageText ? `<span>${escapeHtml(messageText)}</span>` : "";
-  const action = job.cancellable
-    ? `<button type="button" class="ai-job-icon-button" data-ai-job-cancel="${escapeHtml(job.job_id)}" aria-label="${escapeHtml(t("cancel"))}" title="${escapeHtml(t("cancel"))}">×</button>`
-    : (isFailed && job.retryable ? `<button type="button" class="ai-job-icon-button" data-ai-job-retry="${escapeHtml(job.job_id)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(t("aiJobRetry"))}">${retryIcon()}</button>` : "");
+  const timeValue = job.completed_at || job.updated_at || job.created_at || "";
+  const timeMeta = timeValue ? `<span>${escapeHtml(formatDateTime(timeValue))}</span>` : "";
+  const retryAction = isFailed && job.retryable
+    ? `<button type="button" class="ai-job-icon-button" data-ai-job-retry="${escapeHtml(job.job_id)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(t("aiJobRetry"))}">${retryIcon()}</button>`
+    : "";
   row.innerHTML = `
     <div class="ai-job-main">
       <strong>${escapeHtml(label)}</strong>
       <span class="ai-run-meta">
         ${isActive ? '<i class="ai-job-progress-dot" aria-hidden="true"></i>' : ""}
         <em class="ai-run-status ${statusClass}">${escapeHtml(getAiRunStatusLabel(job.status))}</em>
-        ${stageMeta}
-        ${itemMeta}
         ${timeMeta}
-        ${message}
       </span>
     </div>
-    ${action}
-    ${expanded ? renderAiJobDetails(job) : ""}
+    <div class="ai-job-actions">
+      ${retryAction}
+      <button type="button" class="ai-job-detail-link" data-ai-job-details="${escapeHtml(jobId)}">${escapeHtml(t("aiGenerationHistoryDetails"))}</button>
+    </div>
   `;
-  if (hasDetails) {
-    row.addEventListener("click", (event) => {
-      if (event.target.closest("button, a")) return;
-      toggleAiJobDetails(jobId);
-    });
-    row.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      toggleAiJobDetails(jobId);
-    });
-  }
-  row.querySelector("[data-ai-job-cancel]")?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    cancelAiJob(job.job_id);
-  });
   row.querySelector("[data-ai-job-retry]")?.addEventListener("click", (event) => {
     event.stopPropagation();
     retryAiJob(job.job_id);
   });
+  row.querySelector("[data-ai-job-details]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openAiGenerationHistorySettings();
+  });
   return row;
+}
+
+function openAiGenerationHistorySettings() {
+  closeAiJobsPanel();
+  openSettings("ai-generation-history");
+}
+
+async function loadAiGenerationHistory() {
+  if (!elements.aiGenerationList) return;
+  if (elements.aiGenerationRefresh) elements.aiGenerationRefresh.disabled = true;
+  if (!state.agentUrl) {
+    state.aiJobs = [];
+    renderAiGenerationHistory();
+    elements.aiGenerationFeedback.textContent = t("aiRunHistoryUnavailable");
+    if (elements.aiGenerationRefresh) elements.aiGenerationRefresh.disabled = false;
+    return;
+  }
+  try {
+    const response = await apiFetch("/api/ai/jobs?limit=100", { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `Agent returned ${response.status}`);
+    state.aiJobs = Array.isArray(data.jobs) ? data.jobs : [];
+    renderAiJobs();
+    renderAiGenerationHistory();
+    elements.aiGenerationFeedback.textContent = "";
+  } catch (error) {
+    state.aiJobs = [];
+    renderAiJobs();
+    renderAiGenerationHistory();
+    elements.aiGenerationFeedback.textContent = t("aiRunHistoryFailed");
+    console.error(error);
+  } finally {
+    if (elements.aiGenerationRefresh) elements.aiGenerationRefresh.disabled = false;
+  }
+}
+
+function renderAiGenerationHistory() {
+  if (!elements.aiGenerationList) return;
+  const jobs = getOrderedAiJobs(state.aiJobs);
+  if (jobs.length === 0) {
+    elements.aiGenerationList.innerHTML = `<div class="empty-state">${escapeHtml(t("aiJobQueueEmpty"))}</div>`;
+    return;
+  }
+  const activeOrder = new Map(
+    [...jobs]
+      .filter((job) => ["pending", "running"].includes(String(job.status || "").toLowerCase()))
+      .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")))
+      .map((job, index) => [String(job.job_id || ""), index + 1])
+  );
+  elements.aiGenerationList.replaceChildren(...jobs.map((job) => renderAiGenerationHistoryRow(job, activeOrder)));
+}
+
+function renderAiGenerationHistoryRow(job, activeOrder = new Map()) {
+  const row = document.createElement("div");
+  row.className = "management-row ai-generation-row";
+  const jobId = String(job.job_id || "");
+  const expanded = state.expandedAiGenerationJobIds.has(jobId);
+  const statusClass = `status-${String(job.status || "pending").toLowerCase().replace(/[^a-z0-9-]/g, "") || "pending"}`;
+  const title = job.label || getAiRunKindLabel(job);
+  const generatedAt = job.completed_at || job.updated_at || job.created_at || "";
+  const item = job.item_id ? getItemById(job.item_id) : null;
+  const notice = state.aiGenerationJobNotices[jobId] || "";
+  const isActive = ["pending", "running"].includes(String(job.status || "").toLowerCase());
+  const openButton = job.status === "completed" && item
+    ? `<button type="button" class="ai-run-icon-button" data-ai-generation-open="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiGenerationHistoryOpenItem"))}" title="${escapeHtml(t("aiGenerationHistoryOpenItem"))}">${openNoteIcon()}</button>`
+    : "";
+  const retryButton = job.status === "failed"
+    ? `<button type="button" class="ai-run-icon-button" data-ai-generation-retry="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(t("aiJobRetry"))}">${retryIcon()}</button>`
+    : "";
+  const queueIndex = activeOrder.get(jobId);
+  const activeButton = isActive
+    ? `<button type="button" class="ai-run-status-button" disabled>${queueIndex ? `<span class="ai-run-queue-index">#${escapeHtml(String(queueIndex))}</span>` : ""}<i class="ai-job-progress-dot" aria-hidden="true"></i>${escapeHtml(getAiRunStatusLabel(job.status))}</button>`
+    : "";
+  row.innerHTML = `
+    <div class="management-name">
+      <strong>${escapeHtml(title)}</strong>
+      <span class="ai-run-meta">
+        <em class="ai-run-status ${statusClass}">${escapeHtml(getAiRunStatusLabel(job.status))}</em>
+        ${generatedAt ? `<span>${escapeHtml(t("aiGenerationHistoryGeneratedAt", { date: formatDateTime(generatedAt) }))}</span>` : ""}
+      </span>
+    </div>
+    <div class="ai-run-actions-inline">
+      ${openButton}
+      ${retryButton}
+      ${activeButton}
+      <button type="button" class="ai-run-icon-button" data-ai-generation-delete="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("delete"))}" title="${escapeHtml(t("delete"))}">${trashIcon()}</button>
+      <button type="button" class="ai-run-icon-button primary-inline-button" data-ai-generation-more="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiGenerationHistoryDetails"))}" title="${escapeHtml(t("aiGenerationHistoryDetails"))}">${detailIcon()}</button>
+    </div>
+    ${notice ? `<div class="ai-generation-row-notice">${escapeHtml(notice)}</div>` : ""}
+    ${expanded ? `<div class="ai-generation-more-panel">${escapeHtml(t("aiGenerationHistoryMorePlaceholder"))}</div>` : ""}
+  `;
+  row.querySelector("[data-ai-generation-open]")?.addEventListener("click", () => {
+    if (!item) return;
+    closeSettings();
+    openReader(item);
+  });
+  row.querySelector("[data-ai-generation-retry]")?.addEventListener("click", () => retryAiGenerationJob(jobId));
+  row.querySelector("[data-ai-generation-delete]")?.addEventListener("click", () => deleteAiGenerationJob(jobId));
+  row.querySelector("[data-ai-generation-more]")?.addEventListener("click", () => openAiGenerationDetail(job));
+  return row;
+}
+
+async function deleteAiGenerationJob(jobId) {
+  if (!jobId) return;
+  if (!window.confirm(t("aiGenerationHistoryDeleteConfirm"))) return;
+  await cancelAiJob(jobId);
+}
+
+function openAiGenerationDetail(job) {
+  const jobId = String(job?.job_id || "");
+  if (!jobId || !elements.aiGenerationDetail) return;
+  state.aiGenerationDetailJobId = jobId;
+  state.aiGenerationDetailJob = job || null;
+  state.aiGenerationDetailStageIndex = 0;
+  elements.aiGenerationDetail.hidden = false;
+  renderAiGenerationDetail();
+  loadAiGenerationDetail(jobId);
+}
+
+function closeAiGenerationDetail() {
+  if (!elements.aiGenerationDetail) return;
+  elements.aiGenerationDetail.hidden = true;
+  state.aiGenerationDetailJobId = "";
+  state.aiGenerationDetailJob = null;
+  state.aiGenerationDetailStageIndex = 0;
+  stopAiGenerationDetailPolling();
+}
+
+async function loadAiGenerationDetail(jobId = state.aiGenerationDetailJobId) {
+  if (!jobId || !state.agentUrl) return;
+  if (elements.aiGenerationDetailFeedback) elements.aiGenerationDetailFeedback.textContent = t("aiGenerationDetailLoading");
+  try {
+    const response = await apiFetch(`/api/ai/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `Agent returned ${response.status}`);
+    state.aiGenerationDetailJob = data.job || null;
+    syncAiJobInList(state.aiGenerationDetailJob);
+    if (elements.aiGenerationDetailFeedback) elements.aiGenerationDetailFeedback.textContent = "";
+    renderAiGenerationDetail();
+    if (["pending", "running"].includes(String(state.aiGenerationDetailJob?.status || "").toLowerCase())) {
+      startAiGenerationDetailPolling();
+    } else {
+      stopAiGenerationDetailPolling();
+    }
+  } catch (error) {
+    if (elements.aiGenerationDetailFeedback) elements.aiGenerationDetailFeedback.textContent = error?.message || t("aiGenerationDetailLoadFailed");
+    console.error(error);
+  }
+}
+
+function syncAiJobInList(job) {
+  if (!job?.job_id) return;
+  const index = state.aiJobs.findIndex((item) => item.job_id === job.job_id);
+  if (index >= 0) state.aiJobs[index] = job;
+  else state.aiJobs.unshift(job);
+  renderAiJobs();
+  if (state.activeSettingsTab === "ai-generation-history") renderAiGenerationHistory();
+}
+
+function startAiGenerationDetailPolling() {
+  if (!state.aiGenerationDetailJobId) return;
+  if (state.aiGenerationDetailEventSource || state.aiGenerationDetailPollTimer) return;
+  if (window.EventSource) {
+    const source = new EventSource(buildApiEventUrl(`/api/ai/jobs/${encodeURIComponent(state.aiGenerationDetailJobId)}/events`), { withCredentials: true });
+    state.aiGenerationDetailEventSource = source;
+    source.addEventListener("job", (event) => {
+      const data = parseJsonSafe(event.data);
+      if (!data?.job) return;
+      state.aiGenerationDetailJob = data.job;
+      syncAiJobInList(data.job);
+      if (elements.aiGenerationDetailFeedback) elements.aiGenerationDetailFeedback.textContent = "";
+      renderAiGenerationDetail();
+      if (!["pending", "running"].includes(String(data.job.status || "").toLowerCase())) {
+        stopAiGenerationDetailPolling();
+      }
+    });
+    source.onerror = () => {
+      stopAiGenerationDetailEventSource();
+      if (state.aiGenerationDetailJobId && !state.aiGenerationDetailPollTimer) {
+        state.aiGenerationDetailPollTimer = window.setInterval(() => loadAiGenerationDetail(), 1800);
+      }
+    };
+    return;
+  }
+  state.aiGenerationDetailPollTimer = window.setInterval(() => loadAiGenerationDetail(), 1800);
+}
+
+function stopAiGenerationDetailPolling() {
+  stopAiGenerationDetailEventSource();
+  if (state.aiGenerationDetailPollTimer) {
+    window.clearInterval(state.aiGenerationDetailPollTimer);
+    state.aiGenerationDetailPollTimer = 0;
+  }
+}
+
+function stopAiGenerationDetailEventSource() {
+  if (!state.aiGenerationDetailEventSource) return;
+  state.aiGenerationDetailEventSource.close();
+  state.aiGenerationDetailEventSource = null;
+}
+
+function parseJsonSafe(value) {
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return null;
+  }
+}
+
+function renderAiGenerationDetail() {
+  const job = state.aiGenerationDetailJob;
+  if (!elements.aiGenerationDetail || !job) return;
+  const title = job.label || getAiRunKindLabel(job);
+  const statusClass = `status-${String(job.status || "pending").toLowerCase().replace(/[^a-z0-9-]/g, "") || "pending"}`;
+  elements.aiGenerationDetailTitle.textContent = title;
+  elements.aiGenerationDetailMeta.innerHTML = [
+    job.created_at ? `${escapeHtml(t("aiGenerationDetailCreated"))}: ${escapeHtml(formatDateTime(job.created_at))}` : "",
+    job.updated_at ? `${escapeHtml(t("aiGenerationDetailUpdated"))}: ${escapeHtml(formatDateTime(job.updated_at))}` : "",
+    job.completed_at ? `${escapeHtml(t("aiGenerationDetailCompleted"))}: ${escapeHtml(formatDateTime(job.completed_at))}` : "",
+  ].filter(Boolean).map((item) => `<span>${item}</span>`).join("");
+  const stageLabel = job.current_stage ? formatAiGenerationStage(job.current_stage) : "";
+  const currentAction = getAiGenerationCurrentAction(job);
+  elements.aiGenerationDetailStatus.innerHTML = `
+    <span class="ai-run-status ${statusClass}">${escapeHtml(getAiRunStatusLabel(job.status))}</span>
+    ${stageLabel ? `<span>${escapeHtml(t("aiGenerationDetailCurrentStage"))}: ${escapeHtml(stageLabel)}</span>` : ""}
+    ${currentAction ? `<span>${escapeHtml(t("aiGenerationDetailCurrentAction"))}: ${escapeHtml(currentAction)}</span>` : ""}
+    ${job.message ? `<span>${escapeHtml(t("aiGenerationDetailMessage"))}: ${escapeHtml(job.message)}</span>` : ""}
+    ${job.error?.message ? `<span class="ai-run-error">${escapeHtml(t("aiGenerationDetailError"))}: ${escapeHtml(job.error.message)}</span>` : ""}
+  `;
+  renderAiGenerationDetailActions(job);
+  renderAiGenerationStageList(job);
+  renderAiGenerationStagePanel(job);
+  renderAiGenerationDetailChecklist(job);
+  renderAiGenerationDetailSkills(job);
+}
+
+function renderAiGenerationDetailActions(job) {
+  const item = job.item_id ? getItemById(job.item_id) : null;
+  const canOpenItem = job.status === "completed" && item;
+  elements.aiGenerationDetailOpen.hidden = false;
+  elements.aiGenerationDetailOpen.disabled = !canOpenItem;
+  elements.aiGenerationDetailRetry.hidden = job.status !== "failed";
+  elements.aiGenerationDetailOpen.onclick = () => {
+    if (!canOpenItem) return;
+    closeAiGenerationDetail();
+    closeSettings();
+    openReader(item);
+  };
+  elements.aiGenerationDetailRetry.onclick = () => retryAiGenerationJob(job.job_id || "");
+}
+
+function getAiGenerationStages(job) {
+  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace : [];
+  if (traces.length > 0) return traces;
+  if (job?.current_stage) return [{ stage: job.current_stage, status: job.status || "pending", message: job.message || "" }];
+  return [];
+}
+
+function renderAiGenerationStageList(job) {
+  const stages = getAiGenerationStages(job);
+  if (!elements.aiGenerationStageList) return;
+  if (stages.length === 0) {
+    elements.aiGenerationStageList.innerHTML = `<div class="empty-state">${escapeHtml(t("aiGenerationDetailNoStage"))}</div>`;
+    return;
+  }
+  const maxIndex = stages.length - 1;
+  if (state.aiGenerationDetailStageIndex > maxIndex) state.aiGenerationDetailStageIndex = maxIndex;
+  elements.aiGenerationStageList.replaceChildren(...stages.map((stage, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ai-generation-stage-node";
+    button.classList.toggle("active", index === state.aiGenerationDetailStageIndex);
+    button.classList.toggle("running", stage.status === "running");
+    button.classList.toggle("failed", stage.status === "failed");
+    button.innerHTML = `
+      <span class="ai-generation-stage-dot"></span>
+      <strong>${escapeHtml(formatAiGenerationStage(stage.stage || stage.node || stage.name || ""))}</strong>
+      <small>${escapeHtml([stage.agent || "", getAiRunStatusLabel(stage.status)].filter(Boolean).join(" · "))}</small>
+    `;
+    button.addEventListener("click", () => {
+      state.aiGenerationDetailStageIndex = index;
+      renderAiGenerationDetail();
+    });
+    return button;
+  }));
+}
+
+function renderAiGenerationStagePanel(job) {
+  const stages = getAiGenerationStages(job);
+  const stage = stages[state.aiGenerationDetailStageIndex] || null;
+  const artifact = findAiGenerationArtifact(job, stage);
+  if (!elements.aiGenerationStagePanel) return;
+  if (!stage) {
+    elements.aiGenerationStagePanel.innerHTML = `<div class="empty-state">${escapeHtml(t("aiGenerationDetailNoData"))}</div>`;
+    return;
+  }
+  const metadataRows = renderKeyValueList(stage.metadata || {});
+  const artifactRows = artifact ? renderAiGenerationArtifactDetail(artifact) : "";
+  const currentAction = stage.message || getAiGenerationCurrentAction({ ...job, current_stage: stage.stage });
+  elements.aiGenerationStagePanel.innerHTML = `
+    <div class="ai-generation-stage-detail-head">
+      <div>
+        <p>${escapeHtml(stage.agent || stage.node || "")}</p>
+        <h3>${escapeHtml(formatAiGenerationStage(stage.stage || stage.node || stage.name || ""))}</h3>
+      </div>
+      <span class="ai-run-status status-${escapeHtml(normalizeAiRunStatus(stage.status))}">${escapeHtml(getAiRunStatusLabel(stage.status))}</span>
+    </div>
+    <div class="ai-generation-stage-facts">
+      ${stage.started_at ? `<span>${escapeHtml(t("aiGenerationDetailStarted"))}: ${escapeHtml(formatDateTime(stage.started_at))}</span>` : ""}
+      ${stage.completed_at ? `<span>${escapeHtml(t("aiGenerationDetailCompleted"))}: ${escapeHtml(formatDateTime(stage.completed_at))}</span>` : ""}
+      ${formatDuration(stage.duration_ms) ? `<span>${escapeHtml(formatDuration(stage.duration_ms))}</span>` : ""}
+    </div>
+    ${currentAction ? `<section><h4>${escapeHtml(t("aiGenerationDetailCurrentAction"))}</h4><p>${escapeHtml(currentAction)}</p></section>` : ""}
+    ${stage.error_summary || stage.error ? `<section><h4>${escapeHtml(t("aiGenerationDetailError"))}</h4><p class="ai-run-error">${escapeHtml(stage.error_summary || stage.error)}</p></section>` : ""}
+    ${artifactRows}
+    ${metadataRows ? `<section><h4>${escapeHtml(t("aiGenerationDetailMetadata"))}</h4>${metadataRows}</section>` : ""}
+  `;
+}
+
+function findAiGenerationArtifact(job, stage) {
+  const artifacts = Array.isArray(job?.agent_artifacts) ? job.agent_artifacts : [];
+  if (!stage || artifacts.length === 0) return null;
+  const stageKey = String(stage.stage || stage.node || "").toLowerCase();
+  const agentKey = String(stage.agent || "").toLowerCase();
+  return artifacts.find((artifact) => {
+    const artifactStage = String(artifact.stage || "").toLowerCase();
+    const artifactAgent = String(artifact.agent || "").toLowerCase();
+    return (stageKey && artifactStage && (artifactStage.includes(stageKey) || stageKey.includes(artifactStage))) ||
+      (agentKey && artifactAgent && artifactAgent === agentKey);
+  }) || null;
+}
+
+function renderAiGenerationArtifactDetail(artifact) {
+  const summary = artifact.summary ? `<section><h4>${escapeHtml(t("aiGenerationDetailSummary"))}</h4><p>${escapeHtml(artifact.summary)}</p></section>` : "";
+  const inputSummary = artifact.input_summary ? `<section><h4>${escapeHtml(t("aiGenerationDetailInputSummary"))}</h4><p>${escapeHtml(artifact.input_summary)}</p></section>` : "";
+  const outputSummary = artifact.output_summary ? `<section><h4>${escapeHtml(t("aiGenerationDetailOutputSummary"))}</h4><p>${escapeHtml(artifact.output_summary)}</p></section>` : "";
+  const qualityScore = Number(artifact.quality_score || 0);
+  const quality = qualityScore > 0 ? `<section><h4>${escapeHtml(t("aiGenerationDetailQualityScore"))}</h4><p>${escapeHtml(formatQualityScore(qualityScore))}</p></section>` : "";
+  const usageRows = artifact.usage && typeof artifact.usage === "object" ? renderKeyValueList(artifact.usage) : "";
+  const usage = usageRows ? `<section><h4>${escapeHtml(t("aiGenerationDetailUsage"))}</h4>${usageRows}</section>` : "";
+  const warnings = Array.isArray(artifact.warnings) && artifact.warnings.length > 0
+    ? `<section><h4>${escapeHtml(t("aiGenerationDetailWarnings"))}</h4><ul class="ai-generation-detail-list">${artifact.warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`
+    : "";
+  const data = artifact.data && typeof artifact.data === "object" ? renderKeyValueList(artifact.data) : "";
+  return `${summary}${inputSummary}${outputSummary}${quality}${usage}${warnings}${data ? `<section><h4>${escapeHtml(artifact.title || artifact.agent || t("aiJobArtifacts"))}</h4>${data}</section>` : ""}`;
+}
+
+function renderAiGenerationDetailChecklist(job) {
+  const items = Array.isArray(job.execution_checklist) ? job.execution_checklist : [];
+  if (!elements.aiGenerationDetailChecklist) return;
+  if (items.length === 0) {
+    elements.aiGenerationDetailChecklist.innerHTML = `<p>${escapeHtml(t("aiGenerationDetailNoData"))}</p>`;
+    return;
+  }
+  elements.aiGenerationDetailChecklist.innerHTML = `<ul class="ai-generation-chip-list">${items.map((item) => `<li><span>${escapeHtml(item.label || item.title || item.id || "")}</span><em>${escapeHtml(getAiRunStatusLabel(item.status))}</em></li>`).join("")}</ul>`;
+}
+
+function renderAiGenerationDetailSkills(job) {
+  const items = Array.isArray(job.skill_trace) ? job.skill_trace : [];
+  if (!elements.aiGenerationDetailSkills) return;
+  if (items.length === 0) {
+    elements.aiGenerationDetailSkills.innerHTML = `<p>${escapeHtml(t("aiGenerationDetailNoData"))}</p>`;
+    return;
+  }
+  elements.aiGenerationDetailSkills.innerHTML = `<ul class="ai-generation-chip-list">${items.map((item) => `<li><span>${escapeHtml(item.title || item.id || "")}</span><em>${escapeHtml(item.agent || item.source || "")}</em></li>`).join("")}</ul>`;
 }
 
 function toggleAiJobDetails(jobId) {
@@ -6054,6 +6561,7 @@ async function cancelAiJob(jobId) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || `Agent returned ${response.status}`);
     await loadAiJobs();
+    if (state.activeSettingsTab === "ai-generation-history") renderAiGenerationHistory();
   } catch (error) {
     console.error(error);
   }
@@ -6068,11 +6576,27 @@ async function retryAiJob(jobId) {
     state.aiSubmittedJobIds.add(data.job_id || jobId);
     appendAiMessage("assistant", t("aiJobRetrying", { jobId: data.job_id || jobId }));
     await loadAiJobs();
+    if (state.activeSettingsTab === "ai-generation-history") renderAiGenerationHistory();
     startAiJobPolling();
+    return { ok: true, jobId: data.job_id || jobId };
   } catch (error) {
     appendAiMessage("assistant", error?.message || t("aiJobFailed", { message: jobId }));
     console.error(error);
+    return { ok: false, message: error?.message || t("aiJobFailed", { message: jobId }) };
   }
+}
+
+async function retryAiGenerationJob(jobId) {
+  if (elements.aiGenerationFeedback) elements.aiGenerationFeedback.textContent = "";
+  state.aiGenerationJobNotices[jobId] = "";
+  renderAiGenerationHistory();
+  const result = await retryAiJob(jobId);
+  if (result?.ok) {
+    state.aiGenerationJobNotices[jobId] = t("aiJobRetrying", { jobId: result.jobId || jobId });
+  } else {
+    state.aiGenerationJobNotices[jobId] = result?.message || t("aiJobFailed", { message: jobId });
+  }
+  renderAiGenerationHistory();
 }
 
 function hasActiveAiJobs() {
@@ -6145,31 +6669,31 @@ function renderAiRunRow(run) {
   const statusLabel = getAiRunStatusLabel(run.status);
   const statusClass = `status-${String(run.status || "pending").toLowerCase().replace(/[^a-z0-9-]/g, "") || "pending"}`;
   const nodeCount = Array.isArray(run.node_trace) ? run.node_trace.length : 0;
-  const itemMeta = run.item_id ? `<span>${escapeHtml(t("aiRunItem", { id: run.item_id }))}</span>` : "";
   const duration = formatDuration(run.duration_ms);
   const durationMeta = duration ? `<span>${escapeHtml(t("aiRunDuration", { duration }))}</span>` : "";
-  const completedMeta = run.completed_at ? `<span>${escapeHtml(t("aiRunCompletedAt", { date: formatDateTime(run.completed_at) }))}</span>` : "";
-  const errorMessage = run.error?.message ? `<span class="ai-run-error">${escapeHtml(t("aiRunError", { message: run.error.message }))}</span>` : "";
+  const completedMeta = run.completed_at ? `<span>${escapeHtml(t(run.kind === "material_html_generation" ? "aiRunGeneratedAt" : "aiRunCompletedAt", { date: formatDateTime(run.completed_at) }))}</span>` : "";
   const capabilityMeta = [
-    run.retryable ? `<span class="ai-run-capability">${escapeHtml(t("aiRunRetryable"))}</span>` : "",
     run.cancellable ? "" : `<span class="ai-run-capability muted">${escapeHtml(t("aiRunNotCancellable"))}</span>`,
+    run.retryable ? `<span class="ai-run-capability">${escapeHtml(t("aiRunRetryable"))}</span>` : "",
   ].join("");
+  const facts = [
+    completedMeta,
+    durationMeta,
+    `<span>${escapeHtml(t("aiRunNodeCount", { count: nodeCount }))}</span>`,
+    capabilityMeta,
+  ].filter(Boolean).join("");
   row.innerHTML = `
     <div class="management-name">
       <strong>${escapeHtml(kindLabel)}</strong>
       <span class="ai-run-meta">
-        <em class="ai-run-status ${statusClass}">${escapeHtml(statusLabel)}</em>
-        ${itemMeta}
-        ${durationMeta}
-        ${completedMeta}
-        <span>${escapeHtml(t("aiRunNodeCount", { count: nodeCount }))}</span>
-        ${errorMessage}
-        ${capabilityMeta}
+        <span class="ai-run-meta-primary">
+          <em class="ai-run-status ${statusClass}">${escapeHtml(statusLabel)}</em>
+          <span class="ai-run-facts">${facts}</span>
+        </span>
       </span>
     </div>
     <div class="ai-run-actions-inline">
       <button type="button" class="secondary-button" data-ai-run-details="${escapeHtml(runId)}">${escapeHtml(t(selected ? "aiRunHideDetails" : "aiRunDetails"))}</button>
-      <code>${escapeHtml(runId.slice(0, 12))}</code>
     </div>
     ${selected ? renderAiRunDetails(details) : ""}
   `;
@@ -6187,9 +6711,6 @@ function renderAiRunDetails(run) {
   const specItems = renderKeyValueList(run.spec || {});
   const usageItems = renderAiRunUsage(run.usage || {});
   const budgetItems = renderKeyValueList(run.budget || {});
-  const nodeItems = Array.isArray(run.node_trace) && run.node_trace.length > 0
-    ? `<ol>${run.node_trace.map((node) => `<li>${escapeHtml(node.node || node.name || t("aiRunNodes"))} <em>${escapeHtml(node.status || "")}</em></li>`).join("")}</ol>`
-    : `<p>${escapeHtml(t("aiRunNodeCount", { count: 0 }))}</p>`;
   const errorMessage = run.error?.message ? `<p class="ai-run-error">${escapeHtml(t("aiRunError", { message: run.error.message }))}</p>` : "";
   return `
     <div class="ai-run-detail-panel">
@@ -6204,10 +6725,6 @@ function renderAiRunDetails(run) {
       <section>
         <h4>${escapeHtml(t("aiRunBudget"))}</h4>
         ${budgetItems || `<p>${escapeHtml(t("aiRunNoDetailData"))}</p>`}
-      </section>
-      <section>
-        <h4>${escapeHtml(t("aiRunNodes"))}</h4>
-        ${nodeItems}
       </section>
       ${errorMessage}
     </div>
@@ -6275,9 +6792,37 @@ function getAiRunStatusLabel(status) {
     completed: "aiRunStatusCompleted",
     failed: "aiRunStatusFailed",
     running: "aiRunStatusRunning",
+    started: "aiRunStatusRunning",
     pending: "aiRunStatusPending",
-  }[String(status || "").toLowerCase()];
+    retrying: "aiRunStatusRetrying",
+    warning: "aiRunStatusWarning",
+  }[normalizeAiRunStatus(status)];
   return key ? t(key) : String(status || t("aiRunStatusPending"));
+}
+
+function normalizeAiRunStatus(status) {
+  const value = String(status || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+  if (value === "started") return "running";
+  if (value === "done") return "completed";
+  return value || "pending";
+}
+
+function getAiGenerationCurrentAction(job) {
+  const stages = getAiGenerationStages(job);
+  const running = [...stages].reverse().find((stage) => ["started", "running", "retrying"].includes(normalizeAiRunStatus(stage.status)));
+  const currentStage = running?.stage || job.current_stage || "";
+  const agent = running?.agent || "";
+  const message = running?.message || "";
+  if (message && !String(message).toLowerCase().includes("started")) return message;
+  const label = formatAiGenerationStage(currentStage);
+  if (!label && !agent) return "";
+  return [agent, label].filter(Boolean).join(" · ");
+}
+
+function formatQualityScore(value) {
+  const score = Number(value || 0);
+  if (!Number.isFinite(score) || score <= 0) return "";
+  return score <= 1 ? `${Math.round(score * 100)} / 100` : `${Math.round(score)} / 100`;
 }
 
 function formatAiGenerationStage(stage) {
@@ -6290,21 +6835,33 @@ function formatAiGenerationStage(stage) {
     analyze: "aiGenerationStageAnalyzing",
     analyzing: "aiGenerationStageAnalyzing",
     requirement_analysis: "aiGenerationStageAnalyzing",
+    analyzing_requirements: "aiGenerationStageAnalyzing",
+    requirement_analyst: "aiGenerationStageAnalyzing",
     planning: "aiGenerationStagePlanning",
     plan: "aiGenerationStagePlanning",
+    planner: "aiGenerationStagePlanning",
     writing: "aiGenerationStageWriting",
     content_writing: "aiGenerationStageWriting",
+    writing_content: "aiGenerationStageWriting",
+    content_writer: "aiGenerationStageWriting",
     designing: "aiGenerationStageDesigning",
     designing_style: "aiGenerationStageDesigning",
     style_design: "aiGenerationStageDesigning",
+    style_designer: "aiGenerationStageDesigning",
     coding: "aiGenerationStageCoding",
+    coding_html: "aiGenerationStageCoding",
     html_coding: "aiGenerationStageCoding",
+    html_coder: "aiGenerationStageCoding",
     verifying: "aiGenerationStageVerifying",
     verification: "aiGenerationStageVerifying",
+    verifier: "aiGenerationStageVerifying",
     safety: "aiGenerationStageSafety",
     safety_review: "aiGenerationStageSafety",
+    safety_checking: "aiGenerationStageSafety",
+    safety_reviewer: "aiGenerationStageSafety",
     finalizing: "aiGenerationStageFinalizing",
     finalize: "aiGenerationStageFinalizing",
+    finalizer: "aiGenerationStageFinalizing",
     write: "aiGenerationStageWritingFile",
     writing_file: "aiGenerationStageWritingFile",
   }[normalized];
@@ -6587,16 +7144,6 @@ function queueIcon() {
   `;
 }
 
-function moreIcon() {
-  return `
-    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.5"></circle>
-      <circle cx="12" cy="12" r="1.5"></circle>
-      <circle cx="19" cy="12" r="1.5"></circle>
-    </svg>
-  `;
-}
-
 function plusIcon() {
   return `
     <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -6687,6 +7234,35 @@ function openContextIcon() {
   `;
 }
 
+function openNoteIcon() {
+  return `
+    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 4h12a2 2 0 0 1 2 2v9l-5 5H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+      <path d="M13 20v-5h5"></path>
+    </svg>
+  `;
+}
+
+function detailIcon() {
+  return `
+    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8"></circle>
+      <path d="M12 8v4"></path>
+      <path d="M12 16h.1"></path>
+    </svg>
+  `;
+}
+
+function moreDotsIcon() {
+  return `
+    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12h.1"></path>
+      <path d="M12 12h.1"></path>
+      <path d="M19 12h.1"></path>
+    </svg>
+  `;
+}
+
 function moonIcon() {
   return `
     <svg class="button-icon moon-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -6743,7 +7319,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.4-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.0.5-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
@@ -6869,12 +7445,14 @@ elements.searchInput.addEventListener("input", (event) => {
 elements.brandHome.addEventListener("click", openWorkspaceHome);
 elements.sidebarCollapse.addEventListener("click", toggleSidebar);
 elements.sidebarResize.addEventListener("pointerdown", startSidebarResize);
+elements.sidebarResize.addEventListener("mousedown", startSidebarResize);
 elements.navSectionToggles.forEach((button) => {
   button.addEventListener("click", () => toggleNavSection(button.dataset.navSectionToggle));
 });
 elements.aiPanelOpen.addEventListener("click", toggleAiPanel);
 elements.aiPanelClose.addEventListener("click", closeAiPanel);
 elements.aiPanelResize.addEventListener("pointerdown", startAiPanelResize);
+elements.aiPanelResize.addEventListener("mousedown", startAiPanelResize);
 elements.aiComposerResize?.addEventListener("pointerdown", startAiComposerResize);
 elements.aiComposerResize?.addEventListener("mousedown", startAiComposerResize);
 elements.aiChatForm.addEventListener("submit", submitAiMessage);
@@ -6885,8 +7463,7 @@ elements.aiGenerateNote.addEventListener("click", openGenerateNoteDialog);
 elements.aiNewChat?.addEventListener("click", startNewAiConversation);
 elements.aiHistoryToggle?.addEventListener("click", toggleAiHistory);
 elements.aiJobToggle?.addEventListener("click", toggleAiJobs);
-elements.aiMoreToggle?.addEventListener("click", toggleAiMoreMenu);
-document.addEventListener("click", handleAiMoreOutsideClick);
+document.addEventListener("click", handleAiHistoryOutsideClick);
 elements.luckyButton.addEventListener("click", openLuckyItem);
 elements.multiFilterToggle.addEventListener("click", toggleMultiFilterPopover);
 elements.tagMatchButtons.forEach((button) => {
@@ -6908,6 +7485,10 @@ document.addEventListener("click", (event) => {
   closeSortPopover();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && elements.aiGenerationDetail && !elements.aiGenerationDetail.hidden) {
+    closeAiGenerationDetail();
+    return;
+  }
   if (event.key === "Escape" && !elements.codeEditor.hidden) {
     closeCodeEditor();
     return;
@@ -6948,6 +7529,11 @@ elements.exportManifest.addEventListener("click", exportManifestData);
 elements.exportPreferences.addEventListener("click", exportPreferencesData);
 elements.testProvider.addEventListener("click", testProviderConfig);
 elements.aiRunRefresh?.addEventListener("click", loadAiRuns);
+elements.aiGenerationRefresh?.addEventListener("click", loadAiGenerationHistory);
+elements.aiGenerationDetailClose?.addEventListener("click", closeAiGenerationDetail);
+elements.aiGenerationDetail?.addEventListener("click", (event) => {
+  if (event.target === elements.aiGenerationDetail) closeAiGenerationDetail();
+});
 elements.aiConversationRefresh?.addEventListener("click", loadAiConversationManagement);
 elements.newItemForm.addEventListener("submit", submitNewItem);
 elements.newGenerationToggle?.addEventListener("click", toggleNewGenerationOptions);
@@ -6971,9 +7557,8 @@ elements.readerArchive.addEventListener("click", () => {
 elements.readerShare.addEventListener("click", () => {
   if (state.currentReaderItemId) openShareDialog(state.currentReaderItemId);
 });
-elements.readerAiPanelOpen.addEventListener("click", () => {
-  if (state.currentReaderItemId) openReaderAiPanel();
-  else openAiPanel();
+elements.readerAiPanelOpen?.addEventListener("click", () => {
+  if (state.currentReaderItemId) permanentlyDeleteItem(state.currentReaderItemId);
 });
 elements.readerFrame.addEventListener("load", bindReaderFrameScroll);
 elements.shareForm.addEventListener("submit", submitShareDialog);

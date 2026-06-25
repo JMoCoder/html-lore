@@ -80,6 +80,8 @@ Implemented today:
   sources when an external search adapter is configured.
 - AI run history, lightweight asynchronous generation history, retryable failed
   conversation-generation jobs, and global conversation management in Settings.
+- AI generation history includes LangGraph workflow details, SSE updates, stage
+  summaries, token usage, lightweight quality scores, and redacted run metadata.
 - Beta HTML note generation from an AI conversation using a staged
   PM/UX/Coder/QA/Reviewer graph.
 - Beta material-to-HTML generation from uploaded HTML, Markdown, or text
