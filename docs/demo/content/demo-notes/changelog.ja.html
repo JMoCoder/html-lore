@@ -15,12 +15,24 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.5</span></aside>
+<aside class="stat"><span class="badge">1.1.0</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
 <p>Languages: <a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.1.0] - 2026-06-26</h2>
+<h3>Added</h3>
+<ul>
+<li>HTML generation が Q&amp;A の短い response limit を継承しないよう、<code>HTML_LORE_AI_GENERATION_MAX_TOKENS</code> を追加しました。</li>
+<li>provider chat / embedding の待機時間を設定できる <code>HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS</code> と <code>HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS</code> を追加しました。</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>長い HTML generation 向けに provider wait handling を緩和しました。node retry、max graph steps、reviewer revision limit は維持し、generation job 全体の wall-clock hard cutoff は追加していません。</li>
+<li>README と AI generation closure note に、streamed multi-agent path が local note を生成・書き込みできる実生成検証を追記しました。</li>
+<li>パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを <code>1.1.0</code> に更新しました。</li>
+</ul>
 <h2>[1.0.5] - 2026-06-25</h2>
 <h3>Added</h3>
 <ul>

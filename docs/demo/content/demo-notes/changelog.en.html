@@ -15,7 +15,7 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.5</span></aside>
+<aside class="stat"><span class="badge">1.1.0</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
@@ -24,6 +24,18 @@
 <p>The format is based on Keep a Changelog, and this project uses semantic</p>
 <p>versioning after the initial public release.</p>
 <h2>[Unreleased]</h2>
+<h2>[1.1.0] - 2026-06-26</h2>
+<h3>Added</h3>
+<ul>
+<li>Added <code>HTML_LORE_AI_GENERATION_MAX_TOKENS</code> so HTML generation has its own output budget instead of inheriting the shorter Q&amp;A response limit.</li>
+<li>Added configurable provider chat and embedding wait times with <code>HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS</code> and <code>HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS</code>.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>Relaxed provider wait handling for long HTML generation while keeping node retries, max graph steps, and reviewer revision limits; no total wall-clock cutoff is applied to a generation job.</li>
+<li>Updated README and AI generation closure notes with a real complex-generation validation showing the streamed multi-agent path can write a local note.</li>
+<li>Updated package, app, PWA, demo, and provider user-agent versions to <code>1.1.0</code>.</li>
+</ul>
 <h2>[1.0.5] - 2026-06-25</h2>
 <h3>Added</h3>
 <ul>

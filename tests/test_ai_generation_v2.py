@@ -400,12 +400,16 @@ def test_generation_config_defaults_to_legacy(monkeypatch) -> None:
 def test_generation_config_accepts_v2(monkeypatch) -> None:
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_ENGINE", "v2")
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_MODEL", "custom-generation-model")
+    monkeypatch.setenv("HTML_LORE_AI_GENERATION_MAX_TOKENS", "16000")
+    monkeypatch.setenv("HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS", "240")
     monkeypatch.setenv("HTML_LORE_DOCUMENT_PARSER", "basic")
 
     settings = load_settings()
 
     assert settings.ai_generation_engine == "v2"
     assert settings.ai_generation_model == "custom-generation-model"
+    assert settings.ai_generation_max_tokens == 16000
+    assert settings.ai_provider_timeout_seconds == 240
     assert settings.document_parser == "basic"
 
 

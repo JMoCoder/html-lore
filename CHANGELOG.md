@@ -9,6 +9,26 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-26
+
+### Added
+
+- Added `HTML_LORE_AI_GENERATION_MAX_TOKENS` so HTML generation has its own
+  output budget instead of inheriting the shorter Q&A response limit.
+- Added configurable provider chat and embedding wait times with
+  `HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS` and
+  `HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS`.
+
+### Changed
+
+- Relaxed provider wait handling for long HTML generation while keeping node
+  retries, max graph steps, and reviewer revision limits; no total wall-clock
+  cutoff is applied to a generation job.
+- Updated README and AI generation closure notes with a real complex-generation
+  validation showing the streamed multi-agent path can write a local note.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.1.0`.
+
 ## [1.0.5] - 2026-06-25
 
 ### Added

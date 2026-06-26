@@ -15,12 +15,24 @@
 <p class="eyebrow">发布轨迹</p>
 <h1>HTMlore 更新日志</h1>
 </article>
-<aside class="stat"><span class="badge">1.0.5</span></aside>
+<aside class="stat"><span class="badge">1.1.0</span></aside>
 </section>
 <section class="timeline doc">
 <h1>更新日志</h1>
 <p>语言：<a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.1.0] - 2026-06-26</h2>
+<h3>新增</h3>
+<ul>
+<li>AI 生成链路新增独立的生成输出上限配置 <code>HTML_LORE_AI_GENERATION_MAX_TOKENS</code>，避免 HTML 生成受知识库问答短回答上限影响。</li>
+<li>新增可配置的 provider chat / embedding 等待时间：<code>HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS</code> 与 <code>HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS</code>。</li>
+</ul>
+<h3>变更</h3>
+<ul>
+<li>放宽长 HTML 生成的 provider 等待策略，保留节点级重试、最大图步数和 reviewer 修订轮次上限，但不增加整个生成任务的总耗时硬截断。</li>
+<li>README 与 AI 生成主链路收口文档补充真实复杂生成验证：流式 provider 调用下完整多 agent 链路可生成并写入本地资料库。</li>
+<li>包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为 <code>1.1.0</code>。</li>
+</ul>
 <h2>[1.0.5] - 2026-06-25</h2>
 <h3>新增</h3>
 <ul>

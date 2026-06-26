@@ -4,6 +4,26 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-26
+
+### Added
+
+- HTML generation が Q&A の短い response limit を継承しないよう、
+  `HTML_LORE_AI_GENERATION_MAX_TOKENS` を追加しました。
+- provider chat / embedding の待機時間を設定できる
+  `HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS` と
+  `HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS` を追加しました。
+
+### Changed
+
+- 長い HTML generation 向けに provider wait handling を緩和しました。node retry、
+  max graph steps、reviewer revision limit は維持し、generation job 全体の
+  wall-clock hard cutoff は追加していません。
+- README と AI generation closure note に、streamed multi-agent path が local note
+  を生成・書き込みできる実生成検証を追記しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.1.0` に更新しました。
+
 ## [1.0.5] - 2026-06-25
 
 ### Added

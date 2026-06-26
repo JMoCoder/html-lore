@@ -418,7 +418,7 @@ class AIConversationService:
         return build_provider_generation_client(
             ModelClient(config),
             max_prompt_chars=self.settings.ai_max_prompt_chars,
-            max_tokens=max(self.settings.ai_max_response_tokens, 4096),
+            max_tokens=self.settings.ai_generation_max_tokens,
         )
 
 

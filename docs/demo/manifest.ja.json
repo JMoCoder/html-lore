@@ -9,7 +9,7 @@
     {
       "id": "demo-notes/readme.ja.html",
       "title": "HTMlore README 完全版",
-      "summary": "日本語 README 全文を HTML 化し、プロジェクトの方向性、ノートブックフロー、1.0.5 AI generation workflow details、Docker デプロイ、API、セキュリティ、ロードマップをまとめています。",
+      "summary": "日本語 README 全文を HTML 化し、プロジェクトの方向性、ノートブックフロー、1.1.0 AI generation workflow details、Docker デプロイ、API、セキュリティ、ロードマップをまとめています。",
       "path": "content/demo-notes/readme.ja.html",
       "source_type": "html",
       "source_url": null,
@@ -35,7 +35,7 @@
     {
       "id": "demo-notes/changelog.ja.html",
       "title": "HTMlore 変更履歴",
-      "summary": "日本語 CHANGELOG 全文を HTML 化し、1.0.5 AI generation workflow details と過去の開発マイルストーンを表示します。",
+      "summary": "日本語 CHANGELOG 全文を HTML 化し、1.1.0 AI generation workflow details と過去の開発マイルストーンを表示します。",
       "path": "content/demo-notes/changelog.ja.html",
       "source_type": "html",
       "source_url": null,

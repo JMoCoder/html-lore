@@ -810,6 +810,7 @@ def test_openai_compatible_adapter_uses_bearer_header_without_logging_key(monkey
 
     def fake_urlopen(request, timeout):
         seen["url"] = request.full_url
+        seen["timeout"] = timeout
         seen["authorization"] = request.get_header("Authorization")
         seen["user_agent"] = request.get_header("User-agent") or request.get_header("User-Agent") or ""
         seen["body"] = request.data.decode("utf-8")
@@ -823,12 +824,14 @@ def test_openai_compatible_adapter_uses_bearer_header_without_logging_key(monkey
             model="gpt-5.5",
             enabled=True,
             api_key="test-secret-key",
+            timeout_seconds=240,
         ),
     )
 
     response = adapter.chat(messages=[{"role": "user", "content": "ping"}])
 
     assert seen["url"] == "https://api.example.test/v1/chat/completions"
+    assert seen["timeout"] == 240
     assert seen["authorization"] == "Bearer test-secret-key"
     assert seen["body"].count('"stream": true') == 1
     assert "HTMlore" in seen["user_agent"]

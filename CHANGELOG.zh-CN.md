@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-26
+
+### 新增
+
+- AI 生成链路新增独立的生成输出上限配置 `HTML_LORE_AI_GENERATION_MAX_TOKENS`，避免 HTML 生成受知识库问答短回答上限影响。
+- 新增可配置的 provider chat / embedding 等待时间：`HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS` 与 `HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS`。
+
+### 变更
+
+- 放宽长 HTML 生成的 provider 等待策略，保留节点级重试、最大图步数和 reviewer 修订轮次上限，但不增加整个生成任务的总耗时硬截断。
+- README 与 AI 生成主链路收口文档补充真实复杂生成验证：流式 provider 调用下完整多 agent 链路可生成并写入本地资料库。
+- 包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为
+  `1.1.0`。
+
 ## [1.0.5] - 2026-06-25
 
 ### 新增

@@ -31,6 +31,8 @@ class AIProviderConfig:
     enabled: bool = False
     secret_ref: str = "env:HTML_LORE_AI_API_KEY"
     api_key: str = ""
+    timeout_seconds: int = 180
+    embedding_timeout_seconds: int = 45
 
     @property
     def configured(self) -> bool:
@@ -50,6 +52,7 @@ class AIProviderConfig:
             "configured": self.configured,
             "secret_ref": self.secret_ref,
             "has_api_key": bool(self.api_key),
+            "timeout_seconds": self.timeout_seconds,
         }
 
 
@@ -84,6 +87,8 @@ class AIProviderConfigStore:
             embedding_model=embedding_model,
             enabled=enabled,
             api_key=self.settings.ai_api_key,
+            timeout_seconds=self.settings.ai_provider_timeout_seconds,
+            embedding_timeout_seconds=self.settings.ai_embedding_timeout_seconds,
         )
 
     def update(self, values: dict[str, Any]) -> AIProviderConfig:
@@ -166,12 +171,12 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.0.5 curl-compatible",
+                "User-Agent": "HTMlore/1.1.0 curl-compatible",
                 "Accept": "application/json, text/event-stream",
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=45) as response:
+            with urllib.request.urlopen(request, timeout=self.config.timeout_seconds) as response:
                 raw_response = response.read().decode("utf-8")
                 data = parse_provider_response(raw_response)
         except urllib.error.HTTPError as exc:
@@ -203,12 +208,12 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.0.5 curl-compatible",
+                "User-Agent": "HTMlore/1.1.0 curl-compatible",
                 "Accept": "application/json",
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=45) as response:
+            with urllib.request.urlopen(request, timeout=self.config.embedding_timeout_seconds) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = provider_error_detail(exc)

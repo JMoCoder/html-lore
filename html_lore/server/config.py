@@ -41,12 +41,15 @@ class ServerSettings:
     ai_max_prompt_chars: int = 12000
     ai_max_message_chars: int = 4000
     ai_max_response_tokens: int = 1024
+    ai_provider_timeout_seconds: int = 180
+    ai_embedding_timeout_seconds: int = 45
     ai_rate_limit_requests: int = 20
     ai_rate_limit_window_seconds: int = 60
     ai_retrieval_mode: str = "keyword"
     ai_qa_engine: str = "auto"
     ai_generation_engine: str = "legacy"
     ai_generation_model: str = "gpt-5.5"
+    ai_generation_max_tokens: int = 12000
     document_parser: str = "markitdown"
 
     @property
@@ -107,12 +110,15 @@ def load_settings() -> ServerSettings:
     ai_max_prompt_chars = parse_positive_int(get_env("AI_MAX_PROMPT_CHARS", "12000"), 12000)
     ai_max_message_chars = parse_positive_int(get_env("AI_MAX_MESSAGE_CHARS", "4000"), 4000)
     ai_max_response_tokens = parse_positive_int(get_env("AI_MAX_RESPONSE_TOKENS", "1024"), 1024)
+    ai_provider_timeout_seconds = parse_positive_int(get_env("AI_PROVIDER_TIMEOUT_SECONDS", "180"), 180)
+    ai_embedding_timeout_seconds = parse_positive_int(get_env("AI_EMBEDDING_TIMEOUT_SECONDS", "45"), 45)
     ai_rate_limit_requests = parse_positive_int(get_env("AI_RATE_LIMIT_REQUESTS", "20"), 20)
     ai_rate_limit_window_seconds = parse_positive_int(get_env("AI_RATE_LIMIT_WINDOW_SECONDS", "60"), 60)
     ai_retrieval_mode = parse_choice(get_env("AI_RETRIEVAL_MODE", "keyword"), {"keyword", "vector", "hybrid"}, "keyword")
     ai_qa_engine = parse_choice(get_env("AI_QA_ENGINE", "auto"), {"auto", "agent_runtime", "langgraph"}, "auto")
     ai_generation_engine = parse_choice(get_env("AI_GENERATION_ENGINE", "legacy"), {"legacy", "v2"}, "legacy")
     ai_generation_model = get_env("AI_GENERATION_MODEL", "gpt-5.5").strip() or "gpt-5.5"
+    ai_generation_max_tokens = parse_positive_int(get_env("AI_GENERATION_MAX_TOKENS", "12000"), 12000)
     document_parser = parse_choice(get_env("DOCUMENT_PARSER", "markitdown"), {"markitdown", "basic"}, "markitdown")
     return ServerSettings(
         content_dir=content_dir,
@@ -149,12 +155,15 @@ def load_settings() -> ServerSettings:
         ai_max_prompt_chars=ai_max_prompt_chars,
         ai_max_message_chars=ai_max_message_chars,
         ai_max_response_tokens=ai_max_response_tokens,
+        ai_provider_timeout_seconds=ai_provider_timeout_seconds,
+        ai_embedding_timeout_seconds=ai_embedding_timeout_seconds,
         ai_rate_limit_requests=ai_rate_limit_requests,
         ai_rate_limit_window_seconds=ai_rate_limit_window_seconds,
         ai_retrieval_mode=ai_retrieval_mode,
         ai_qa_engine=ai_qa_engine,
         ai_generation_engine=ai_generation_engine,
         ai_generation_model=ai_generation_model,
+        ai_generation_max_tokens=ai_generation_max_tokens,
         document_parser=document_parser,
     )
 
