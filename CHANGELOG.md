@@ -9,6 +9,31 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-29
+
+### Added
+
+- Added default AI generation v2 skill routing and optional capability skills
+  for presentation surfaces, architecture explainers, and static HTML component
+  patterns to improve output quality without changing the graph architecture.
+
+### Changed
+
+- Strengthened AI generation v2 design, component, and verification prompts with
+  a layout contract for representation choice, card density, title/badge
+  spacing, paired-component consistency, and background/content layering.
+- Requirement analysis and planning now preserve non-default generation options
+  such as theme, target use, style preference, audience, and reference style
+  files more explicitly so downstream agents do not drop user choices.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.1.1`.
+
+### Security
+
+- Local real-AI test configuration, API keys, development library data, and
+  generated notes remain in ignored local directories and are not included in
+  the release commit.
+
 ## [1.1.0] - 2026-06-26
 
 ### Added

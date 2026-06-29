@@ -1,0 +1,82 @@
+---
+name: component_pattern_html
+title: Component pattern HTML
+description: Use when HTMLCoder needs a compact set of reusable static HTML/CSS component patterns for cards, grids, timelines, comparison blocks, process flows, callouts, and responsive tables. Helps implementation quality without external frameworks or scripts.
+version: 0.1.0
+author: HTMlore
+license: project-internal
+metadata:
+  hermes:
+    tags: [html, components, css, layout, implementation, responsive]
+    related_skills: [safe_static_html, html_page_design]
+---
+
+# Component Pattern HTML Skill
+
+Implement polished static HTML with a small set of reusable component patterns.
+
+## Role
+
+Use this skill in HTMLCoder when the PlanDraft or StyleBrief calls for component-heavy layouts such as grids, timelines, process flows, architecture maps, comparison blocks, callouts, tables, or presentation cards.
+
+This skill is project-internal original guidance. It does not copy external project prompts, templates, or code.
+
+## Component Principles
+
+- Define CSS custom properties once, then reuse them.
+- Prefer a few strong component patterns over many one-off styles.
+- Keep HTML semantic before styling it.
+- Components must work without JavaScript.
+- Components must stack cleanly on mobile.
+- Do not use external CSS frameworks, icon libraries, web fonts, or remote assets.
+- Components in the same conceptual group must look related: consistent padding, border, radius, type scale, and background opacity.
+- Component size should follow content density. Do not stretch a short label or one-sentence fact into a wide empty card.
+- Visual decoration must never compete with content. Connectors, badges, counters, and background lines need reserved space or reduced contrast.
+
+## Recommended Patterns
+
+- `metric-card`: title, short value or theme label, explanation, optional note. Do not invent numeric values.
+- `info-card`: heading, body, bullets, and source-aware caveat.
+- `timeline`: ordered phases with labels and plain-text outcomes.
+- `process-flow`: steps connected by arrows or borders; stack vertically on mobile.
+- `comparison-grid`: options, before/after, pros/cons, or trade-off columns.
+- `callout`: decision, risk, assumption, warning, or takeaway.
+- `responsive-table`: real tabular data with horizontal overflow fallback.
+- `architecture-node`: component name, role, inputs, outputs, and owner.
+
+## Pattern Selection Rules
+
+- Use `responsive-table` for matrices, responsibilities, parameter boundaries, node/edge conditions, and concept comparisons.
+- Use `process-flow` or `timeline` for ordered stages, loops, dependencies, and state transitions.
+- Use `architecture-node` inside an architecture map when components have inputs, outputs, and owners.
+- Use `info-card` only for repeated independent items. Avoid using a card grid to represent a sequence or a matrix.
+- Use `callout` for one important message beside a longer explanation; match its visual language to the companion panel.
+
+## CSS Implementation Rules
+
+- Use `box-sizing: border-box`.
+- Use `max-width`, `grid`, `flex`, `minmax`, `gap`, and natural wrapping.
+- Avoid viewport-scaled font sizes.
+- Avoid fixed heights for content cards.
+- Keep border radius and shadow consistent.
+- Use `overflow-wrap: anywhere` for long labels only where needed.
+- Tables need `overflow-x: auto` wrappers or mobile card alternatives.
+- Prefer `align-items: stretch` only when card content lengths are similar; otherwise use natural height or compact max-width.
+- Use opaque or nearly opaque surfaces for cards placed over diagrams, connector lines, or textured backgrounds.
+- Place badges and section labels in normal document flow where possible. If absolutely positioned, reserve padding so they cannot overlap headings.
+- Connector lines should sit behind nodes and stop before content surfaces. They should not cross readable text.
+
+## Output Expectations
+
+HTMLCoder should use this skill to make the final HTML more coherent, not more complex.
+
+Before returning final HTML, verify:
+
+- repeated components share class names and tokens,
+- mobile layout is readable,
+- no text overlaps,
+- no avoidable empty columns or stretched short-content cards,
+- no translucent panel exposes distracting background lines behind text,
+- related left/right or paired panels use a coherent visual system,
+- no scripts or unsafe attributes were introduced,
+- visual patterns match StyleBrief rather than overriding it.

@@ -15,12 +15,27 @@
 <p class="eyebrow">发布轨迹</p>
 <h1>HTMlore 更新日志</h1>
 </article>
-<aside class="stat"><span class="badge">1.1.0</span></aside>
+<aside class="stat"><span class="badge">1.1.1</span></aside>
 </section>
 <section class="timeline doc">
 <h1>更新日志</h1>
 <p>语言：<a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.1.1] - 2026-06-29</h2>
+<h3>新增</h3>
+<ul>
+<li>AI 生成 v2 新增默认 skill 路由与可选能力 skill，包括演示页设计、架构说明和静态 HTML 组件模式，用于在不改主图架构的前提下提升生成质量。</li>
+</ul>
+<h3>变更</h3>
+<ul>
+<li>强化 AI 生成 v2 的页面设计、组件实现和质量验收提示词，增加版式契约、表现形式选择、卡片密度、标题/标签避让、背景层与内容层隔离等规则。</li>
+<li>需求分析与规划智能体现在会更明确地保留主题、用途、样式偏好、受众和参考样式文件等非默认生成选项，避免下游规划或样式设计丢失用户选择。</li>
+<li>包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为 <code>1.1.1</code>。</li>
+</ul>
+<h3>安全</h3>
+<ul>
+<li>真实 AI 生成验证使用的本地配置、API Key、开发资料库和生成笔记仍保持在 ignored 本地目录中，不进入发布包或仓库提交。</li>
+</ul>
 <h2>[1.1.0] - 2026-06-26</h2>
 <h3>新增</h3>
 <ul>

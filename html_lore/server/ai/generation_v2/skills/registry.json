@@ -3,39 +3,51 @@
   "skills": [
     {
       "id": "html_page_design",
-      "title": "HTML page design",
-      "description": "Design method for readable static HTML pages.",
       "applies_to_agents": ["StyleDesigner"],
       "default_enabled": true,
       "trigger_keywords": ["design", "style", "layout", "page"],
-      "version": "0.1.0",
-      "license": "project-internal",
       "source": "local",
       "path": "html_page_design/SKILL.md"
     },
     {
       "id": "safe_static_html",
-      "title": "Safe static HTML",
-      "description": "Constraints for safe static HTML output.",
       "applies_to_agents": ["HTMLCoder"],
       "default_enabled": true,
       "trigger_keywords": ["html", "safe", "static"],
-      "version": "0.1.0",
-      "license": "project-internal",
       "source": "local",
       "path": "safe_static_html/SKILL.md"
     },
     {
       "id": "content_quality_review",
-      "title": "Content quality review",
-      "description": "Review method for requirement coverage and content quality.",
       "applies_to_agents": ["Verifier"],
       "default_enabled": true,
       "trigger_keywords": ["verify", "quality", "review"],
-      "version": "0.1.0",
-      "license": "project-internal",
       "source": "local",
       "path": "content_quality_review/SKILL.md"
+    },
+    {
+      "id": "presentation_surface_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "trigger_keywords": ["presentation", "pitch", "deck", "roadshow", "briefing", "showcase", "launch", "ppt", "share"],
+      "source": "local",
+      "path": "presentation_surface_design/SKILL.md"
+    },
+    {
+      "id": "architecture_explainer_design",
+      "applies_to_agents": ["StyleDesigner", "HTMLCoder"],
+      "default_enabled": false,
+      "trigger_keywords": ["architecture", "workflow", "system", "process", "pipeline", "state machine", "runtime", "agent", "edge", "loop", "diagram"],
+      "source": "local",
+      "path": "architecture_explainer_design/SKILL.md"
+    },
+    {
+      "id": "component_pattern_html",
+      "applies_to_agents": ["HTMLCoder"],
+      "default_enabled": false,
+      "trigger_keywords": ["component", "cards", "grid", "timeline", "process flow", "comparison", "callout", "responsive table", "pattern"],
+      "source": "local",
+      "path": "component_pattern_html/SKILL.md"
     }
   ]
 }

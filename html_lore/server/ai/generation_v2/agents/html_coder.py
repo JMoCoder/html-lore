@@ -4,6 +4,7 @@ from html import escape
 from ..model_client import agent_payload
 from ..schema_loader import AgentOutputSchemaError
 from ..schemas import GenerationStage, HtmlDraft
+from ..skills.loader import LoadedSkill
 from .base import GenerationAgent
 
 
@@ -12,10 +13,10 @@ class HTMLCoderAgent(GenerationAgent):
     stage = GenerationStage.CODING_HTML
     output_schema = HtmlDraft
 
-    def invoke_structured(self, state) -> HtmlDraft:
+    def invoke_structured(self, state, *, skills: tuple[LoadedSkill, ...] = ()) -> HtmlDraft:
         html = self.model_client.complete_text(
             node=self.name,
-            payload=agent_payload(node=self.name, schema=self.output_schema, state=state, fallback=self.fake_payload(state), skills=self.skills),
+            payload=agent_payload(node=self.name, schema=self.output_schema, state=state, fallback=self.fake_payload(state), skills=skills),
             attempt=state.same_node_retries.get(self.name, 0),
         )
         if not is_complete_html_document(html):

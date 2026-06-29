@@ -4,6 +4,30 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-29
+
+### Added
+
+- graph architecture を変更せずに出力品質を高めるため、AI generation v2 に
+  default skill routing と、presentation surface、architecture explainer、
+  static HTML component pattern の optional capability skills を追加しました。
+
+### Changed
+
+- AI generation v2 の design、component、verification prompts を強化し、
+  representation choice、card density、title/badge spacing、paired-component
+  consistency、background/content layering を含む layout contract を追加しました。
+- Requirement analysis と planning が theme、target use、style preference、
+  audience、reference style file などの non-default generation options をより明示的に
+  保持し、downstream agents が user choice を落としにくくしました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.1.1` に更新しました。
+
+### Security
+
+- real AI test 用の local configuration、API key、development library data、
+  generated notes は ignored local directories に残し、release commit には含めません。
+
 ## [1.1.0] - 2026-06-26
 
 ### Added

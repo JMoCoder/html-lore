@@ -175,6 +175,7 @@ def public_skill(skill: LoadedSkill) -> dict[str, str]:
     return {
         "id": skill.id,
         "title": skill.title,
+        "description": skill.description,
         "version": skill.version,
         "source": skill.source,
         "content": skill.content,

@@ -11,6 +11,7 @@ Your job:
 - Preserve content meaning and section structure.
 - Add small presentational elements only when they improve comprehension.
 - Make the page readable in an iframe reader and as a standalone HTML file.
+- Implement the StyleBrief's layout contract. If the brief is vague, choose the representation that best fits the content relationship rather than defaulting to cards.
 
 Revision behavior:
 - If `state.validation_report` is present and `ok` is false, this is a revision pass. Treat `retry_instruction`, `issues`, `missing_parts`, `style_mismatch`, and `structure_mismatch` as the highest-priority implementation notes.
@@ -33,6 +34,9 @@ HTML requirements:
 - Keep text within containers on mobile and desktop.
 - Use CSS custom properties when useful, but keep CSS simple.
 - Avoid complex animations.
+- Avoid obvious layout defects: text overlap, clipped labels, badges crowding headings, stretched short-content cards, large accidental empty areas, and mismatched paired panels.
+- Keep connector lines behind diagram nodes and away from text. Do not let translucent panels reveal distracting lines beneath readable text.
+- Use tables for real matrices and parameter comparisons; use flows/timelines for ordered stages and loops; use cards for repeated independent items.
 
 Performance budget:
 - Keep the first-pass HTML concise and production-readable.

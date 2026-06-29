@@ -9,7 +9,8 @@ from ..fake_model import FakeGenerationModelClient
 from ..model_client import GenerationJsonModelClient, agent_payload
 from ..schema_loader import AgentOutputSchemaError, parse_dataclass_json
 from ..schemas import AgentArtifact, ChecklistStatus, GenerationStage, GenerationState, SkillTraceEntry, normalize_for_json
-from ..skills.loader import LoadedSkill, load_default_skills_for_agent
+from ..skill_router import resolve_skills_for_agent
+from ..skills.loader import LoadedSkill
 from ..state import complete_stage, fail_stage, retry_stage, start_stage
 
 
@@ -30,15 +31,15 @@ class GenerationAgent:
 
     def __init__(self, model_client: GenerationJsonModelClient | None = None) -> None:
         self.model_client = model_client or FakeGenerationModelClient()
-        self.skills = load_default_skills_for_agent(self.name)
 
     def run(self, state: GenerationState) -> GenerationAgentResult:
         next_state = start_stage(state, self.stage, agent=self.name, message=f"{self.name} started.")
+        skills = resolve_skills_for_agent(self.name, next_state)
         try:
-            output = self.invoke_structured(next_state)
+            output = self.invoke_structured(next_state, skills=skills)
             next_state = self.apply_output(next_state, output)
             next_state = self.record_agent_artifact(next_state, output)
-            next_state = self.record_skill_trace(next_state)
+            next_state = self.record_skill_trace(next_state, skills=skills)
             next_state = self.update_execution_checklist(next_state, ChecklistStatus.COMPLETED)
             next_state = complete_stage(next_state, self.stage, message=f"{self.name} completed.", metadata=self.output_metadata(output, next_state))
             return GenerationAgentResult(state=next_state, message=f"{self.name} completed.")
@@ -61,13 +62,13 @@ class GenerationAgent:
             next_state = fail_stage(next_state, self.stage, message=str(exc), retryable=True, metadata=self.error_metadata(exc, next_state))
             return GenerationAgentResult(state=next_state, message=str(exc))
 
-    def invoke_structured(self, state: GenerationState) -> Any:
+    def invoke_structured(self, state: GenerationState, *, skills: tuple[LoadedSkill, ...] = ()) -> Any:
         if self.output_schema is None:
             raise AgentOutputSchemaError(f"{self.name} has no output schema.")
         raw = self.model_client.complete_json(
             node=self.name,
             schema_name=self.output_schema.__name__,
-            payload=agent_payload(node=self.name, schema=self.output_schema, state=state, fallback=self.fake_payload(state), skills=self.skills),
+            payload=agent_payload(node=self.name, schema=self.output_schema, state=state, fallback=self.fake_payload(state), skills=skills),
             attempt=state.same_node_retries.get(self.name, 0),
         )
         return parse_dataclass_json(raw, self.output_schema)
@@ -83,12 +84,12 @@ class GenerationAgent:
         retries[self.name] = retries.get(self.name, 0) + 1
         return replace(state, same_node_retries=retries)
 
-    def record_skill_trace(self, state: GenerationState) -> GenerationState:
-        if not self.skills:
+    def record_skill_trace(self, state: GenerationState, *, skills: tuple[LoadedSkill, ...]) -> GenerationState:
+        if not skills:
             return state
         seen = {(entry.agent, entry.id) for entry in state.skill_trace}
         trace = list(state.skill_trace)
-        for skill in self.skills:
+        for skill in skills:
             if (self.name, skill.id) in seen:
                 continue
             trace.append(skill_trace_entry(self.name, skill))

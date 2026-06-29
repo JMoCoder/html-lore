@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from html_lore.server.ai.generation_v2.agents.requirement_analyst import RequirementAnalystAgent
 from html_lore.server.ai.generation_v2.agents.html_coder import HTMLCoderAgent
 from html_lore.server.ai.generation_v2.graph import HtmlGenerationV2Graph
 from html_lore.server.ai.generation_v2.fake_model import FakeGenerationModelClient
@@ -9,8 +10,9 @@ from html_lore.server.ai.generation_v2.material_runner import generate_note_from
 from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, NoteMetadataProposal, ParsedDocument, StageTraceEvent
-from html_lore.server.ai.generation_v2.skills.loader import load_default_skills_for_agent
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, NoteMetadataProposal, ParsedDocument, PlanDraft, StageTraceEvent, ToolNeed
+from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
+from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
 from html_lore.server.ai.generation_v2.store import GenerationStore
 from html_lore.server.ai.api import sync_v2_job_from_run
@@ -115,6 +117,129 @@ def test_generation_v2_skill_loader_uses_fixed_default_mapping() -> None:
     assert [skill.id for skill in load_default_skills_for_agent("HTMLCoder")] == ["safe_static_html"]
     assert [skill.id for skill in load_default_skills_for_agent("Verifier")] == ["content_quality_review"]
     assert load_default_skills_for_agent("Planner") == ()
+
+
+def test_generation_v2_skill_loader_uses_frontmatter_metadata_and_strips_it() -> None:
+    skill = load_skill_by_id("html_page_design")
+
+    assert skill.title == "HTML page design"
+    assert skill.description.startswith("Use when designing readable static HTML")
+    assert skill.version == "0.2.0"
+    assert skill.license == "project-internal"
+    assert skill.content.startswith("# HTML Page Design Skill")
+    assert not skill.content.startswith("---")
+
+    registry_items = {item.id: item for item in iter_skill_registry_items()}
+    assert registry_items["html_page_design"].version == "0.2.0"
+    assert registry_items["safe_static_html"].title == "Safe static HTML"
+    assert registry_items["content_quality_review"].description.startswith("Use when verifying")
+
+
+def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> None:
+    design = load_skill_by_id("html_page_design").content
+    safe_html = load_skill_by_id("safe_static_html").content
+    review = load_skill_by_id("content_quality_review").content
+    presentation = load_skill_by_id("presentation_surface_design").content
+    architecture = load_skill_by_id("architecture_explainer_design").content
+    components = load_skill_by_id("component_pattern_html").content
+
+    assert "First Decide The Surface" in design
+    assert "Layout Patterns" in design
+    assert "Layout Quality Contract" in design
+    assert "collision" in design.lower()
+    assert "transparent" in design.lower()
+    assert "knowledge_note" in design
+    assert "architecture" in design
+
+    assert "Required Document Shape" in safe_html
+    assert "Do not include:" in safe_html
+    assert "<script>" in safe_html
+    assert "Revision Behavior" in safe_html
+
+    assert "Pass Criteria" in review
+    assert "Fail Criteria" in review
+    assert "Routing Guidance" in review
+    assert "background lines" in review
+    assert "stretched short-content cards" in review
+    assert "score" in review.lower()
+
+    assert "Presentation Surface Design Skill" in presentation
+    assert "hero_brief" in presentation
+    assert "roadmap" in presentation
+    assert "Slide-Like Layout Guardrails" in presentation
+
+    assert "Architecture Explainer Design Skill" in architecture
+    assert "runtime" in architecture
+    assert "loop" in architecture
+    assert "collision zone" in architecture
+
+    assert "Component Pattern HTML Skill" in components
+    assert "process-flow" in components
+    assert "responsive-table" in components
+    assert "Pattern Selection Rules" in components
+
+
+def test_generation_v2_requirement_analyst_fallback_preserves_generation_options() -> None:
+    state = HtmlGenerationV2Graph().initial_state(
+        GenerationInput(
+            instruction="Create a board report.",
+            theme="dark",
+            target_use="ppt",
+            style_preference="tech",
+            audience="share",
+            reference_style="uploaded",
+            reference_file_name="style.pdf",
+        )
+    )
+    payload = RequirementAnalystAgent().fake_payload(state)
+
+    assert "Target use: ppt." in payload["constraints"]
+    assert "Audience: share." in payload["constraints"]
+    assert "theme: dark" in payload["style_preferences"]
+    assert "style preference: tech" in payload["style_preferences"]
+    assert "reference style: uploaded" in payload["style_preferences"]
+    assert "reference file: style.pdf" in payload["style_preferences"]
+
+
+def test_generation_v2_skill_router_uses_planner_tool_needs() -> None:
+    state = GenerationState(
+        plan_draft=PlanDraft(
+            tool_needs=[
+                ToolNeed(tool_name="safe static html", reason="Need safe self-contained HTML output.", priority="high"),
+                ToolNeed(tool_name="content quality review", reason="Verify requirement coverage.", priority="medium"),
+            ],
+        ),
+    )
+
+    assert planned_skill_ids_for_agent("HTMLCoder", state) == ()
+    assert planned_skill_ids_for_agent("Verifier", state) == ()
+    assert planned_skill_ids_for_agent("StyleDesigner", state) == ()
+    assert [skill.id for skill in resolve_skills_for_agent("HTMLCoder", state)] == ["safe_static_html"]
+
+
+def test_generation_v2_skill_router_loads_optional_capability_skills() -> None:
+    state = GenerationState(
+        plan_draft=PlanDraft(
+            tool_needs=[
+                ToolNeed(tool_name="presentation surface design", reason="External roadshow pitch page.", priority="high"),
+                ToolNeed(tool_name="architecture explainer design", reason="Explain runtime nodes, edges, and loops.", priority="high"),
+                ToolNeed(tool_name="component pattern html", reason="Use grids, process flow, and comparison cards.", priority="medium"),
+            ],
+        ),
+    )
+
+    assert planned_skill_ids_for_agent("StyleDesigner", state) == ("presentation_surface_design", "architecture_explainer_design")
+    assert planned_skill_ids_for_agent("HTMLCoder", state) == ("architecture_explainer_design", "component_pattern_html")
+    assert [skill.id for skill in resolve_skills_for_agent("StyleDesigner", state)] == [
+        "html_page_design",
+        "presentation_surface_design",
+        "architecture_explainer_design",
+    ]
+    assert [skill.id for skill in resolve_skills_for_agent("HTMLCoder", state)] == [
+        "safe_static_html",
+        "architecture_explainer_design",
+        "component_pattern_html",
+    ]
 
 
 def test_generation_v2_style_reference_file_guides_style_hints() -> None:
