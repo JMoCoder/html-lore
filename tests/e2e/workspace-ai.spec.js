@@ -355,7 +355,20 @@ test("workspace file create mode uploads material to the AI generation endpoint"
     },
   ]);
   await expect(page.locator("#new-file-name")).toContainText("material.md");
-  await expect(page.locator("#new-file-name")).toContainText("2");
+  await expect(page.locator("#new-file-name")).toContainText("appendix.md");
+  await expect(page.locator("#new-file-name .new-file-item")).toHaveCount(2);
+  const secondFileChooserPromise = page.waitForEvent("filechooser");
+  await page.locator("#new-file-trigger").click();
+  const secondFileChooser = await secondFileChooserPromise;
+  await secondFileChooser.setFiles({
+    name: "brief.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Brief\n\nThird uploaded source.", "utf8"),
+  });
+  await expect(page.locator("#new-file-name")).toContainText("material.md");
+  await expect(page.locator("#new-file-name")).toContainText("appendix.md");
+  await expect(page.locator("#new-file-name")).toContainText("brief.md");
+  await expect(page.locator("#new-file-name .new-file-item")).toHaveCount(3);
   await expect(page.locator("#new-file-trigger")).toHaveClass(/has-file/);
   await page.locator("#new-item-form button[type='submit']").click();
 
@@ -367,6 +380,7 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   expect(materialRequest.method).toBe("POST");
   expect(materialRequest.postData).toContain("material.md");
   expect(materialRequest.postData).toContain("appendix.md");
+  expect(materialRequest.postData).toContain("brief.md");
   expect(materialRequest.postData).toContain("Turn this material into a concise study note.");
   expect(materialRequest.postData).toContain("name=\"theme\"");
   expect(materialRequest.postData).toContain("dark");
@@ -576,7 +590,7 @@ test("workspace source file selection shows upload limit before submitting", asy
   });
 
   await expect(page.locator("#new-file-name")).toContainText("too-large.md");
-  await expect(page.locator("#new-file-status")).toContainText("exceeds");
+  await expect(page.locator("#new-file-name .new-file-item-status")).toContainText("exceeds");
   await page.locator("#new-item-form button[type='submit']").click();
   await expect(page.locator("#new-feedback")).toContainText("Material note generation failed.");
   expect(materialJobCalled).toBe(false);

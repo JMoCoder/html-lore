@@ -2308,18 +2308,77 @@ textarea {
 
 .new-file-main {
   display: grid;
-  gap: 3px;
+  gap: 6px;
   min-width: 0;
   flex: 1;
 }
 
 .new-file-name {
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   color: var(--text);
   font-size: 13px;
+}
+
+.new-file-list {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.new-file-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 20px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 3px 0;
+}
+
+.new-file-item-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.new-file-item-status {
+  max-width: min(280px, 38vw);
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.new-file-item.is-ready .new-file-item-status {
+  color: var(--muted);
+}
+
+.new-file-item.is-uploading .new-file-item-status {
+  color: var(--accent-dark);
+}
+
+.new-file-item.has-error .new-file-item-status {
+  color: var(--danger);
+}
+
+.new-file-item-remove {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.new-file-item-remove:hover {
+  color: var(--text);
 }
 
 .new-file-status {
@@ -2514,6 +2573,15 @@ textarea {
 
   .new-file-row {
     grid-column: 1 / -1;
+  }
+
+  .new-file-item {
+    grid-template-columns: minmax(0, 1fr) 20px;
+  }
+
+  .new-file-item-status {
+    grid-column: 1 / -1;
+    max-width: 100%;
   }
 
   .new-generation-drawer {

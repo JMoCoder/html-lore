@@ -2847,10 +2847,30 @@ function openMaterialReferencePicker() {
   elements.materialReferenceFile.click();
 }
 
-function setPendingMaterialFiles(files) {
-  state.pendingMaterialFiles = Array.from(files || []).filter(Boolean);
+function setPendingMaterialFiles(files, options = {}) {
+  const incomingFiles = Array.from(files || []).filter(Boolean);
+  const currentFiles = options.append === false ? [] : Array.from(state.pendingMaterialFiles || []).filter(Boolean);
+  const seen = new Set(currentFiles.map(materialFileKey));
+  const nextFiles = [...currentFiles];
+  incomingFiles.forEach((file) => {
+    const key = materialFileKey(file);
+    if (seen.has(key)) return;
+    seen.add(key);
+    nextFiles.push(file);
+  });
+  state.pendingMaterialFiles = nextFiles;
   state.materialUpload = materialUploadStateForFiles(state.pendingMaterialFiles);
   updateNewFileMode();
+}
+
+function removePendingMaterialFile(fileKey) {
+  state.pendingMaterialFiles = Array.from(state.pendingMaterialFiles || []).filter((file) => materialFileKey(file) !== fileKey);
+  state.materialUpload = materialUploadStateForFiles(state.pendingMaterialFiles);
+  updateNewFileMode();
+}
+
+function materialFileKey(file) {
+  return [file?.name || "", file?.size || 0, file?.lastModified || 0].join("::");
 }
 
 function setPendingReferenceFile(file) {
@@ -2941,6 +2961,31 @@ function materialFilesTitle(files) {
     .filter(Boolean)
     .map((file) => file.name)
     .join("\n");
+}
+
+function materialFileStatus(file, files) {
+  const limit = getAiMaxUploadBytes();
+  if (limit && file.size > limit) {
+    return {
+      className: "has-error",
+      text: t("fileTooLargeStatus", { size: formatBytes(file.size), limit: formatBytes(limit) || t("uploadLimitUnknown") }),
+    };
+  }
+  const status = state.materialUpload.status;
+  if (status === "starting") return { className: "is-uploading", text: t("fileUploadStarting") };
+  if (status === "uploading") return { className: "is-uploading", text: t("fileUploadingStatus", { percent: state.materialUpload.progress }) };
+  if (status === "queued") return { className: "is-ready", text: t("fileUploadQueued") };
+  if (status === "failed") return { className: "has-error", text: state.materialUpload.message || t("materialNoteFailed") };
+  if (status === "too-large") return { className: "has-error", text: state.materialUpload.message || t("materialNoteFailed") };
+  const totalLimit = getAiMaxUploadTotalBytes();
+  const totalSize = Array.from(files || []).reduce((sum, item) => sum + Number(item.size || 0), 0);
+  if (totalLimit && totalSize > totalLimit) {
+    return {
+      className: "has-error",
+      text: t("filesTooLargeStatus", { size: formatBytes(totalSize), limit: formatBytes(totalLimit) || t("uploadLimitUnknown") }),
+    };
+  }
+  return { className: "is-ready", text: t("fileReadyStatus", { size: formatBytes(file.size) }) };
 }
 
 function formatBytes(value) {
@@ -3034,11 +3079,29 @@ function updateNewFileMode() {
   elements.newFileRow?.classList.toggle("is-uploading", ["starting", "uploading"].includes(state.materialUpload.status));
   elements.newFileRow?.classList.toggle("has-error", ["failed", "too-large"].includes(state.materialUpload.status));
   if (elements.newFileName) {
-    elements.newFileName.textContent = hasFile ? materialFilesLabel(files) : "";
+    elements.newFileName.replaceChildren();
+    if (hasFile) {
+      const list = document.createElement("span");
+      list.className = "new-file-list";
+      files.forEach((file) => {
+        const item = document.createElement("span");
+        const status = materialFileStatus(file, files);
+        item.className = `new-file-item ${status.className}`;
+        item.dataset.fileKey = materialFileKey(file);
+        item.innerHTML = `
+          <span class="new-file-item-name">${escapeHtml(file.name || t("item"))}</span>
+          <span class="new-file-item-status">${escapeHtml(status.text)}</span>
+          <button type="button" class="new-file-item-remove" aria-label="${escapeHtml(t("removeFile"))}" title="${escapeHtml(t("removeFile"))}">×</button>
+        `;
+        item.querySelector(".new-file-item-remove")?.addEventListener("click", () => removePendingMaterialFile(item.dataset.fileKey || ""));
+        list.append(item);
+      });
+      elements.newFileName.append(list);
+    }
     elements.newFileName.title = materialFilesTitle(files);
   }
   if (elements.newFileStatus) {
-    elements.newFileStatus.textContent = hasFile ? state.materialUpload.message || "" : "";
+    elements.newFileStatus.textContent = hasFile && files.length > 1 ? state.materialUpload.message || materialFilesLabel(files) : "";
   }
   if (elements.newFileProgress) {
     const showProgress = hasFile && ["starting", "uploading", "queued"].includes(state.materialUpload.status);
@@ -7941,7 +8004,7 @@ elements.importEntries.forEach((button) => {
   button.addEventListener("click", openHtmlImportPicker);
 });
 elements.htmlImportFile.addEventListener("change", (event) => importHtmlFile(event.target.files?.[0]));
-elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFiles(event.target.files));
+elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFiles(event.target.files, { append: true }));
 elements.materialReferenceFile?.addEventListener("change", (event) => setPendingReferenceFile(event.target.files?.[0]));
 window.addEventListener("hashchange", openFromHash);
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {

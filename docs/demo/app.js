@@ -395,6 +395,13 @@ const i18n = {
     filesSelected: "{name} + {count} more",
     fileReadyStatus: "{size} selected",
     filesReadyStatus: "{count} files · {size} selected",
+    fileTooLargeStatus: "{size} exceeds the {limit} upload limit",
+    filesTooLargeStatus: "{size} exceeds the {limit} total upload limit",
+    fileUploadStarting: "Preparing upload...",
+    fileUploadingStatus: "Uploading {percent}%",
+    fileUploadQueued: "Upload complete. Generation queued.",
+    fileUploadFailedStatus: "Upload failed: {message}",
+    uploadLimitUnknown: "configured limit",
     removeFile: "Remove file",
     chooseReferenceFile: "Upload style",
     referenceFileHint: "Optional style reference. Supports JPG/PNG, HTML, PDF, PPT/PPTX.",
@@ -893,6 +900,13 @@ const i18n = {
     filesSelected: "{name} 等 {count} 个文件",
     fileReadyStatus: "已选择 {size}",
     filesReadyStatus: "{count} 个文件 · 已选择 {size}",
+    fileTooLargeStatus: "{size} 超过上传上限 {limit}",
+    filesTooLargeStatus: "{size} 超过本次上传总上限 {limit}",
+    fileUploadStarting: "正在准备上传...",
+    fileUploadingStatus: "正在上传 {percent}%",
+    fileUploadQueued: "上传完成，已加入生成队列。",
+    fileUploadFailedStatus: "上传失败：{message}",
+    uploadLimitUnknown: "当前配置上限",
     removeFile: "移除文件",
     chooseReferenceFile: "上传样式",
     referenceFileHint: "可选样式参考，支持 JPG/PNG、HTML、PDF、PPT/PPTX。",
@@ -1391,6 +1405,13 @@ const i18n = {
     filesSelected: "{name} ほか {count} 件",
     fileReadyStatus: "{size} を選択済み",
     filesReadyStatus: "{count} 件 · {size} を選択済み",
+    fileTooLargeStatus: "{size} はアップロード上限 {limit} を超えています",
+    filesTooLargeStatus: "{size} は合計アップロード上限 {limit} を超えています",
+    fileUploadStarting: "アップロードを準備中...",
+    fileUploadingStatus: "アップロード中 {percent}%",
+    fileUploadQueued: "アップロード完了。生成キューに追加しました。",
+    fileUploadFailedStatus: "アップロード失敗: {message}",
+    uploadLimitUnknown: "設定済み上限",
     removeFile: "ファイルを削除",
     chooseReferenceFile: "スタイルをアップロード",
     referenceFileHint: "任意のスタイル参考。JPG/PNG、HTML、PDF、PPT/PPTX に対応。",
@@ -1642,6 +1663,8 @@ const state = {
   fileEditorPanelCollapsed: false,
   pendingMaterialFiles: [],
   pendingReferenceFile: null,
+  materialUpload: { status: "idle", progress: 0, message: "" },
+  referenceUpload: { status: "idle", progress: 0, message: "" },
   shares: [],
   sharingItemId: "",
 };
@@ -2171,6 +2194,38 @@ function apiFetch(path, options = {}) {
     credentials: "same-origin",
     headers: getApiHeaders(options.headers || {}),
   });
+}
+
+function apiUpload(path, formData, { onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", buildApiUrl(path), true);
+    xhr.withCredentials = true;
+    if (state.agentToken) xhr.setRequestHeader("Authorization", `Bearer ${state.agentToken}`);
+    xhr.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable || typeof onProgress !== "function") return;
+      onProgress(Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100))));
+    });
+    xhr.addEventListener("load", () => {
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        text: () => Promise.resolve(xhr.responseText || ""),
+        json: () => Promise.resolve(parseJsonSafely(xhr.responseText)),
+      });
+    });
+    xhr.addEventListener("error", () => reject(new Error("Network upload failed.")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload aborted.")));
+    xhr.send(formData);
+  });
+}
+
+function parseJsonSafely(value) {
+  try {
+    return JSON.parse(value || "{}");
+  } catch {
+    return {};
+  }
 }
 
 function withApiAccessToken(url) {
@@ -2792,14 +2847,166 @@ function openMaterialReferencePicker() {
   elements.materialReferenceFile.click();
 }
 
-function setPendingMaterialFiles(files) {
-  state.pendingMaterialFiles = Array.from(files || []).filter(Boolean);
+function setPendingMaterialFiles(files, options = {}) {
+  const incomingFiles = Array.from(files || []).filter(Boolean);
+  const currentFiles = options.append === false ? [] : Array.from(state.pendingMaterialFiles || []).filter(Boolean);
+  const seen = new Set(currentFiles.map(materialFileKey));
+  const nextFiles = [...currentFiles];
+  incomingFiles.forEach((file) => {
+    const key = materialFileKey(file);
+    if (seen.has(key)) return;
+    seen.add(key);
+    nextFiles.push(file);
+  });
+  state.pendingMaterialFiles = nextFiles;
+  state.materialUpload = materialUploadStateForFiles(state.pendingMaterialFiles);
   updateNewFileMode();
+}
+
+function removePendingMaterialFile(fileKey) {
+  state.pendingMaterialFiles = Array.from(state.pendingMaterialFiles || []).filter((file) => materialFileKey(file) !== fileKey);
+  state.materialUpload = materialUploadStateForFiles(state.pendingMaterialFiles);
+  updateNewFileMode();
+}
+
+function materialFileKey(file) {
+  return [file?.name || "", file?.size || 0, file?.lastModified || 0].join("::");
 }
 
 function setPendingReferenceFile(file) {
   state.pendingReferenceFile = file || null;
+  state.referenceUpload = materialUploadStateForFiles(state.pendingReferenceFile ? [state.pendingReferenceFile] : []);
   updateNewReferenceFile();
+}
+
+function materialUploadStateForFiles(files) {
+  const selectedFiles = Array.from(files || []).filter(Boolean);
+  if (!selectedFiles.length) return { status: "idle", progress: 0, message: "" };
+  const limit = getAiMaxUploadBytes();
+  const totalLimit = getAiMaxUploadTotalBytes();
+  const oversizedFile = selectedFiles.find((file) => limit && file.size > limit);
+  if (oversizedFile) {
+    return {
+      status: "too-large",
+      progress: 0,
+      message: t("fileTooLargeStatus", { size: formatBytes(oversizedFile.size), limit: formatBytes(limit) || t("uploadLimitUnknown") }),
+    };
+  }
+  const totalSize = selectedFiles.reduce((sum, file) => sum + Number(file.size || 0), 0);
+  if (totalLimit && totalSize > totalLimit) {
+    return {
+      status: "too-large",
+      progress: 0,
+      message: t("filesTooLargeStatus", { size: formatBytes(totalSize), limit: formatBytes(totalLimit) || t("uploadLimitUnknown") }),
+    };
+  }
+  return {
+    status: "ready",
+    progress: 0,
+    message:
+      selectedFiles.length === 1
+        ? t("fileReadyStatus", { size: formatBytes(totalSize) })
+        : t("filesReadyStatus", { count: selectedFiles.length, size: formatBytes(totalSize) }),
+  };
+}
+
+function setMaterialUploadState(status, progress, message = "") {
+  state.materialUpload = { status, progress: Math.max(0, Math.min(100, Number(progress || 0))), message };
+  updateNewFileMode();
+}
+
+function markUploadFailed(files, message) {
+  const selectedFiles = Array.from(files || []).filter(Boolean);
+  if (!selectedFiles.length) {
+    state.materialUpload = { status: "failed", progress: 0, message: String(message || t("materialNoteFailed")) };
+  } else {
+    state.materialUpload = { status: "failed", progress: 0, message: t("fileUploadFailedStatus", { message: String(message || t("materialNoteFailed")) }) };
+  }
+  updateNewFileMode();
+}
+
+function firstOversizedGenerationFile(materialFiles, referenceFile) {
+  const limit = getAiMaxUploadBytes();
+  const files = Array.from(materialFiles || []).filter(Boolean);
+  if (limit) {
+    const oversizedFile = files.find((file) => file.size > limit);
+    if (oversizedFile) return oversizedFile;
+  }
+  if (referenceFile && limit && referenceFile.size > limit) return referenceFile;
+  const totalLimit = getAiMaxUploadTotalBytes();
+  const totalSize = files.reduce((sum, file) => sum + Number(file.size || 0), 0) + Number(referenceFile?.size || 0);
+  if (totalLimit && totalSize > totalLimit) return { name: "materials", size: totalSize, totalLimitExceeded: true };
+  return null;
+}
+
+function getAiMaxUploadBytes() {
+  const value = Number(state.aiStatus?.limits?.max_upload_bytes || 0);
+  return Number.isFinite(value) && value > 0 ? value : 100 * 1024 * 1024;
+}
+
+function getAiMaxUploadTotalBytes() {
+  const value = Number(state.aiStatus?.limits?.max_upload_total_bytes || 0);
+  return Number.isFinite(value) && value > 0 ? value : 500 * 1024 * 1024;
+}
+
+function materialFilesLabel(files) {
+  const selectedFiles = Array.from(files || []).filter(Boolean);
+  if (!selectedFiles.length) return "";
+  if (selectedFiles.length === 1) return t("fileSelected", { name: selectedFiles[0].name });
+  return t("filesSelected", { name: selectedFiles[0].name, count: selectedFiles.length });
+}
+
+function materialFilesTitle(files) {
+  return Array.from(files || [])
+    .filter(Boolean)
+    .map((file) => file.name)
+    .join("\n");
+}
+
+function materialFileStatus(file, files) {
+  const limit = getAiMaxUploadBytes();
+  if (limit && file.size > limit) {
+    return {
+      className: "has-error",
+      text: t("fileTooLargeStatus", { size: formatBytes(file.size), limit: formatBytes(limit) || t("uploadLimitUnknown") }),
+    };
+  }
+  const status = state.materialUpload.status;
+  if (status === "starting") return { className: "is-uploading", text: t("fileUploadStarting") };
+  if (status === "uploading") return { className: "is-uploading", text: t("fileUploadingStatus", { percent: state.materialUpload.progress }) };
+  if (status === "queued") return { className: "is-ready", text: t("fileUploadQueued") };
+  if (status === "failed") return { className: "has-error", text: state.materialUpload.message || t("materialNoteFailed") };
+  if (status === "too-large") return { className: "has-error", text: state.materialUpload.message || t("materialNoteFailed") };
+  const totalLimit = getAiMaxUploadTotalBytes();
+  const totalSize = Array.from(files || []).reduce((sum, item) => sum + Number(item.size || 0), 0);
+  if (totalLimit && totalSize > totalLimit) {
+    return {
+      className: "has-error",
+      text: t("filesTooLargeStatus", { size: formatBytes(totalSize), limit: formatBytes(totalLimit) || t("uploadLimitUnknown") }),
+    };
+  }
+  return { className: "is-ready", text: t("fileReadyStatus", { size: formatBytes(file.size) }) };
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let current = bytes;
+  let index = 0;
+  while (current >= 1024 && index < units.length - 1) {
+    current /= 1024;
+    index += 1;
+  }
+  const digits = current >= 10 || index === 0 ? 0 : 1;
+  return `${current.toFixed(digits)} ${units[index]}`;
+}
+
+function errorMessageFromPayload(payload, status) {
+  const detail = payload && typeof payload === "object" ? payload.detail || payload.message || payload.error : "";
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (Array.isArray(detail) && detail.length) return detail.map((item) => item?.msg || item?.message || "").filter(Boolean).join("; ");
+  return `Agent returned ${status}`;
 }
 
 async function generateNoteFromMaterialFiles(files) {
@@ -2808,7 +3015,21 @@ async function generateNoteFromMaterialFiles(files) {
     return;
   }
   const selectedFiles = Array.from(files || []).filter(Boolean);
-  setFeedback("generatingMaterialNote");
+  const tooLargeFile = firstOversizedGenerationFile(selectedFiles, state.pendingReferenceFile);
+  if (tooLargeFile) {
+    if (tooLargeFile === state.pendingReferenceFile) {
+      state.referenceUpload = materialUploadStateForFiles([state.pendingReferenceFile]);
+      updateNewReferenceFile();
+    } else {
+      const limit = tooLargeFile.totalLimitExceeded ? getAiMaxUploadTotalBytes() : getAiMaxUploadBytes();
+      const messageKey = tooLargeFile.totalLimitExceeded ? "filesTooLargeStatus" : "fileTooLargeStatus";
+      markUploadFailed(selectedFiles, t(messageKey, { size: formatBytes(tooLargeFile.size), limit: formatBytes(limit) || t("uploadLimitUnknown") }));
+    }
+    setFeedback("materialNoteFailed");
+    return;
+  }
+  setMaterialUploadState("starting", 0, t("fileUploadStarting"));
+  setFeedback("submittingJob");
   const formData = new FormData();
   selectedFiles.forEach((file) => formData.append("file", file));
   formData.append("instruction", elements.newItemInput.value.trim());
@@ -2825,12 +3046,15 @@ async function generateNoteFromMaterialFiles(files) {
   }
 
   try {
-    const response = await apiFetch("/api/ai/material-jobs", {
-      method: "POST",
-      body: formData,
+    const response = await apiUpload("/api/ai/material-jobs", formData, {
+      onProgress: (progress) => setMaterialUploadState("uploading", progress, t("fileUploadingStatus", { percent: progress })),
     });
-    if (!response.ok) throw new Error(`Agent returned ${response.status}`);
+    if (!response.ok) {
+      const errorPayload = await response.json();
+      throw new Error(errorMessageFromPayload(errorPayload, response.status));
+    }
     const result = await response.json();
+    setMaterialUploadState("queued", 100, t("fileUploadQueued"));
     trackSubmittedAiJob(result.job_id || "");
     await loadAiJobs();
     startAiJobPolling();
@@ -2841,6 +3065,7 @@ async function generateNoteFromMaterialFiles(files) {
     setFeedback("queuedJob", { jobId: result.job_id || "" });
   } catch (error) {
     await loadAiRuns();
+    markUploadFailed(selectedFiles, error?.message || t("materialNoteFailed"));
     setFeedback("materialNoteFailed");
     console.error(error);
   }
@@ -2851,38 +3076,52 @@ function updateNewFileMode() {
   const hasFile = files.length > 0;
   elements.newFileTrigger?.classList.toggle("has-file", hasFile);
   if (elements.newFileRow) elements.newFileRow.hidden = !hasFile;
+  elements.newFileRow?.classList.toggle("is-uploading", ["starting", "uploading"].includes(state.materialUpload.status));
+  elements.newFileRow?.classList.toggle("has-error", ["failed", "too-large"].includes(state.materialUpload.status));
   if (elements.newFileName) {
-    elements.newFileName.textContent = hasFile ? materialFilesLabel(files) : "";
-    elements.newFileName.title = files.map((file) => file.name).join("\n");
+    elements.newFileName.replaceChildren();
+    if (hasFile) {
+      const list = document.createElement("span");
+      list.className = "new-file-list";
+      files.forEach((file) => {
+        const item = document.createElement("span");
+        const status = materialFileStatus(file, files);
+        item.className = `new-file-item ${status.className}`;
+        item.dataset.fileKey = materialFileKey(file);
+        item.innerHTML = `
+          <span class="new-file-item-name">${escapeHtml(file.name || t("item"))}</span>
+          <span class="new-file-item-status">${escapeHtml(status.text)}</span>
+          <button type="button" class="new-file-item-remove" aria-label="${escapeHtml(t("removeFile"))}" title="${escapeHtml(t("removeFile"))}">×</button>
+        `;
+        item.querySelector(".new-file-item-remove")?.addEventListener("click", () => removePendingMaterialFile(item.dataset.fileKey || ""));
+        list.append(item);
+      });
+      elements.newFileName.append(list);
+    }
+    elements.newFileName.title = materialFilesTitle(files);
   }
   if (elements.newFileStatus) {
-    const totalSize = files.reduce((sum, file) => sum + Number(file.size || 0), 0);
-    elements.newFileStatus.textContent = hasFile
-      ? files.length === 1
-        ? t("fileReadyStatus", { size: formatBytes(totalSize) })
-        : t("filesReadyStatus", { count: files.length, size: formatBytes(totalSize) })
-      : "";
+    elements.newFileStatus.textContent = hasFile && files.length > 1 ? state.materialUpload.message || materialFilesLabel(files) : "";
   }
   if (elements.newFileProgress) {
-    elements.newFileProgress.hidden = true;
-    elements.newFileProgress.querySelector("span").style.width = "0%";
+    const showProgress = hasFile && ["starting", "uploading", "queued"].includes(state.materialUpload.status);
+    elements.newFileProgress.hidden = !showProgress;
+    elements.newFileProgress.querySelector("span").style.width = `${showProgress ? state.materialUpload.progress : 0}%`;
   }
-}
-
-function materialFilesLabel(files) {
-  const selectedFiles = Array.from(files || []).filter(Boolean);
-  if (!selectedFiles.length) return "";
-  if (selectedFiles.length === 1) return t("fileSelected", { name: selectedFiles[0].name });
-  return t("filesSelected", { name: selectedFiles[0].name, count: selectedFiles.length });
+  if (elements.newItemForm) {
+    elements.newItemForm.querySelector("button[type='submit']").disabled = ["starting", "uploading"].includes(state.materialUpload.status);
+  }
 }
 
 function updateNewReferenceFile() {
   const hasFile = Boolean(state.pendingReferenceFile);
   elements.newReferenceTrigger?.classList.toggle("has-file", hasFile);
+  elements.newReferenceName?.classList.toggle("has-error", state.referenceUpload.status === "too-large");
   if (elements.newReferenceName) {
     elements.newReferenceName.hidden = !hasFile;
-    elements.newReferenceName.textContent = hasFile ? t("fileSelected", { name: state.pendingReferenceFile.name }) : "";
-    elements.newReferenceName.title = state.pendingReferenceFile?.name || "";
+    const status = state.referenceUpload.message ? ` · ${state.referenceUpload.message}` : "";
+    elements.newReferenceName.textContent = hasFile ? `${t("fileSelected", { name: state.pendingReferenceFile.name })}${status}` : "";
+    elements.newReferenceName.title = hasFile ? `${state.pendingReferenceFile.name}${status}` : "";
   }
   if (elements.newReferenceRemove) {
     elements.newReferenceRemove.hidden = !hasFile;
@@ -7557,20 +7796,6 @@ function formatDuration(value) {
   return `${(milliseconds / 1000).toFixed(milliseconds < 10_000 ? 1 : 0)}s`;
 }
 
-function formatBytes(value) {
-  const bytes = Number(value || 0);
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  let current = bytes;
-  let index = 0;
-  while (current >= 1024 && index < units.length - 1) {
-    current /= 1024;
-    index += 1;
-  }
-  const digits = current >= 10 || index === 0 ? 0 : 1;
-  return `${current.toFixed(digits)} ${units[index]}`;
-}
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -7779,7 +8004,7 @@ elements.importEntries.forEach((button) => {
   button.addEventListener("click", openHtmlImportPicker);
 });
 elements.htmlImportFile.addEventListener("change", (event) => importHtmlFile(event.target.files?.[0]));
-elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFiles(event.target.files));
+elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFiles(event.target.files, { append: true }));
 elements.materialReferenceFile?.addEventListener("change", (event) => setPendingReferenceFile(event.target.files?.[0]));
 window.addEventListener("hashchange", openFromHash);
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
