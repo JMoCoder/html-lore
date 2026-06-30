@@ -3780,6 +3780,57 @@ def test_ai_material_job_v2_accepts_multiple_material_files(tmp_path: Path) -> N
         server.close()
 
 
+def test_ai_material_job_v2_accepts_uploaded_material_ids_and_consumes_temp_files(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-generation-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        ai_generation_model="fake-generation-model",
+        document_parser="basic",
+    )
+    try:
+        upload = server.multipart(
+            "/api/ai/material-uploads",
+            fields={},
+            file_field="file",
+            filename="uploaded-source.md",
+            content=b"# Uploaded Source\n\nPrivate staged source body.",
+            content_type="text/markdown",
+        )
+        upload_id = upload["uploads"][0]["upload_id"]
+        assert upload["uploads"][0]["filename"] == "uploaded-source.md"
+        assert (meta_dir / "ai" / "material_uploads" / f"{upload_id}.json").exists()
+        assert (meta_dir / "ai" / "material_uploads" / f"{upload_id}.bin").exists()
+
+        queued = server.multipart(
+            "/api/ai/material-jobs",
+            fields={
+                "upload_id": upload_id,
+                "instruction": "Create a concise knowledge note from uploaded ids.",
+                "theme": "default",
+                "target_use": "default",
+                "style_preference": "default",
+            },
+        )
+
+        job = wait_for_ai_job(server, queued["job_id"])
+        run = server.request("GET", f"/api/ai/runs/{job['run_id']}")["run"]
+        raw_jobs = (meta_dir / "ai" / "jobs.json").read_text(encoding="utf-8")
+
+        assert job["status"] == "completed"
+        assert run["material"]["filenames"] == ["uploaded-source.md"]
+        assert not (meta_dir / "ai" / "material_uploads" / f"{upload_id}.json").exists()
+        assert not (meta_dir / "ai" / "material_uploads" / f"{upload_id}.bin").exists()
+        assert "Private staged source body" not in raw_jobs
+    finally:
+        server.close()
+
+
 def test_ai_material_job_v2_accepts_text_prompt_without_file(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = make_dirs(tmp_path)
     server = run_api_server(

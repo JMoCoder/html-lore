@@ -399,7 +399,7 @@ const i18n = {
     filesTooLargeStatus: "{size} exceeds the {limit} total upload limit",
     fileUploadStarting: "Preparing upload...",
     fileUploadingStatus: "Uploading {percent}%",
-    fileUploadQueued: "Upload complete. Generation queued.",
+    fileUploadQueued: "Upload complete.",
     fileUploadFailedStatus: "Upload failed: {message}",
     uploadLimitUnknown: "configured limit",
     removeFile: "Remove file",
@@ -904,7 +904,7 @@ const i18n = {
     filesTooLargeStatus: "{size} 超过本次上传总上限 {limit}",
     fileUploadStarting: "正在准备上传...",
     fileUploadingStatus: "正在上传 {percent}%",
-    fileUploadQueued: "上传完成，已加入生成队列。",
+    fileUploadQueued: "上传完成。",
     fileUploadFailedStatus: "上传失败：{message}",
     uploadLimitUnknown: "当前配置上限",
     removeFile: "移除文件",
@@ -1409,7 +1409,7 @@ const i18n = {
     filesTooLargeStatus: "{size} は合計アップロード上限 {limit} を超えています",
     fileUploadStarting: "アップロードを準備中...",
     fileUploadingStatus: "アップロード中 {percent}%",
-    fileUploadQueued: "アップロード完了。生成キューに追加しました。",
+    fileUploadQueued: "アップロード完了。",
     fileUploadFailedStatus: "アップロード失敗: {message}",
     uploadLimitUnknown: "設定済み上限",
     removeFile: "ファイルを削除",
@@ -1663,6 +1663,7 @@ const state = {
   fileEditorPanelCollapsed: false,
   pendingMaterialFiles: [],
   pendingReferenceFile: null,
+  newPromptManualHeight: 0,
   materialUpload: { status: "idle", progress: 0, message: "" },
   referenceUpload: { status: "idle", progress: 0, message: "" },
   shares: [],
@@ -2204,7 +2205,11 @@ function apiUpload(path, formData, { onProgress } = {}) {
     if (state.agentToken) xhr.setRequestHeader("Authorization", `Bearer ${state.agentToken}`);
     xhr.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable || typeof onProgress !== "function") return;
-      onProgress(Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100))));
+      onProgress({
+        loaded: event.loaded,
+        total: event.total,
+        percent: Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100))),
+      });
     });
     xhr.addEventListener("load", () => {
       resolve({
@@ -2850,22 +2855,53 @@ function openMaterialReferencePicker() {
 function setPendingMaterialFiles(files, options = {}) {
   const incomingFiles = Array.from(files || []).filter(Boolean);
   const currentFiles = options.append === false ? [] : Array.from(state.pendingMaterialFiles || []).filter(Boolean);
-  const seen = new Set(currentFiles.map(materialFileKey));
+  if (options.append === false && options.cleanup !== false) {
+    Array.from(state.pendingMaterialFiles || []).forEach((entry) => {
+      if (entry.uploadId) apiFetch(`/api/ai/material-uploads/${encodeURIComponent(entry.uploadId)}`, { method: "DELETE" }).catch(() => {});
+    });
+  }
+  const seen = new Set(currentFiles.map((entry) => entry.key || materialFileKey(entry.file || entry)));
   const nextFiles = [...currentFiles];
+  const newEntries = [];
   incomingFiles.forEach((file) => {
     const key = materialFileKey(file);
     if (seen.has(key)) return;
     seen.add(key);
-    nextFiles.push(file);
+    const entry = {
+      key,
+      file,
+      uploadId: "",
+      status: "pending",
+      progress: 0,
+      message: "",
+      error: "",
+    };
+    nextFiles.push(entry);
+    newEntries.push(entry);
   });
   state.pendingMaterialFiles = nextFiles;
-  state.materialUpload = materialUploadStateForFiles(state.pendingMaterialFiles);
+  state.materialUpload = materialUploadStateForEntries(state.pendingMaterialFiles);
   updateNewFileMode();
+  if (state.materialUpload.status !== "too-large") {
+    newEntries.forEach((entry) => uploadMaterialFileEntry(entry));
+  } else {
+    newEntries.forEach((entry) => {
+      entry.status = "failed";
+      entry.message = state.materialUpload.message;
+    });
+    state.materialUpload = materialUploadStateForFiles(state.pendingMaterialFiles.map((entry) => entry.file || entry));
+    updateNewFileMode();
+  }
 }
 
 function removePendingMaterialFile(fileKey) {
-  state.pendingMaterialFiles = Array.from(state.pendingMaterialFiles || []).filter((file) => materialFileKey(file) !== fileKey);
-  state.materialUpload = materialUploadStateForFiles(state.pendingMaterialFiles);
+  const entries = Array.from(state.pendingMaterialFiles || []).filter(Boolean);
+  const removed = entries.find((entry) => (entry.key || materialFileKey(entry.file || entry)) === fileKey);
+  if (removed?.uploadId) {
+    apiFetch(`/api/ai/material-uploads/${encodeURIComponent(removed.uploadId)}`, { method: "DELETE" }).catch(() => {});
+  }
+  state.pendingMaterialFiles = entries.filter((entry) => (entry.key || materialFileKey(entry.file || entry)) !== fileKey);
+  state.materialUpload = materialUploadStateForEntries(state.pendingMaterialFiles);
   updateNewFileMode();
 }
 
@@ -2910,6 +2946,29 @@ function materialUploadStateForFiles(files) {
   };
 }
 
+function materialUploadStateForEntries(entries) {
+  const selectedEntries = Array.from(entries || []).filter(Boolean);
+  if (!selectedEntries.length) return { status: "idle", progress: 0, message: "" };
+  const files = selectedEntries.map((entry) => entry.file || entry).filter(Boolean);
+  const sizeState = materialUploadStateForFiles(files);
+  if (sizeState.status === "too-large") return sizeState;
+  if (selectedEntries.some((entry) => entry.status === "failed")) {
+    return { status: "failed", progress: 0, message: selectedEntries.find((entry) => entry.status === "failed")?.message || t("materialNoteFailed") };
+  }
+  if (selectedEntries.some((entry) => ["pending", "starting", "uploading"].includes(entry.status))) {
+    const progress = Math.round(selectedEntries.reduce((sum, entry) => sum + Number(entry.progress || 0), 0) / selectedEntries.length);
+    return { status: "uploading", progress, message: t("fileUploadingStatus", { percent: progress }) };
+  }
+  return {
+    status: "uploaded",
+    progress: 100,
+    message:
+      selectedEntries.length === 1
+        ? t("fileUploadQueued")
+        : t("filesReadyStatus", { count: selectedEntries.length, size: formatBytes(files.reduce((sum, file) => sum + Number(file.size || 0), 0)) }),
+  };
+}
+
 function setMaterialUploadState(status, progress, message = "") {
   state.materialUpload = { status, progress: Math.max(0, Math.min(100, Number(progress || 0))), message };
   updateNewFileMode();
@@ -2927,7 +2986,7 @@ function markUploadFailed(files, message) {
 
 function firstOversizedGenerationFile(materialFiles, referenceFile) {
   const limit = getAiMaxUploadBytes();
-  const files = Array.from(materialFiles || []).filter(Boolean);
+  const files = Array.from(materialFiles || []).filter(Boolean).map((entry) => entry.file || entry);
   if (limit) {
     const oversizedFile = files.find((file) => file.size > limit);
     if (oversizedFile) return oversizedFile;
@@ -2950,7 +3009,7 @@ function getAiMaxUploadTotalBytes() {
 }
 
 function materialFilesLabel(files) {
-  const selectedFiles = Array.from(files || []).filter(Boolean);
+  const selectedFiles = Array.from(files || []).filter(Boolean).map((entry) => entry.file || entry);
   if (!selectedFiles.length) return "";
   if (selectedFiles.length === 1) return t("fileSelected", { name: selectedFiles[0].name });
   return t("filesSelected", { name: selectedFiles[0].name, count: selectedFiles.length });
@@ -2959,11 +3018,13 @@ function materialFilesLabel(files) {
 function materialFilesTitle(files) {
   return Array.from(files || [])
     .filter(Boolean)
+    .map((entry) => entry.file || entry)
     .map((file) => file.name)
     .join("\n");
 }
 
-function materialFileStatus(file, files) {
+function materialFileStatus(entry, files) {
+  const file = entry.file || entry;
   const limit = getAiMaxUploadBytes();
   if (limit && file.size > limit) {
     return {
@@ -2971,14 +3032,14 @@ function materialFileStatus(file, files) {
       text: t("fileTooLargeStatus", { size: formatBytes(file.size), limit: formatBytes(limit) || t("uploadLimitUnknown") }),
     };
   }
-  const status = state.materialUpload.status;
-  if (status === "starting") return { className: "is-uploading", text: t("fileUploadStarting") };
-  if (status === "uploading") return { className: "is-uploading", text: t("fileUploadingStatus", { percent: state.materialUpload.progress }) };
-  if (status === "queued") return { className: "is-ready", text: t("fileUploadQueued") };
-  if (status === "failed") return { className: "has-error", text: state.materialUpload.message || t("materialNoteFailed") };
+  const status = entry.status || state.materialUpload.status;
+  if (["pending", "starting"].includes(status)) return { className: "is-uploading", text: t("fileUploadStarting") };
+  if (status === "uploading") return { className: "is-uploading", text: t("fileUploadingStatus", { percent: entry.progress || 0 }) };
+  if (status === "uploaded") return { className: "is-ready", text: t("fileUploadQueued") };
+  if (status === "failed") return { className: "has-error", text: entry.message || state.materialUpload.message || t("materialNoteFailed") };
   if (status === "too-large") return { className: "has-error", text: state.materialUpload.message || t("materialNoteFailed") };
   const totalLimit = getAiMaxUploadTotalBytes();
-  const totalSize = Array.from(files || []).reduce((sum, item) => sum + Number(item.size || 0), 0);
+  const totalSize = Array.from(files || []).reduce((sum, item) => sum + Number((item.file || item).size || 0), 0);
   if (totalLimit && totalSize > totalLimit) {
     return {
       className: "has-error",
@@ -2986,6 +3047,71 @@ function materialFileStatus(file, files) {
     };
   }
   return { className: "is-ready", text: t("fileReadyStatus", { size: formatBytes(file.size) }) };
+}
+
+function canSubmitMaterialGeneration() {
+  const entries = Array.from(state.pendingMaterialFiles || []).filter(Boolean);
+  if (!entries.length) return !["starting", "uploading"].includes(state.materialUpload.status);
+  return entries.every((entry) => entry.status === "uploaded" && entry.uploadId) && !["failed", "too-large", "uploading", "starting"].includes(state.materialUpload.status);
+}
+
+function updateMaterialEntry(key, values) {
+  state.pendingMaterialFiles = Array.from(state.pendingMaterialFiles || []).map((entry) => {
+    if ((entry.key || materialFileKey(entry.file || entry)) !== key) return entry;
+    return { ...entry, ...values };
+  });
+  state.materialUpload = materialUploadStateForEntries(state.pendingMaterialFiles);
+  updateNewFileMode();
+}
+
+async function uploadMaterialFileEntry(entry) {
+  if (!state.agentUrl || !entry?.file) return;
+  const file = entry.file;
+  const tooLargeFile = firstOversizedGenerationFile([entry], null);
+  if (tooLargeFile) {
+    const limit = tooLargeFile.totalLimitExceeded ? getAiMaxUploadTotalBytes() : getAiMaxUploadBytes();
+    const messageKey = tooLargeFile.totalLimitExceeded ? "filesTooLargeStatus" : "fileTooLargeStatus";
+    updateMaterialEntry(entry.key, {
+      status: "failed",
+      progress: 0,
+      message: t(messageKey, { size: formatBytes(tooLargeFile.size), limit: formatBytes(limit) || t("uploadLimitUnknown") }),
+    });
+    return;
+  }
+  updateMaterialEntry(entry.key, { status: "starting", progress: 0, message: t("fileUploadStarting"), error: "" });
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await apiUpload("/api/ai/material-uploads", formData, {
+      onProgress: (progress) => updateMaterialEntry(entry.key, {
+        status: "uploading",
+        progress: progress.percent,
+        message: t("fileUploadingStatus", { percent: progress.percent }),
+      }),
+    });
+    if (!response.ok) {
+      const errorPayload = await response.json();
+      throw new Error(errorMessageFromPayload(errorPayload, response.status));
+    }
+    const result = await response.json();
+    const upload = Array.isArray(result.uploads) ? result.uploads[0] : null;
+    if (!upload?.upload_id) throw new Error(t("materialNoteFailed"));
+    updateMaterialEntry(entry.key, {
+      status: "uploaded",
+      progress: 100,
+      uploadId: upload.upload_id,
+      message: t("fileUploadQueued"),
+      error: "",
+    });
+  } catch (error) {
+    updateMaterialEntry(entry.key, {
+      status: "failed",
+      progress: 0,
+      message: t("fileUploadFailedStatus", { message: error?.message || t("materialNoteFailed") }),
+      error: error?.message || "",
+    });
+    console.error(error);
+  }
 }
 
 function formatBytes(value) {
@@ -3014,7 +3140,8 @@ async function generateNoteFromMaterialFiles(files) {
     setFeedback("agentNotConfigured");
     return;
   }
-  const selectedFiles = Array.from(files || []).filter(Boolean);
+  const selectedEntries = Array.from(files || []).filter(Boolean);
+  const selectedFiles = selectedEntries.map((entry) => entry.file || entry).filter(Boolean);
   const tooLargeFile = firstOversizedGenerationFile(selectedFiles, state.pendingReferenceFile);
   if (tooLargeFile) {
     if (tooLargeFile === state.pendingReferenceFile) {
@@ -3028,10 +3155,16 @@ async function generateNoteFromMaterialFiles(files) {
     setFeedback("materialNoteFailed");
     return;
   }
+  if (!canSubmitMaterialGeneration()) {
+    setFeedback("chooseFileFirst");
+    return;
+  }
   setMaterialUploadState("starting", 0, t("fileUploadStarting"));
   setFeedback("submittingJob");
   const formData = new FormData();
-  selectedFiles.forEach((file) => formData.append("file", file));
+  selectedEntries.forEach((entry) => {
+    if (entry.uploadId) formData.append("upload_id", entry.uploadId);
+  });
   formData.append("instruction", elements.newItemInput.value.trim());
   formData.append("theme", elements.newGenerateTheme?.value || "default");
   formData.append("target_use", elements.newGenerateTargetUse?.value || "default");
@@ -3047,7 +3180,7 @@ async function generateNoteFromMaterialFiles(files) {
 
   try {
     const response = await apiUpload("/api/ai/material-jobs", formData, {
-      onProgress: (progress) => setMaterialUploadState("uploading", progress, t("fileUploadingStatus", { percent: progress })),
+      onProgress: (progress) => setMaterialUploadState("uploading", progress.percent, t("submittingJob")),
     });
     if (!response.ok) {
       const errorPayload = await response.json();
@@ -3060,7 +3193,7 @@ async function generateNoteFromMaterialFiles(files) {
     startAiJobPolling();
     elements.newItemInput.value = "";
     resetNewItemInputHeight();
-    setPendingMaterialFiles([]);
+    setPendingMaterialFiles([], { append: false, cleanup: false });
     setPendingReferenceFile(null);
     setFeedback("queuedJob", { jobId: result.job_id || "" });
   } catch (error) {
@@ -3072,25 +3205,30 @@ async function generateNoteFromMaterialFiles(files) {
 }
 
 function updateNewFileMode() {
-  const files = Array.from(state.pendingMaterialFiles || []).filter(Boolean);
+  const entries = Array.from(state.pendingMaterialFiles || []).filter(Boolean);
+  const files = entries.map((entry) => entry.file || entry).filter(Boolean);
   const hasFile = files.length > 0;
   elements.newFileTrigger?.classList.toggle("has-file", hasFile);
   if (elements.newFileRow) elements.newFileRow.hidden = !hasFile;
-  elements.newFileRow?.classList.toggle("is-uploading", ["starting", "uploading"].includes(state.materialUpload.status));
+  elements.newFileRow?.classList.toggle("is-uploading", ["starting", "uploading", "pending"].includes(state.materialUpload.status));
   elements.newFileRow?.classList.toggle("has-error", ["failed", "too-large"].includes(state.materialUpload.status));
   if (elements.newFileName) {
     elements.newFileName.replaceChildren();
     if (hasFile) {
       const list = document.createElement("span");
       list.className = "new-file-list";
-      files.forEach((file) => {
+      entries.forEach((entry) => {
+        const file = entry.file || entry;
         const item = document.createElement("span");
-        const status = materialFileStatus(file, files);
+        const status = materialFileStatus(entry, entries);
+        const progress = Math.max(0, Math.min(100, Number(entry.progress || 0)));
+        const showItemProgress = ["pending", "starting", "uploading"].includes(entry.status);
         item.className = `new-file-item ${status.className}`;
-        item.dataset.fileKey = materialFileKey(file);
+        item.dataset.fileKey = entry.key || materialFileKey(file);
         item.innerHTML = `
           <span class="new-file-item-name">${escapeHtml(file.name || t("item"))}</span>
           <span class="new-file-item-status">${escapeHtml(status.text)}</span>
+          <span class="new-file-item-progress"${showItemProgress ? "" : " hidden"}><span style="width: ${progress}%"></span></span>
           <button type="button" class="new-file-item-remove" aria-label="${escapeHtml(t("removeFile"))}" title="${escapeHtml(t("removeFile"))}">×</button>
         `;
         item.querySelector(".new-file-item-remove")?.addEventListener("click", () => removePendingMaterialFile(item.dataset.fileKey || ""));
@@ -3104,12 +3242,11 @@ function updateNewFileMode() {
     elements.newFileStatus.textContent = hasFile && files.length > 1 ? state.materialUpload.message || materialFilesLabel(files) : "";
   }
   if (elements.newFileProgress) {
-    const showProgress = hasFile && ["starting", "uploading", "queued"].includes(state.materialUpload.status);
-    elements.newFileProgress.hidden = !showProgress;
-    elements.newFileProgress.querySelector("span").style.width = `${showProgress ? state.materialUpload.progress : 0}%`;
+    elements.newFileProgress.hidden = true;
+    elements.newFileProgress.querySelector("span").style.width = "0%";
   }
   if (elements.newItemForm) {
-    elements.newItemForm.querySelector("button[type='submit']").disabled = ["starting", "uploading"].includes(state.materialUpload.status);
+    elements.newItemForm.querySelector("button[type='submit']").disabled = !canSubmitMaterialGeneration();
   }
 }
 
@@ -3150,14 +3287,16 @@ function toggleNewGenerationOptions() {
 function resizeNewItemInput() {
   const input = elements.newItemInput;
   if (!input) return;
-  const currentHeight = Math.ceil(input.getBoundingClientRect().height || 42);
-  const nextHeight = Math.min(Math.max(input.scrollHeight, currentHeight, 42), 220);
+  const manualHeight = Number(state.newPromptManualHeight || 0);
+  input.style.height = `${manualHeight || 42}px`;
+  const nextHeight = Math.min(Math.max(input.scrollHeight, manualHeight || 42), 220);
   input.style.height = `${nextHeight}px`;
 }
 
 function resetNewItemInputHeight() {
   const input = elements.newItemInput;
   if (!input) return;
+  state.newPromptManualHeight = 0;
   input.style.height = "";
 }
 
@@ -3176,6 +3315,7 @@ function startNewPromptResize(event) {
     input.style.height = `${Math.min(Math.max(startHeight + moveEvent.clientY - startY, 42), 220)}px`;
   };
   const onUp = () => {
+    state.newPromptManualHeight = Math.ceil(input.getBoundingClientRect().height || 0);
     promptBox?.classList.remove("is-resizing");
     window.removeEventListener(moveEventName, onMove);
     window.removeEventListener(upEventName, onUp);
@@ -6491,7 +6631,9 @@ function closeAiGenerationDetail() {
 
 async function loadAiGenerationDetail(jobId = state.aiGenerationDetailJobId) {
   if (!jobId || !state.agentUrl) return;
-  if (elements.aiGenerationDetailFeedback) elements.aiGenerationDetailFeedback.textContent = t("aiGenerationDetailLoading");
+  if (!state.aiGenerationDetailJob && elements.aiGenerationDetailFeedback) {
+    elements.aiGenerationDetailFeedback.textContent = t("aiGenerationDetailLoading");
+  }
   try {
     const response = await apiFetch(`/api/ai/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
     const data = await response.json().catch(() => ({}));
@@ -6674,6 +6816,9 @@ function renderAiGenerationStagePanel(job) {
   }
   const metadataRows = renderKeyValueList(stage.metadata || {});
   const artifactRows = artifact ? renderAiGenerationArtifactDetail(artifact) : "";
+  const loadingRows = !artifact && !isTerminalAiStageStatus(stage.status)
+    ? `<section class="ai-generation-stage-loading">${escapeHtml(t("aiGenerationDetailLoading"))}</section>`
+    : "";
   const currentAction = stage.message || getAiGenerationCurrentAction({ ...job, current_stage: stage.stage });
   elements.aiGenerationStagePanel.innerHTML = `
     <div class="ai-generation-stage-detail-head">
@@ -6690,6 +6835,7 @@ function renderAiGenerationStagePanel(job) {
     </div>
     ${currentAction ? `<section><h4>${escapeHtml(t("aiGenerationDetailCurrentAction"))}</h4><p>${escapeHtml(currentAction)}</p></section>` : ""}
     ${stage.error_summary || stage.error ? `<section><h4>${escapeHtml(t("aiGenerationDetailError"))}</h4><p class="ai-run-error">${escapeHtml(stage.error_summary || stage.error)}</p></section>` : ""}
+    ${loadingRows}
     ${artifactRows}
     ${metadataRows ? `<section><h4>${escapeHtml(t("aiGenerationDetailMetadata"))}</h4>${metadataRows}</section>` : ""}
   `;
@@ -7908,7 +8054,7 @@ elements.newItemInput.addEventListener("input", resizeNewItemInput);
 elements.newPromptResize?.addEventListener("pointerdown", startNewPromptResize);
 elements.newPromptResize?.addEventListener("mousedown", startNewPromptResize);
 elements.newFileTrigger?.addEventListener("click", openMaterialGeneratePicker);
-elements.newFileRemove?.addEventListener("click", () => setPendingMaterialFiles([]));
+elements.newFileRemove?.addEventListener("click", () => setPendingMaterialFiles([], { append: false }));
 elements.newReferenceTrigger?.addEventListener("click", openMaterialReferencePicker);
 elements.newReferenceRemove?.addEventListener("click", () => setPendingReferenceFile(null));
 elements.readerClose.addEventListener("click", closeReader);

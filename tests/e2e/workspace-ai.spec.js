@@ -47,6 +47,7 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   await routeWorkspace(page);
 
   let materialRequest = null;
+  const uploadRequests = [];
   let uploadHtmlCalled = false;
   let legacyJobCalled = false;
   let manifestCalls = 0;
@@ -299,6 +300,27 @@ test("workspace file create mode uploads material to the AI generation endpoint"
       }),
     });
   });
+  await page.route("**/api/ai/material-uploads", async (route) => {
+    const postData = route.request().postData() || "";
+    uploadRequests.push(postData);
+    const filename = postData.includes("appendix.md") ? "appendix.md" : postData.includes("brief.md") ? "brief.md" : "material.md";
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        uploads: [
+          {
+            upload_id: `upload-${uploadRequests.length}`,
+            filename,
+            content_type: "text/markdown",
+            size: 36,
+            created_at: "2026-06-07T02:00:00.000Z",
+          },
+        ],
+        count: 1,
+        total_size: 36,
+      }),
+    });
+  });
   await page.route("**/api/ai/material-jobs", async (route) => {
     materialRequest = {
       method: route.request().method(),
@@ -357,6 +379,8 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   await expect(page.locator("#new-file-name")).toContainText("material.md");
   await expect(page.locator("#new-file-name")).toContainText("appendix.md");
   await expect(page.locator("#new-file-name .new-file-item")).toHaveCount(2);
+  await expect.poll(() => uploadRequests.length).toBe(2);
+  await expect(page.locator("#new-file-name .new-file-item-status")).toContainText(["Upload complete.", "Upload complete."]);
   const secondFileChooserPromise = page.waitForEvent("filechooser");
   await page.locator("#new-file-trigger").click();
   const secondFileChooser = await secondFileChooserPromise;
@@ -369,6 +393,7 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   await expect(page.locator("#new-file-name")).toContainText("appendix.md");
   await expect(page.locator("#new-file-name")).toContainText("brief.md");
   await expect(page.locator("#new-file-name .new-file-item")).toHaveCount(3);
+  await expect.poll(() => uploadRequests.length).toBe(3);
   await expect(page.locator("#new-file-trigger")).toHaveClass(/has-file/);
   await page.locator("#new-item-form button[type='submit']").click();
 
@@ -378,9 +403,12 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   expect(legacyJobCalled).toBe(false);
   expect(materialRequest).not.toBeNull();
   expect(materialRequest.method).toBe("POST");
-  expect(materialRequest.postData).toContain("material.md");
-  expect(materialRequest.postData).toContain("appendix.md");
-  expect(materialRequest.postData).toContain("brief.md");
+  expect(materialRequest.postData).toContain("upload-1");
+  expect(materialRequest.postData).toContain("upload-2");
+  expect(materialRequest.postData).toContain("upload-3");
+  expect(materialRequest.postData).not.toContain("Important uploaded source.");
+  expect(materialRequest.postData).not.toContain("Second uploaded source.");
+  expect(materialRequest.postData).not.toContain("Third uploaded source.");
   expect(materialRequest.postData).toContain("Turn this material into a concise study note.");
   expect(materialRequest.postData).toContain("name=\"theme\"");
   expect(materialRequest.postData).toContain("dark");
@@ -538,6 +566,7 @@ test("workspace source file selection shows upload limit before submitting", asy
   await routeWorkspace(page);
 
   let materialJobCalled = false;
+  let uploadCalled = false;
   await page.route("**/api/auth/status", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -578,6 +607,10 @@ test("workspace source file selection shows upload limit before submitting", asy
     materialJobCalled = true;
     await route.abort();
   });
+  await page.route("**/api/ai/material-uploads", async (route) => {
+    uploadCalled = true;
+    await route.abort();
+  });
 
   await page.goto("/workspace/", { waitUntil: "domcontentloaded" });
   const fileChooserPromise = page.waitForEvent("filechooser");
@@ -591,8 +624,8 @@ test("workspace source file selection shows upload limit before submitting", asy
 
   await expect(page.locator("#new-file-name")).toContainText("too-large.md");
   await expect(page.locator("#new-file-name .new-file-item-status")).toContainText("exceeds");
-  await page.locator("#new-item-form button[type='submit']").click();
-  await expect(page.locator("#new-feedback")).toContainText("Material note generation failed.");
+  await expect(page.locator("#new-item-form button[type='submit']")).toBeDisabled();
+  expect(uploadCalled).toBe(false);
   expect(materialJobCalled).toBe(false);
 });
 

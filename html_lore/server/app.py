@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+import uuid
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -42,7 +45,7 @@ from .items import ItemContentError, ItemContentUpdateError, ItemDeleteError, It
 from .jobs import JobError, JobService
 from .navigation import NavigationConfigError, NavigationConfigService
 from .shares import ShareError, ShareSafetyError, ShareService, scan_share_content, settings_for_share_token
-from .uploads import UploadError, UploadService
+from .uploads import UploadError, UploadService, ensure_within
 
 
 @lru_cache
@@ -146,6 +149,9 @@ class UploadedMaterial:
     content_type: str = ""
 
 
+MATERIAL_UPLOAD_ID_PATTERN = re.compile(r"^mat_upl_[A-Za-z0-9]+$")
+
+
 async def read_style_reference_metadata(
     reference_file: UploadFile | None,
     reference_file_name: str,
@@ -192,6 +198,88 @@ async def read_generation_materials(files: list[UploadFile], instruction: str, m
     if not prompt:
         raise HTTPException(status_code=400, detail="Provide a file or describe what you want to generate.")
     return [UploadedMaterial(filename="prompt.txt", content=prompt.encode("utf-8"), content_type="text/plain")]
+
+
+def material_uploads_root(settings: ServerSettings) -> Path:
+    root = settings.meta_dir or (settings.content_dir.parent / ".html-lore-meta")
+    return root / "ai" / "material_uploads"
+
+
+def material_upload_paths(settings: ServerSettings, upload_id: str) -> tuple[Path, Path]:
+    if not MATERIAL_UPLOAD_ID_PATTERN.match(upload_id):
+        raise HTTPException(status_code=400, detail="Invalid upload id.")
+    root = material_uploads_root(settings)
+    metadata_path = root / f"{upload_id}.json"
+    content_path = root / f"{upload_id}.bin"
+    ensure_within(metadata_path, root)
+    ensure_within(content_path, root)
+    return metadata_path, content_path
+
+
+def public_material_upload(metadata: dict[str, object]) -> dict[str, object]:
+    return {
+        "upload_id": str(metadata.get("upload_id") or ""),
+        "filename": str(metadata.get("filename") or ""),
+        "content_type": str(metadata.get("content_type") or ""),
+        "size": int(metadata.get("size") or 0),
+        "created_at": str(metadata.get("created_at") or ""),
+    }
+
+
+async def store_material_upload(file: UploadFile, settings: ServerSettings) -> dict[str, object]:
+    content = await read_limited_upload(file, settings.max_upload_bytes)
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    upload_id = f"mat_upl_{uuid.uuid4().hex}"
+    metadata_path, content_path = material_upload_paths(settings, upload_id)
+    metadata = {
+        "upload_id": upload_id,
+        "filename": file.filename or "material.txt",
+        "content_type": file.content_type or "",
+        "size": len(content),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    content_path.write_bytes(content)
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return public_material_upload(metadata)
+
+
+def load_material_upload(settings: ServerSettings, upload_id: str) -> UploadedMaterial:
+    metadata_path, content_path = material_upload_paths(settings, upload_id)
+    if not metadata_path.exists() or not content_path.exists():
+        raise HTTPException(status_code=404, detail="Uploaded material not found.")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Uploaded material metadata is invalid.") from exc
+    if not isinstance(metadata, dict):
+        raise HTTPException(status_code=400, detail="Uploaded material metadata is invalid.")
+    content = content_path.read_bytes()
+    return UploadedMaterial(
+        filename=str(metadata.get("filename") or "material.txt"),
+        content=content,
+        content_type=str(metadata.get("content_type") or ""),
+    )
+
+
+def delete_material_upload(settings: ServerSettings, upload_id: str) -> None:
+    metadata_path, content_path = material_upload_paths(settings, upload_id)
+    for path in (metadata_path, content_path):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def read_uploaded_generation_materials(settings: ServerSettings, upload_ids: list[str] | None) -> list[UploadedMaterial]:
+    ids = [str(upload_id or "").strip() for upload_id in (upload_ids or []) if str(upload_id or "").strip()]
+    if not ids:
+        return []
+    materials = [load_material_upload(settings, upload_id) for upload_id in ids]
+    total = sum(len(material.content) for material in materials)
+    ensure_upload_total_within_limit(total, settings.max_upload_total_bytes)
+    return materials
 
 
 def uploaded_payload_size(materials: list[UploadedMaterial], reference: dict[str, object]) -> int:
@@ -412,6 +500,7 @@ def create_app() -> FastAPI:
         __: AiRateLimit,
         service: Annotated[AIConversationService, Depends(get_ai_conversation_service)],
         file: Annotated[list[UploadFile] | None, File()] = None,
+        upload_id: Annotated[list[str] | None, Form()] = None,
         instruction: Annotated[str, Form()] = "",
         theme: Annotated[str, Form()] = "default",
         target_use: Annotated[str, Form()] = "default",
@@ -423,11 +512,12 @@ def create_app() -> FastAPI:
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
-        materials = await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
+        uploaded_materials = read_uploaded_generation_materials(service.settings, upload_id)
+        materials = uploaded_materials or await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
         uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size, service.settings.max_upload_bytes)
         ensure_upload_total_within_limit(uploaded_payload_size(materials, uploaded_reference), service.settings.max_upload_total_bytes)
         try:
-            return service.generate_note_from_material(
+            result = service.generate_note_from_material(
                 materials=[asdict(material) for material in materials],
                 instruction=instruction,
                 values={
@@ -439,8 +529,40 @@ def create_app() -> FastAPI:
                     "style_preference": style_preference,
                 },
             )
+            for uploaded_id in upload_id or []:
+                delete_material_upload(service.settings, uploaded_id)
+            return result
         except (HtmlGenerationError, MaterialGenerationError, AIRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/ai/material-uploads")
+    async def upload_ai_material(
+        _: ApiAuth,
+        __: AiRateLimit,
+        settings: Annotated[ServerSettings, Depends(get_request_settings)],
+        file: Annotated[list[UploadFile] | None, File()] = None,
+    ) -> dict:
+        files = [item for item in (file or []) if item is not None]
+        if not files:
+            raise HTTPException(status_code=400, detail="Choose at least one file to upload.")
+        uploads: list[dict[str, object]] = []
+        total = 0
+        try:
+            for item in files:
+                upload = await store_material_upload(item, settings)
+                total += int(upload.get("size") or 0)
+                uploads.append(upload)
+            ensure_upload_total_within_limit(total, settings.max_upload_total_bytes)
+        except HTTPException:
+            for upload in uploads:
+                delete_material_upload(settings, str(upload.get("upload_id") or ""))
+            raise
+        return {"uploads": uploads, "count": len(uploads), "total_size": total}
+
+    @app.delete("/api/ai/material-uploads/{upload_id}")
+    def delete_ai_material_upload(upload_id: str, _: ApiAuth, settings: Annotated[ServerSettings, Depends(get_request_settings)]) -> dict:
+        delete_material_upload(settings, upload_id)
+        return {"ok": True}
 
     @app.post("/api/ai/material-jobs")
     async def enqueue_ai_note_from_material(
@@ -448,6 +570,7 @@ def create_app() -> FastAPI:
         __: AiRateLimit,
         service: Annotated[AIConversationService, Depends(get_ai_conversation_service)],
         file: Annotated[list[UploadFile] | None, File()] = None,
+        upload_id: Annotated[list[str] | None, Form()] = None,
         instruction: Annotated[str, Form()] = "",
         theme: Annotated[str, Form()] = "default",
         target_use: Annotated[str, Form()] = "default",
@@ -459,11 +582,12 @@ def create_app() -> FastAPI:
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
-        materials = await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
+        uploaded_materials = read_uploaded_generation_materials(service.settings, upload_id)
+        materials = uploaded_materials or await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
         uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size, service.settings.max_upload_bytes)
         ensure_upload_total_within_limit(uploaded_payload_size(materials, uploaded_reference), service.settings.max_upload_total_bytes)
         try:
-            return service.enqueue_generate_note_from_material(
+            result = service.enqueue_generate_note_from_material(
                 materials=[asdict(material) for material in materials],
                 instruction=instruction,
                 values={
@@ -475,6 +599,9 @@ def create_app() -> FastAPI:
                     "style_preference": style_preference,
                 },
             )
+            for uploaded_id in upload_id or []:
+                delete_material_upload(service.settings, uploaded_id)
+            return result
         except (HtmlGenerationError, MaterialGenerationError, AIJobError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
