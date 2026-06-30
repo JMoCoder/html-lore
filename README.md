@@ -347,7 +347,8 @@ Deployment notes:
 
 - Installing the `agent` extra installs the AI runtime dependencies used by the
   backend, including LangGraph for workflow orchestration and MarkItDown for
-  enhanced document parsing.
+  enhanced document parsing. The Python Playwright package is included, but the
+  default Docker image does not install a browser binary.
 - `HTML_LORE_AI_API_KEY` is used by the server for chat and embedding calls; it
   must not be placed in frontend config files.
 - `HTML_LORE_DOCUMENT_PARSER=markitdown` is the default parser mode for AI
@@ -389,6 +390,27 @@ Deployment notes:
   `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chrome`, renders generated HTML,
   and passes overflow / blank-viewport / layout warnings to the verifier. The
   default is `off`, so deployments without Playwright or Chrome keep working.
+- Production browser visual checking requires both the Python Playwright package
+  and an installed browser. The default `Dockerfile.api` is intentionally
+  lightweight and does not include Chromium. Use one of these paths:
+  - Docker Compose profile:
+    `docker compose --profile visual-check up -d --build html-lore-visual`
+    uses `Dockerfile.api.visual`, installs Playwright Chromium and system
+    dependencies, and defaults `HTML_LORE_AI_VISUAL_CHECK=basic` plus
+    `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chromium`.
+  - Direct image build:
+    `docker build -f Dockerfile.api.visual -t html-lore-api-visual .`
+  - Non-Docker / custom image:
+    after installing `html-lore[agent]`, run
+    `python -m playwright install chromium` or
+    `python -m playwright install --with-deps chromium`, then set
+    `HTML_LORE_AI_VISUAL_CHECK=basic` and
+    `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chromium`.
+  Browser rendering increases image size and runtime memory. For production,
+  keep extra memory headroom for Chromium processes, uploaded material bytes,
+  MarkItDown parsing, and long HTML-generation model responses; 1-2 GB
+  additional container memory is a practical starting point for occasional
+  visual checks, with higher limits for concurrent generation jobs.
 - Smoke-test commands make real provider calls and should only be run after the
   target model and key are confirmed for that environment.
 

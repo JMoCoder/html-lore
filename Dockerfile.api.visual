@@ -1,0 +1,23 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chromium
+
+WORKDIR /app
+
+COPY pyproject.toml README.md LICENSE ./
+COPY html_lore ./html_lore
+COPY app_static ./app_static
+COPY deploy/api-entrypoint.sh /usr/local/bin/html-lore-api-entrypoint
+
+RUN pip install --no-cache-dir ".[agent]" \
+    && python -m playwright install --with-deps chromium \
+    && chmod +x /usr/local/bin/html-lore-api-entrypoint
+
+EXPOSE 8787
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/health', timeout=3).read()"]
+
+ENTRYPOINT ["html-lore-api-entrypoint"]

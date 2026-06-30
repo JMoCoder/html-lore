@@ -8,7 +8,8 @@ services:
       HTML_LORE_META: /data/meta
       HTML_LORE_PUBLIC: /public
       HTML_LORE_TITLE: ${HTML_LORE_TITLE:-HTMlore}
-      HTML_LORE_MAX_UPLOAD_BYTES: ${HTML_LORE_MAX_UPLOAD_BYTES:-10485760}
+      HTML_LORE_MAX_UPLOAD_BYTES: ${HTML_LORE_MAX_UPLOAD_BYTES:-104857600}
+      HTML_LORE_MAX_UPLOAD_TOTAL_BYTES: ${HTML_LORE_MAX_UPLOAD_TOTAL_BYTES:-524288000}
       HTML_LORE_API_TOKEN: ${HTML_LORE_API_TOKEN:-}
       HTML_LORE_AUTH_USERNAME: ${HTML_LORE_AUTH_USERNAME:-admin}
       HTML_LORE_AUTH_PASSWORD: ${HTML_LORE_AUTH_PASSWORD:-test-password}
@@ -18,6 +19,37 @@ services:
       HTML_LORE_SESSION_SECURE: ${HTML_LORE_SESSION_SECURE:-false}
       HTML_LORE_CORS_ORIGINS: ${HTML_LORE_CORS_ORIGINS:-http://localhost,http://127.0.0.1}
       HTML_LORE_AI_QA_ENGINE: ${HTML_LORE_AI_QA_ENGINE:-auto}
+    volumes:
+      - ./data:/data
+      - ./public:/public
+    ports:
+      - "${HTML_LORE_HTTP_PORT:-8080}:8787"
+    restart: unless-stopped
+
+  html-lore-visual:
+    profiles:
+      - visual-check
+    build:
+      context: .
+      dockerfile: Dockerfile.api.visual
+    environment:
+      HTML_LORE_CONTENT: /data/content
+      HTML_LORE_META: /data/meta
+      HTML_LORE_PUBLIC: /public
+      HTML_LORE_TITLE: ${HTML_LORE_TITLE:-HTMlore}
+      HTML_LORE_MAX_UPLOAD_BYTES: ${HTML_LORE_MAX_UPLOAD_BYTES:-104857600}
+      HTML_LORE_MAX_UPLOAD_TOTAL_BYTES: ${HTML_LORE_MAX_UPLOAD_TOTAL_BYTES:-524288000}
+      HTML_LORE_API_TOKEN: ${HTML_LORE_API_TOKEN:-}
+      HTML_LORE_AUTH_USERNAME: ${HTML_LORE_AUTH_USERNAME:-admin}
+      HTML_LORE_AUTH_PASSWORD: ${HTML_LORE_AUTH_PASSWORD:-test-password}
+      HTML_LORE_USERS_FILE: ${HTML_LORE_USERS_FILE:-/data/users.json}
+      HTML_LORE_USER_DATA_DIR: ${HTML_LORE_USER_DATA_DIR:-/data/users}
+      HTML_LORE_SESSION_SECRET: ${HTML_LORE_SESSION_SECRET:-html-lore-local-dev-session-secret-change-me}
+      HTML_LORE_SESSION_SECURE: ${HTML_LORE_SESSION_SECURE:-false}
+      HTML_LORE_CORS_ORIGINS: ${HTML_LORE_CORS_ORIGINS:-http://localhost,http://127.0.0.1}
+      HTML_LORE_AI_QA_ENGINE: ${HTML_LORE_AI_QA_ENGINE:-auto}
+      HTML_LORE_AI_VISUAL_CHECK: ${HTML_LORE_AI_VISUAL_CHECK:-basic}
+      HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL: ${HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL:-chromium}
     volumes:
       - ./data:/data
       - ./public:/public
