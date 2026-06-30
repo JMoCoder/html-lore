@@ -3512,6 +3512,10 @@ def test_generation_spec_maps_legacy_target_use_to_audience() -> None:
     assert explicit.audience == "personal"
     assert explicit.style_preference == "business"
 
+    legacy_website = GenerationSpec.from_values({"target_use": "website", "style_preference": "magazine"})
+    assert legacy_website.target_use == "webpage"
+    assert legacy_website.style_preference == "magazine"
+
     with pytest.raises(HtmlGenerationError, match="Unsupported audience"):
         GenerationSpec.from_values({"audience": "public"})
 
@@ -3795,7 +3799,7 @@ def test_ai_material_job_v2_accepts_text_prompt_without_file(tmp_path: Path) -> 
             fields={
                 "instruction": "Create a public HTML page about private prompt topic alpha.",
                 "theme": "default",
-                "target_use": "website",
+                "target_use": "webpage",
                 "style_preference": "business",
             },
         )
@@ -3808,7 +3812,7 @@ def test_ai_material_job_v2_accepts_text_prompt_without_file(tmp_path: Path) -> 
         assert job["generation_engine"] == "v2"
         assert job["item_id"].startswith("generated/")
         assert run["spec"]["filename"] == "prompt.txt"
-        assert run["spec"]["target_use"] == "website"
+        assert run["spec"]["target_use"] == "webpage"
         assert run["spec"]["style_preference"] == "business"
         assert "private prompt topic alpha" not in raw_jobs
     finally:

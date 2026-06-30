@@ -226,6 +226,26 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "section rhythm varied" in presentation
     assert "roadmap" in presentation
     assert "Slide-Like Layout Guardrails" in presentation
+    assert "Slide Canvas Contract" in presentation
+    assert "executive_briefing" in presentation
+    assert "tech_sharing" in presentation
+    assert "architecture_scene" in presentation
+    assert "talk-track order" in presentation
+    assert "unsupported runtime" in presentation
+
+    report = load_skill_by_id("report_surface_design").content
+    assert "Report Surface Design Skill" in report
+    assert "surface-design enhancer" in report
+    assert "Do not force a universal report template" in report
+    assert "comparisons, responsibilities, parameters" in report
+    assert "missing data must remain missing" in report
+
+    webpage = load_skill_by_id("webpage_surface_design").content
+    assert "Webpage Surface Design Skill" in webpage
+    assert "surface-design enhancer" in webpage
+    assert "Do not force every webpage into a marketing landing-page pattern" in webpage
+    assert "browser-native vertical scrolling" in webpage
+    assert "unsupported product claims, social proof, prices, and metrics must remain absent" in webpage
 
     assert "Architecture Explainer Design Skill" in architecture
     assert "runtime" in architecture
@@ -302,6 +322,35 @@ def test_generation_v2_skill_router_loads_optional_capability_skills() -> None:
         "safe_static_html",
         "architecture_explainer_design",
         "component_pattern_html",
+    ]
+
+
+def test_generation_v2_skill_router_maps_explicit_generation_options() -> None:
+    state = GenerationState(input=GenerationInput(target_use="ppt", style_preference="magazine"))
+
+    assert planned_skill_ids_for_agent("StyleDesigner", state) == ("presentation_surface_design", "magazine_style_design")
+    assert planned_skill_ids_for_agent("HTMLCoder", state) == ()
+    assert [skill.id for skill in resolve_skills_for_agent("StyleDesigner", state)] == [
+        "html_page_design",
+        "presentation_surface_design",
+    ]
+
+    report_state = GenerationState(input=GenerationInput(target_use="report"))
+
+    assert planned_skill_ids_for_agent("StyleDesigner", report_state) == ("report_surface_design",)
+    assert planned_skill_ids_for_agent("HTMLCoder", report_state) == ()
+    assert [skill.id for skill in resolve_skills_for_agent("StyleDesigner", report_state)] == [
+        "html_page_design",
+        "report_surface_design",
+    ]
+
+    webpage_state = GenerationState(input=GenerationInput(target_use="webpage"))
+
+    assert planned_skill_ids_for_agent("StyleDesigner", webpage_state) == ("webpage_surface_design",)
+    assert planned_skill_ids_for_agent("HTMLCoder", webpage_state) == ()
+    assert [skill.id for skill in resolve_skills_for_agent("StyleDesigner", webpage_state)] == [
+        "html_page_design",
+        "webpage_surface_design",
     ]
 
 

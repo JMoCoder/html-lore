@@ -92,8 +92,9 @@ const i18n = {
     generateBusiness: "Business",
     generateTech: "Tech",
     generateRetro: "Retro",
+    generateMagazine: "Magazine",
     generateReport: "Report",
-    generateWebsite: "Website",
+    generateWebpage: "Webpage",
     generatePpt: "PPT",
     generateNoteSubmit: "Generate note",
     generateNoteRunning: "Generating note...",
@@ -596,8 +597,9 @@ const i18n = {
     generateBusiness: "商务",
     generateTech: "科技",
     generateRetro: "复古",
+    generateMagazine: "杂志",
     generateReport: "报告",
-    generateWebsite: "网站",
+    generateWebpage: "网页",
     generatePpt: "PPT",
     generateNoteSubmit: "生成笔记",
     generateNoteRunning: "正在生成笔记...",
@@ -1100,8 +1102,9 @@ const i18n = {
     generateBusiness: "ビジネス",
     generateTech: "テック",
     generateRetro: "レトロ",
+    generateMagazine: "マガジン",
     generateReport: "レポート",
-    generateWebsite: "Web サイト",
+    generateWebpage: "Web ページ",
     generatePpt: "PPT",
     generateNoteSubmit: "ノートを生成",
     generateNoteRunning: "ノートを生成中...",
@@ -1581,7 +1584,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.3",
+  currentVersion: "1.1.4",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -7620,7 +7623,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.3-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.4-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

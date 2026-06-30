@@ -764,7 +764,7 @@ test("workspace note generation sends target format and style preference", async
   await page.locator("#ai-panel-open").click();
   await page.locator("#ai-generate-note").click();
   await expect(page.locator("#generate-reference-file")).toHaveCount(0);
-  await page.locator("#generate-target-use").selectOption("website");
+  await page.locator("#generate-target-use").selectOption("webpage");
   await page.locator("#generate-audience").selectOption("personal");
   await page.locator("#generate-style-preference").selectOption("business");
   await page.locator("#generate-note-submit").click();
@@ -773,7 +773,7 @@ test("workspace note generation sends target format and style preference", async
   await expect(page.locator("#ai-chat-log")).not.toContainText("AI job queued");
   expect(conversationRequest).not.toBeNull();
   expect(generationRequest).toMatchObject({
-    target_use: "website",
+    target_use: "webpage",
     audience: "personal",
     style_preference: "business",
   });

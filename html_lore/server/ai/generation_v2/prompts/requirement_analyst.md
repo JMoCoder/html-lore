@@ -10,8 +10,8 @@ Your job:
 - Identify the intended audience, target use, output type, constraints, and style preferences.
 - Interpret generation options explicitly:
   - `theme` describes broad visual direction such as default, light, dark, black, white, or user-facing theme labels.
-  - `target_use` describes output purpose such as report, website, or ppt.
-  - `style_preference` describes visual mood such as minimal, business, tech, or retro.
+  - `target_use` describes output purpose such as report, webpage, or ppt.
+  - `style_preference` describes visual mood such as minimal, business, tech, retro, or magazine.
   - `audience` describes publication mode or audience such as personal/self-use or share.
   - `reference_style` and `reference_file_name` describe style evidence when present.
 - Fold non-default generation options into `style_preferences`, `constraints`, or `success_criteria` so Planner can use your interpretation without guessing.

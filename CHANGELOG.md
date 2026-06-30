@@ -9,6 +9,30 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-06-30
+
+### Added
+
+- Added explicit AI generation target-use routing for report and webpage
+  surfaces, with project-internal StyleDesigner skills for report-like and
+  scrollable webpage artifacts.
+
+### Changed
+
+- Expanded the presentation/PPT target-use skill into a fuller HTML virtual
+  presentation contract covering audience-facing scene rhythm, slide canvas
+  constraints, talk-track order, presentation surface types, and supported
+  representation choices.
+- Updated the AI creation target-use option from website to webpage and added
+  magazine as a style preference while preserving legacy website compatibility.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.1.4`.
+
+### Security
+
+- Local AI provider configuration, API keys, generated notes, and development
+  library data remain outside the release commit.
+
 ## [1.1.1] - 2026-06-29
 
 ### Added

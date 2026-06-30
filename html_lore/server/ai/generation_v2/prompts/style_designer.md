@@ -14,8 +14,8 @@ Your job:
 - Translate Planner capability labels and `tool_needs` into specific section-level layout contracts. Do not only state a mood such as "business" or "tech".
 - Interpret style reference hints as inspiration, not pixel-level replication.
 - Keep the design appropriate to the content domain and target use.
-- Treat `target_use` as the target output format when it is `report`, `website`, or `ppt`.
-- Treat `style_preference` as the visual mood when it is `minimal`, `business`, `tech`, or `retro`.
+- Treat `target_use` as the target output format when it is `report`, `webpage`, or `ppt`.
+- Treat `style_preference` as the visual mood when it is `minimal`, `business`, `tech`, `retro`, or `magazine`.
 - Treat `audience` as the publication mode when it is `personal` or `share`; share output should be more self-contained and conservative.
 
 Design principles:

@@ -17,9 +17,9 @@ from .html_generation_graph import HtmlGenerationGraph, HtmlGenerationState
 
 
 VALID_THEMES = {"default", "dark", "light"}
-VALID_TARGET_USES = {"default", "personal", "share", "report", "website", "ppt"}
+VALID_TARGET_USES = {"default", "personal", "share", "report", "webpage", "ppt"}
 VALID_REFERENCE_STYLES = {"default", "file", "image", "note"}
-VALID_STYLE_PREFERENCES = {"default", "report", "website", "ppt", "minimal", "business", "tech", "retro"}
+VALID_STYLE_PREFERENCES = {"default", "report", "webpage", "ppt", "minimal", "business", "tech", "retro", "magazine"}
 VALID_AUDIENCES = {"default", "personal", "share"}
 MAX_REFERENCE_FILE_SIZE = 25 * 1024 * 1024
 
@@ -45,12 +45,12 @@ class GenerationSpec:
     @classmethod
     def from_values(cls, values: dict[str, Any]) -> "GenerationSpec":
         theme = validate_enum(values.get("theme", "default"), VALID_THEMES, "theme")
-        target_use = validate_enum(values.get("target_use", values.get("targetUse", "default")), VALID_TARGET_USES, "target_use")
+        target_use = validate_enum(normalize_generation_option_alias(values.get("target_use", values.get("targetUse", "default"))), VALID_TARGET_USES, "target_use")
         audience = validate_enum(values.get("audience", "default"), VALID_AUDIENCES, "audience")
         if target_use in VALID_AUDIENCES and target_use != "default" and audience == "default":
             audience = target_use
             target_use = "default"
-        style_preference = validate_enum(values.get("style_preference", values.get("stylePreference", "default")), VALID_STYLE_PREFERENCES, "style_preference")
+        style_preference = validate_enum(normalize_generation_option_alias(values.get("style_preference", values.get("stylePreference", "default"))), VALID_STYLE_PREFERENCES, "style_preference")
         reference_style = validate_enum(values.get("reference_style", values.get("referenceStyle", "default")), VALID_REFERENCE_STYLES, "reference_style")
         reference_note_id = normalize_reference_note_id(values.get("reference_note_id") or values.get("referenceNoteId") or "")
         reference_file_name = normalize_reference_file_name(values.get("reference_file_name") or values.get("referenceFileName") or "")
@@ -231,6 +231,13 @@ def validate_enum(value: Any, valid: set[str], name: str) -> str:
     cleaned = str(value or "default").strip() or "default"
     if cleaned not in valid:
         raise HtmlGenerationError(f"Unsupported {name}.")
+    return cleaned
+
+
+def normalize_generation_option_alias(value: Any) -> str:
+    cleaned = str(value or "default").strip().lower() or "default"
+    if cleaned == "website":
+        return "webpage"
     return cleaned
 
 

@@ -4,6 +4,30 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-06-30
+
+### Added
+
+- AI generation に explicit target-use skill routing を追加し、report surface と
+  webpage surface の project-internal StyleDesigner skills を補いました。
+
+### Changed
+
+- presentation / PPT target-use skill を HTML virtual presentation 向けのより
+  完整な design contract に拡張し、audience-facing scene rhythm、slide canvas
+  constraints、talk-track order、presentation surface types、representation
+  choices を扱うようにしました。
+- AI creation の target-use option を website から webpage に変更し、style
+  preference に magazine を追加しました。legacy `website` value は互換 mapping
+  で維持します。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.1.4` に更新しました。
+
+### Security
+
+- local AI provider configuration、API key、generated notes、development
+  library data は release commit の外に残します。
+
 ## [1.1.1] - 2026-06-29
 
 ### Added

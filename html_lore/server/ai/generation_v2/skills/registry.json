@@ -29,9 +29,25 @@
       "id": "presentation_surface_design",
       "applies_to_agents": ["StyleDesigner"],
       "default_enabled": false,
-      "trigger_keywords": ["presentation", "pitch", "deck", "roadshow", "briefing", "showcase", "launch", "ppt", "share"],
+      "trigger_keywords": ["presentation", "pitch", "deck", "slides", "slideshow", "keynote", "roadshow", "briefing", "showcase", "launch", "ppt", "speaker", "presenter", "share"],
       "source": "local",
       "path": "presentation_surface_design/SKILL.md"
+    },
+    {
+      "id": "report_surface_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "trigger_keywords": ["report", "analysis", "findings", "risk", "recommendation", "matrix", "decision"],
+      "source": "local",
+      "path": "report_surface_design/SKILL.md"
+    },
+    {
+      "id": "webpage_surface_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "trigger_keywords": ["webpage", "web page", "website", "landing", "docs", "blog", "dashboard", "prototype", "scrollable"],
+      "source": "local",
+      "path": "webpage_surface_design/SKILL.md"
     },
     {
       "id": "architecture_explainer_design",
