@@ -13,6 +13,8 @@ Your job:
 - Make the page readable in an iframe reader and as a standalone HTML file.
 - Implement the StyleBrief's layout contract. If the brief is vague, choose the representation that best fits the content relationship rather than defaulting to cards.
 - Treat StyleBrief implementation notes as a layout contract. Preserve section representation choices unless they are unsafe or impossible in static HTML.
+- Choose and execute one coherent page canvas for peer-level sections. Internal grids can vary, but the main section edges and widths should feel intentional.
+- Use narrow text measures, asides, and full-bleed variants only when they serve the content and are compatible with the StyleBrief. Avoid accidental width drift between sibling sections.
 
 Revision behavior:
 - If `state.validation_report` is present and `ok` is false, this is a revision pass. Treat `retry_instruction`, `issues`, `missing_parts`, `style_mismatch`, and `structure_mismatch` as the highest-priority implementation notes.
@@ -36,6 +38,7 @@ HTML requirements:
 - Use CSS custom properties when useful, but keep CSS simple.
 - Avoid complex animations.
 - Avoid obvious layout defects: text overlap, clipped labels, badges crowding headings, stretched short-content cards, large accidental empty areas, and mismatched paired panels.
+- Avoid unplanned layout-system drift: unrelated `max-width` values on sibling sections, a narrow conclusion followed by full-width report panels without intent, or card/table groups that do not share the page canvas.
 - Keep connector lines behind diagram nodes and away from text. Do not let translucent panels reveal distracting lines beneath readable text.
 - Use tables for real matrices and parameter comparisons; use flows/timelines for ordered stages and loops; use cards for repeated independent items.
 - If a section has short facts, use compact cards, inline chips, callouts, or a narrow grid instead of wide empty cards.

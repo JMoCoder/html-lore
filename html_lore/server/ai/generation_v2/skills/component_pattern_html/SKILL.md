@@ -30,6 +30,7 @@ This skill is project-internal original guidance. It does not copy external proj
 - Components must stack cleanly on mobile.
 - Do not use external CSS frameworks, icon libraries, web fonts, or remote assets.
 - Components in the same conceptual group must look related: consistent padding, border, radius, type scale, and background opacity.
+- Peer-level component groups should share the same outer canvas unless the StyleBrief explicitly creates a narrow lane, aside, or full-bleed variant.
 - Component size should follow content density. Do not stretch a short label or one-sentence fact into a wide empty card.
 - Visual decoration must never compete with content. Connectors, badges, counters, and background lines need reserved space or reduced contrast.
 - The component pattern must follow the relationship in the content: matrix -> table, sequence -> flow/timeline, bounded system -> architecture map, repeated independent facts -> cards.
@@ -61,6 +62,7 @@ This skill is project-internal original guidance. It does not copy external proj
 
 - Use `box-sizing: border-box`.
 - Use `max-width`, `grid`, `flex`, `minmax`, `gap`, and natural wrapping.
+- Define page, section, panel, and grid wrappers deliberately. Avoid one-off wrapper widths that make adjacent report sections appear unrelated.
 - Avoid viewport-scaled font sizes.
 - Avoid fixed heights for content cards.
 - Keep border radius and shadow consistent.
@@ -86,6 +88,7 @@ Before returning final HTML, verify:
 - no avoidable empty columns or stretched short-content cards,
 - no translucent panel exposes distracting background lines behind text,
 - related left/right or paired panels use a coherent visual system,
+- main section widths and edge alignment match the selected layout system unless a deliberate variant is named in the StyleBrief,
 - tables, flows, and cards are used for the correct content relationships,
 - labels, loop badges, and counters have protected space and do not collide with headings,
 - no scripts or unsafe attributes were introduced,

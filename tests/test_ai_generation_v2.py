@@ -239,6 +239,8 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "Do not force a universal report template" in report
     assert "comparisons, responsibilities, parameters" in report
     assert "missing data must remain missing" in report
+    assert "primary report canvas" in report
+    assert "narrow reading measure" in report
 
     webpage = load_skill_by_id("webpage_surface_design").content
     assert "Webpage Surface Design Skill" in webpage
@@ -258,6 +260,7 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "process-flow" in components
     assert "responsive-table" in components
     assert "boundary-table" in components
+    assert "selected layout system" in components
     assert "compact-fact-row" in components
     assert "Pattern Selection Rules" in components
 
@@ -1162,6 +1165,29 @@ def test_generation_v2_visual_check_disabled_and_empty_html_paths() -> None:
     assert empty.skipped is False
     assert empty.ok is False
     assert empty.issues[0].code == "empty_html"
+
+
+def test_generation_v2_visual_check_reports_layout_observations_without_hard_fail() -> None:
+    html = """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{margin:0;font-family:sans-serif}.page{max-width:1120px;margin:0 auto;padding:24px}
+  section{margin:18px 0;padding:18px;border:1px solid #ddd}.wide{width:100%}.narrow{max-width:620px}
+</style></head><body><main class="page">
+<section class="wide"><h1>Wide section</h1><p>This report section uses the primary canvas with enough body text to be measured.</p></section>
+<section class="narrow"><h2>Narrow section</h2><p>This peer section is much narrower than the main canvas and should be observed.</p></section>
+<section class="wide"><h2>Another wide section</h2><p>This report section returns to the primary canvas with more visible text.</p></section>
+<section class="narrow"><h2>Second narrow section</h2><p>This second narrow peer section makes the layout system drift observable.</p></section>
+<section class="wide"><h2>Final wide section</h2><p>This report section uses the full canvas again for comparison.</p></section>
+</main></body></html>"""
+
+    report = run_visual_check(html, mode="basic", timeout_seconds=5)
+
+    if report.skipped:
+        assert report.reason
+        return
+    assert report.ok is True
+    assert any(issue.code == "section_width_inconsistency" for issue in report.issues)
 
 
 def test_write_gateway_blocks_unsafe_html_without_writing(tmp_path) -> None:

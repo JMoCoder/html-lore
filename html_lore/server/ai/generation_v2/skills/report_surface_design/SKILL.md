@@ -61,6 +61,9 @@ Cards are useful for repeated findings, but they are not a replacement for table
 ## Visual Direction
 
 - Use a stable layout grid with restrained spacing, readable line length, and clear section dividers.
+- Choose one primary report canvas for peer-level sections and keep their left/right edges visually consistent.
+- Treat narrow reading lanes, sidebars, appendix notes, or full-bleed bands as intentional variants. If a report section changes width, the StyleBrief should state why and how it relates to the main canvas.
+- Tables, matrices, comparison panels, and multi-card finding groups usually belong on the primary report canvas. Avoid mixing a narrow prose measure with full-width report panels at the same hierarchy unless it is an intentional editorial rhythm.
 - Give summary or conclusion areas stronger hierarchy, but avoid oversized marketing hero treatment unless the report is meant for external presentation.
 - Tables and matrices should be legible on desktop and usable on mobile through horizontal scroll or stacked rows.
 - Use visual tokens consistently: surface, border, muted text, primary accent, risk/warning accent, and optional success/next-step accent.
@@ -74,6 +77,8 @@ Cards are useful for repeated findings, but they are not a replacement for table
 When this skill is loaded, StyleDesigner should include:
 
 - report surface type and intended reading mode,
+- primary canvas behavior for main report sections, including whether sections are panel-first, article-flow, dashboard-like, or mixed intentionally,
+- rules for when a section may use a narrow reading measure, an aside, or a full-width panel, and how those variants should align with the main canvas,
 - which upstream sections need summary, finding, matrix, risk, recommendation, roadmap, or appendix treatment,
 - table/matrix guidance when the plan contains comparisons, responsibilities, options, parameters, or evidence categories,
 - density rules for findings, callouts, and long analysis sections,

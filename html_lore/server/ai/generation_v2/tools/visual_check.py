@@ -67,6 +67,7 @@ def run_visual_check(
                           const viewportWidth = window.innerWidth;
                           const viewportHeight = window.innerHeight;
                           const elementIssues = [];
+                          const layoutWarnings = [];
                           let visibleArea = 0;
                           let checked = 0;
                           for (const el of elements) {
@@ -90,6 +91,56 @@ def run_visual_check(
                             visibleArea += Math.min(clippedWidth * clippedHeight, viewportWidth * viewportHeight);
                             if (elementIssues.length >= 24) break;
                           }
+                          if (viewportWidth >= 900 && document.body) {
+                            const candidates = Array.from(document.body.querySelectorAll('main > section, main > article, body > section, body > article, .page > section, .page > article, .panel, .card, .note, .alert'))
+                              .filter((el) => {
+                                const style = window.getComputedStyle(el);
+                                const rect = el.getBoundingClientRect();
+                                const text = (el.innerText || '').trim();
+                                if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || 1) === 0) return false;
+                                if (rect.width < 180 || rect.height < 40 || text.length < 24) return false;
+                                if (style.position === 'fixed' || style.position === 'absolute') return false;
+                                return true;
+                              })
+                              .slice(0, 40)
+                              .map((el) => {
+                                const rect = el.getBoundingClientRect();
+                                return {
+                                  tag: el.tagName.toLowerCase(),
+                                  className: String(el.className || '').slice(0, 80),
+                                  text: (el.innerText || '').trim().slice(0, 80),
+                                  left: Math.round(rect.left),
+                                  right: Math.round(rect.right),
+                                  width: Math.round(rect.width),
+                                  top: Math.round(rect.top),
+                                };
+                              });
+                            const blockLike = candidates.filter((item) => item.width >= viewportWidth * 0.45);
+                            if (blockLike.length >= 4) {
+                              const widths = blockLike.map((item) => item.width).sort((a, b) => a - b);
+                              const medianWidth = widths[Math.floor(widths.length / 2)];
+                              const narrow = blockLike.filter((item) => item.width < medianWidth * 0.82 && item.width < viewportWidth * 0.72);
+                              if (narrow.length >= 2) {
+                                layoutWarnings.push({
+                                  code: 'section_width_inconsistency',
+                                  message: `${name} observed ${narrow.length} peer-level content blocks much narrower than the main canvas; verify this is an intentional narrow lane or aside.`,
+                                  severity: 'warning',
+                                });
+                              }
+                              const lefts = blockLike.map((item) => item.left).sort((a, b) => a - b);
+                              const rights = blockLike.map((item) => item.right).sort((a, b) => a - b);
+                              const medianLeft = lefts[Math.floor(lefts.length / 2)];
+                              const medianRight = rights[Math.floor(rights.length / 2)];
+                              const edgeDrift = blockLike.filter((item) => Math.abs(item.left - medianLeft) > 48 || Math.abs(item.right - medianRight) > 48);
+                              if (edgeDrift.length >= 3) {
+                                layoutWarnings.push({
+                                  code: 'section_edge_alignment_drift',
+                                  message: `${name} observed ${edgeDrift.length} major blocks with noticeably different left/right edges; verify the report canvas is intentional.`,
+                                  severity: 'warning',
+                                });
+                              }
+                            }
+                          }
                           const blankRatio = visibleText ? Math.max(0, Math.min(1, 1 - (Math.min(visibleArea, viewportWidth * viewportHeight) / (viewportWidth * viewportHeight)))) : 1;
                           return {
                             rendered: Boolean(body),
@@ -100,6 +151,7 @@ def run_visual_check(
                             blankRatio,
                             checked,
                             elementIssues,
+                            layoutWarnings,
                           };
                         }"""
                     )
@@ -168,6 +220,14 @@ def visual_issues_for_viewport(name: str, width: int, height: int, data: dict[st
         text = str(item.get("text") or "").strip()
         suffix = f": {text}" if text else ""
         issues.append(ValidationIssue(code=code, message=f"{name} {tag} has {code.replace('_', ' ')}{suffix}", severity="warning"))
+    for item in data.get("layoutWarnings") if isinstance(data.get("layoutWarnings"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "layout_observation")
+        message = str(item.get("message") or "").strip()
+        if not message:
+            continue
+        issues.append(ValidationIssue(code=code, message=message, severity="warning"))
     return issues
 
 
