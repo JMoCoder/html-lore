@@ -32,6 +32,7 @@ class ContentWriterAgent(GenerationAgent):
             state,
             content_draft=output,
             html_draft=None,
+            visual_check_report=None,
             validation_report=None,
             safety_report=None,
             create_note_proposal=None,

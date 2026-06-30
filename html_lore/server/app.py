@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import asdict, dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -138,11 +139,19 @@ def verify_ai_rate_limit(
 AiRateLimit = Annotated[None, Depends(verify_ai_rate_limit)]
 
 
+@dataclass(frozen=True)
+class UploadedMaterial:
+    filename: str
+    content: bytes
+    content_type: str = ""
+
+
 async def read_style_reference_metadata(
     reference_file: UploadFile | None,
     reference_file_name: str,
     reference_file_type: str,
     reference_file_size: int,
+    max_upload_bytes: int,
 ) -> dict[str, object]:
     if reference_file is None:
         return {
@@ -151,7 +160,7 @@ async def read_style_reference_metadata(
             "reference_file_size": reference_file_size,
             "reference_file_content": b"",
         }
-    content = await reference_file.read()
+    content = await read_limited_upload(reference_file, max_upload_bytes)
     return {
         "reference_file_name": reference_file.filename or reference_file_name,
         "reference_file_type": reference_file.content_type or reference_file_type,
@@ -160,22 +169,56 @@ async def read_style_reference_metadata(
     }
 
 
-async def read_generation_material(file: UploadFile | None, instruction: str) -> dict[str, bytes | str]:
-    if file is not None:
-        content = await file.read()
-        return {
-            "filename": file.filename or "material.txt",
-            "content": content,
-            "content_type": file.content_type or "",
-        }
+async def read_generation_materials(files: list[UploadFile], instruction: str, max_upload_bytes: int, max_upload_total_bytes: int) -> list[UploadedMaterial]:
+    materials: list[UploadedMaterial] = []
+    total = 0
+    for index, file in enumerate(files):
+        if file is None:
+            continue
+        content = await read_limited_upload(file, max_upload_bytes)
+        total += len(content)
+        if total > max(1, int(max_upload_total_bytes or 1)):
+            raise HTTPException(status_code=413, detail=f"Uploaded files exceed the configured total size limit of {max_upload_total_bytes} bytes.")
+        materials.append(
+            UploadedMaterial(
+                filename=file.filename or f"material-{index + 1}.txt",
+                content=content,
+                content_type=file.content_type or "",
+            ),
+        )
+    if materials:
+        return materials
     prompt = instruction.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Provide a file or describe what you want to generate.")
-    return {
-        "filename": "prompt.txt",
-        "content": prompt.encode("utf-8"),
-        "content_type": "text/plain",
-    }
+    return [UploadedMaterial(filename="prompt.txt", content=prompt.encode("utf-8"), content_type="text/plain")]
+
+
+def uploaded_payload_size(materials: list[UploadedMaterial], reference: dict[str, object]) -> int:
+    reference_content = reference.get("reference_file_content")
+    reference_size = len(reference_content) if isinstance(reference_content, bytes) else 0
+    return sum(len(material.content) for material in materials) + reference_size
+
+
+def ensure_upload_total_within_limit(total: int, max_upload_total_bytes: int) -> None:
+    limit = max(1, int(max_upload_total_bytes or 1))
+    if total > limit:
+        raise HTTPException(status_code=413, detail=f"Uploaded files exceed the configured total size limit of {limit} bytes.")
+
+
+async def read_limited_upload(file: UploadFile, max_upload_bytes: int) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    limit = max(1, int(max_upload_bytes or 1))
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status_code=413, detail=f"Uploaded file exceeds the configured size limit of {limit} bytes.")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def create_app() -> FastAPI:
@@ -368,7 +411,7 @@ def create_app() -> FastAPI:
         _: ApiAuth,
         __: AiRateLimit,
         service: Annotated[AIConversationService, Depends(get_ai_conversation_service)],
-        file: Annotated[UploadFile | None, File()] = None,
+        file: Annotated[list[UploadFile] | None, File()] = None,
         instruction: Annotated[str, Form()] = "",
         theme: Annotated[str, Form()] = "default",
         target_use: Annotated[str, Form()] = "default",
@@ -380,12 +423,12 @@ def create_app() -> FastAPI:
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
-        material = await read_generation_material(file, instruction)
-        uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size)
+        materials = await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
+        uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size, service.settings.max_upload_bytes)
+        ensure_upload_total_within_limit(uploaded_payload_size(materials, uploaded_reference), service.settings.max_upload_total_bytes)
         try:
             return service.generate_note_from_material(
-                filename=str(material["filename"]),
-                content=material["content"] if isinstance(material["content"], bytes) else b"",
+                materials=[asdict(material) for material in materials],
                 instruction=instruction,
                 values={
                     "theme": theme,
@@ -404,7 +447,7 @@ def create_app() -> FastAPI:
         _: ApiAuth,
         __: AiRateLimit,
         service: Annotated[AIConversationService, Depends(get_ai_conversation_service)],
-        file: Annotated[UploadFile | None, File()] = None,
+        file: Annotated[list[UploadFile] | None, File()] = None,
         instruction: Annotated[str, Form()] = "",
         theme: Annotated[str, Form()] = "default",
         target_use: Annotated[str, Form()] = "default",
@@ -416,12 +459,12 @@ def create_app() -> FastAPI:
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
     ) -> dict:
-        material = await read_generation_material(file, instruction)
-        uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size)
+        materials = await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
+        uploaded_reference = await read_style_reference_metadata(reference_file, reference_file_name, reference_file_type, reference_file_size, service.settings.max_upload_bytes)
+        ensure_upload_total_within_limit(uploaded_payload_size(materials, uploaded_reference), service.settings.max_upload_total_bytes)
         try:
             return service.enqueue_generate_note_from_material(
-                filename=str(material["filename"]),
-                content=material["content"] if isinstance(material["content"], bytes) else b"",
+                materials=[asdict(material) for material in materials],
                 instruction=instruction,
                 values={
                     "theme": theme,

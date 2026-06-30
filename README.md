@@ -338,6 +338,8 @@ HTML_LORE_AI_MODEL=gpt-5.5
 HTML_LORE_AI_EMBEDDING_MODEL=baai/bge-m3
 HTML_LORE_AI_RETRIEVAL_MODE=hybrid
 HTML_LORE_DOCUMENT_PARSER=markitdown
+HTML_LORE_MAX_UPLOAD_BYTES=104857600
+HTML_LORE_MAX_UPLOAD_TOTAL_BYTES=524288000
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 ```
 
@@ -368,6 +370,25 @@ Deployment notes:
   large PDF / Office / spreadsheet files. Production deployments should keep upload-size
   limits, task concurrency, and worker memory headroom aligned with expected
   document sizes.
+- `HTML_LORE_MAX_UPLOAD_BYTES` controls the per-file upload limit. The default is
+  `104857600` bytes (100 MB). `HTML_LORE_MAX_UPLOAD_TOTAL_BYTES` controls the
+  total size of all files in one AI material-generation request. The default is
+  `524288000` bytes (500 MB), so a request can include up to five 100 MB main
+  material files, or more smaller files within the same total limit. AI creation supports multiple main material files plus one
+  optional reference-style file. The frontend reads both limits from
+  `/api/ai/status` and warns users before submitting oversized files. The server
+  creates the generation job only after every uploaded file has been fully read
+  and validated. Document parsing still happens later in the AI generation
+  workflow, during the parsing / ingest stage, before the requirement-analysis
+  agent receives the parsed material. Uploaded AI material is not persisted as a source file; the
+  async job holds the bytes in memory until the run finishes, then only the
+  generated HTML and redacted trace metadata are stored.
+- Optional browser visual checking is available with
+  `HTML_LORE_AI_VISUAL_CHECK=basic` or `strict`. It uses headless Playwright
+  with the configured browser channel, for example
+  `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chrome`, renders generated HTML,
+  and passes overflow / blank-viewport / layout warnings to the verifier. The
+  default is `off`, so deployments without Playwright or Chrome keep working.
 - Smoke-test commands make real provider calls and should only be run after the
   target model and key are confirmed for that environment.
 

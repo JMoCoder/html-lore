@@ -12,6 +12,7 @@ class ServerSettings:
     public_dir: Path
     site_title: str
     max_upload_bytes: int
+    max_upload_total_bytes: int = 0
     api_token: str = ""
     auth_username: str = ""
     auth_password: str = ""
@@ -50,7 +51,14 @@ class ServerSettings:
     ai_generation_engine: str = "legacy"
     ai_generation_model: str = "gpt-5.5"
     ai_generation_max_tokens: int = 12000
+    ai_visual_check: str = "off"
+    ai_visual_check_timeout_seconds: int = 20
+    ai_visual_check_browser_channel: str = "chrome"
     document_parser: str = "markitdown"
+
+    def __post_init__(self) -> None:
+        if self.max_upload_total_bytes <= 0:
+            object.__setattr__(self, "max_upload_total_bytes", self.max_upload_bytes)
 
     @property
     def auth_enabled(self) -> bool:
@@ -80,7 +88,8 @@ def load_settings() -> ServerSettings:
     meta_dir = Path(meta_value) if meta_value else None
     public_dir = Path(get_env("PUBLIC", "public"))
     site_title = get_env("TITLE", "HTMlore")
-    max_upload_bytes = int(get_env("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+    max_upload_bytes = parse_positive_int(get_env("MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)), 100 * 1024 * 1024)
+    max_upload_total_bytes = parse_positive_int(get_env("MAX_UPLOAD_TOTAL_BYTES", str(500 * 1024 * 1024)), 500 * 1024 * 1024)
     api_token = get_env("API_TOKEN", "").strip()
     auth_username = get_env("AUTH_USERNAME", "").strip()
     auth_password = get_env("AUTH_PASSWORD", "")
@@ -119,6 +128,9 @@ def load_settings() -> ServerSettings:
     ai_generation_engine = parse_choice(get_env("AI_GENERATION_ENGINE", "legacy"), {"legacy", "v2"}, "legacy")
     ai_generation_model = get_env("AI_GENERATION_MODEL", "gpt-5.5").strip() or "gpt-5.5"
     ai_generation_max_tokens = parse_positive_int(get_env("AI_GENERATION_MAX_TOKENS", "12000"), 12000)
+    ai_visual_check = parse_choice(get_env("AI_VISUAL_CHECK", "off"), {"off", "basic", "strict"}, "off")
+    ai_visual_check_timeout_seconds = parse_positive_int(get_env("AI_VISUAL_CHECK_TIMEOUT_SECONDS", "20"), 20)
+    ai_visual_check_browser_channel = get_env("AI_VISUAL_CHECK_BROWSER_CHANNEL", get_env("PLAYWRIGHT_BROWSER_CHANNEL", "chrome")).strip() or "chrome"
     document_parser = parse_choice(get_env("DOCUMENT_PARSER", "markitdown"), {"markitdown", "basic"}, "markitdown")
     return ServerSettings(
         content_dir=content_dir,
@@ -126,6 +138,7 @@ def load_settings() -> ServerSettings:
         public_dir=public_dir,
         site_title=site_title,
         max_upload_bytes=max_upload_bytes,
+        max_upload_total_bytes=max_upload_total_bytes,
         api_token=api_token,
         auth_username=auth_username,
         auth_password=auth_password,
@@ -164,6 +177,9 @@ def load_settings() -> ServerSettings:
         ai_generation_engine=ai_generation_engine,
         ai_generation_model=ai_generation_model,
         ai_generation_max_tokens=ai_generation_max_tokens,
+        ai_visual_check=ai_visual_check,
+        ai_visual_check_timeout_seconds=ai_visual_check_timeout_seconds,
+        ai_visual_check_browser_channel=ai_visual_check_browser_channel,
         document_parser=document_parser,
     )
 

@@ -79,10 +79,42 @@ class GenerationStore:
             "generation_engine": GenerationEngine.V2.value,
             "current_stage": state.current_step,
             "stage_trace": stage_trace,
-            "skill_trace": normalize_for_json([asdict(event) for event in state.skill_trace]),
+            "skill_trace": public_skill_trace(state),
             "agent_artifacts": normalize_for_json([asdict(event) for event in state.agent_artifacts]),
             "execution_checklist": public_execution_checklist(state.execution_checklist, stage_trace=stage_trace),
         }
+
+
+def public_skill_trace(state: GenerationState) -> list[dict[str, Any]]:
+    trace = normalize_for_json([asdict(event) for event in state.skill_trace])
+    needs = state.plan_draft.tool_needs if state.plan_draft else []
+    for entry in trace:
+        if not isinstance(entry, dict):
+            continue
+        if not entry.get("kind"):
+            entry["kind"] = "default" if str(entry.get("id") or "") in {"html_page_design", "safe_static_html", "content_quality_review"} else "enhanced"
+        reason = skill_trigger_reason(str(entry.get("id") or ""), needs)
+        if reason:
+            entry["trigger_reason"] = reason
+    return trace
+
+
+def skill_trigger_reason(skill_id: str, needs: list[Any]) -> str:
+    if not skill_id or not needs:
+        return ""
+    keywords_by_skill = {
+        "presentation_surface_design": ("presentation", "pitch", "deck", "roadshow", "briefing", "showcase", "launch", "ppt"),
+        "architecture_explainer_design": ("architecture", "workflow", "system", "process", "pipeline", "state machine", "runtime", "agent", "edge", "loop", "diagram"),
+        "component_pattern_html": ("component", "cards", "grid", "timeline", "process flow", "comparison", "callout", "responsive table", "pattern"),
+    }
+    keywords = keywords_by_skill.get(skill_id, ())
+    for need in needs:
+        tool_name = str(getattr(need, "tool_name", "") or "").lower()
+        reason = str(getattr(need, "reason", "") or "").strip()
+        haystack = f"{tool_name} {reason.lower()}"
+        if any(keyword in haystack for keyword in keywords):
+            return reason or str(getattr(need, "tool_name", "") or "")
+    return ""
 
 
 def public_execution_checklist(checklist: list[ChecklistItem] | list[dict[str, Any]], *, stage_trace: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -111,9 +143,9 @@ def checklist_status_from_trace(stage_trace: list[dict[str, Any]]) -> dict[str, 
             continue
         agent = str(event.get("agent") or "").strip()
         status = str(event.get("status") or "").strip().lower()
-        if not agent or status not in {"completed", "failed", "warning"}:
+        if not agent or status not in {"completed", "failed", "warning", "started", "running", "retrying"}:
             continue
-        result[normalize_owner(agent)] = status
+        result[normalize_owner(agent)] = "running" if status == "started" else status
     return result
 
 

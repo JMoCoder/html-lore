@@ -467,8 +467,8 @@ def checklist_status_from_trace(stage_trace: list[dict[str, Any]]) -> dict[str, 
             continue
         agent = str(event.get("agent") or "").strip()
         status = str(event.get("status") or "").strip().lower()
-        if agent and status in {"completed", "failed", "warning"}:
-            result[normalize_checklist_owner(agent)] = status
+        if agent and status in {"completed", "failed", "warning", "started", "running", "retrying"}:
+            result[normalize_checklist_owner(agent)] = "running" if status == "started" else status
     return result
 
 
@@ -505,6 +505,8 @@ def sanitize_skill_trace(value: Any) -> list[dict[str, str]]:
                 "agent": str(raw.get("agent") or "")[:120],
                 "version": str(raw.get("version") or "")[:40],
                 "source": str(raw.get("source") or "")[:40],
+                "kind": str(raw.get("kind") or "")[:40],
+                "trigger_reason": str(raw.get("trigger_reason") or "")[:240],
             },
         )
     return result

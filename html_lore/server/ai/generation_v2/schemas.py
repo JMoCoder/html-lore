@@ -72,6 +72,7 @@ class GenerationInput:
     filename: str = ""
     content: bytes = b""
     content_type: str = ""
+    materials: list[dict[str, Any]] = field(default_factory=list)
     theme: str = "default"
     target_use: str = "default"
     style_preference: str = "default"
@@ -305,6 +306,34 @@ class ValidationIssue:
 
 
 @dataclass(frozen=True)
+class VisualViewportReport:
+    name: str = ""
+    width: int = 0
+    height: int = 0
+    rendered: bool = False
+    body_text_length: int = 0
+    document_width: int = 0
+    document_height: int = 0
+    horizontal_overflow_px: int = 0
+    blank_ratio: float = 0.0
+    issue_count: int = 0
+
+
+@dataclass(frozen=True)
+class VisualCheckReport:
+    mode: str = "off"
+    available: bool = False
+    ok: bool = True
+    skipped: bool = True
+    reason: str = ""
+    checked_at: str = ""
+    duration_ms: int = 0
+    viewports: list[VisualViewportReport] = field(default_factory=list)
+    issues: list[ValidationIssue] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ValidationReport:
     ok: bool = False
     score: float = 0.0
@@ -381,6 +410,8 @@ class SkillTraceEntry:
     agent: str = ""
     version: str = ""
     source: str = "local"
+    kind: str = "default"
+    trigger_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -411,6 +442,7 @@ class GenerationState:
     content_draft: ContentDraft | None = None
     style_brief: StyleBrief | None = None
     html_draft: HtmlDraft | None = None
+    visual_check_report: VisualCheckReport | None = None
     validation_report: ValidationReport | None = None
     safety_report: SafetyReport | None = None
     create_note_proposal: CreateNoteProposal | None = None

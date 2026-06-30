@@ -211,6 +211,40 @@ test("workspace file create mode uploads material to the AI generation endpoint"
             error: failedJobRetried ? {} : { message: "Provider failed." },
           },
           {
+            job_id: "ai-job-running-detail",
+            kind: "material_html_generation",
+            status: "running",
+            label: "active-source.md",
+            generation_engine: "v2",
+            current_stage: "coding_html",
+            stage_trace: [
+              { stage: "parsing", agent: "Ingest", status: "completed", message: "Uploaded material parsed." },
+              { stage: "designing_style", agent: "StyleDesigner", status: "completed", message: "Style direction prepared." },
+            ],
+            execution_checklist: [
+              { id: "parse", label: "Parse uploaded material", owner: "Ingest", status: "completed" },
+              { id: "code", label: "Write HTML", owner: "HTMLCoder", status: "running" },
+            ],
+            skill_trace: [
+              { id: "safe_static_html", title: "Safe static HTML", agent: "HTMLCoder", version: "1", kind: "default" },
+              {
+                id: "component_pattern_html",
+                title: "Component pattern HTML",
+                agent: "HTMLCoder",
+                version: "1",
+                kind: "enhanced",
+                trigger_reason: "Use grids, process flow, and comparison cards.",
+              },
+            ],
+            agent_artifacts: [],
+            run_id: "",
+            item_id: "",
+            cancellable: true,
+            retryable: false,
+            message: "Writing static HTML.",
+            created_at: "2026-06-07T02:03:00.000Z",
+          },
+          {
             job_id: "ai-job-material-test",
             kind: "material_html_generation",
             status: completed ? "completed" : "pending",
@@ -226,7 +260,15 @@ test("workspace file create mode uploads material to the AI generation endpoint"
               { id: "style", label: "Prepare visual direction", status: completed ? "completed" : "running" },
             ],
             skill_trace: [
-              { id: "html_page_design", title: "HTML page design", agent: "StyleDesigner", version: "1" },
+              { id: "html_page_design", title: "HTML page design", agent: "StyleDesigner", version: "1", kind: "default" },
+              {
+                id: "architecture_explainer_design",
+                title: "Architecture explainer design",
+                agent: "StyleDesigner",
+                version: "1",
+                kind: "enhanced",
+                trigger_reason: "Explain runtime nodes, edges, and loops.",
+              },
             ],
             agent_artifacts: [
               {
@@ -300,12 +342,20 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.locator("#new-file-trigger").click();
   const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles({
-    name: "material.md",
-    mimeType: "text/markdown",
-    buffer: Buffer.from("# Material\n\nImportant uploaded source.", "utf8"),
-  });
+  await fileChooser.setFiles([
+    {
+      name: "material.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from("# Material\n\nImportant uploaded source.", "utf8"),
+    },
+    {
+      name: "appendix.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from("# Appendix\n\nSecond uploaded source.", "utf8"),
+    },
+  ]);
   await expect(page.locator("#new-file-name")).toContainText("material.md");
+  await expect(page.locator("#new-file-name")).toContainText("2");
   await expect(page.locator("#new-file-trigger")).toHaveClass(/has-file/);
   await page.locator("#new-item-form button[type='submit']").click();
 
@@ -316,6 +366,7 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   expect(materialRequest).not.toBeNull();
   expect(materialRequest.method).toBe("POST");
   expect(materialRequest.postData).toContain("material.md");
+  expect(materialRequest.postData).toContain("appendix.md");
   expect(materialRequest.postData).toContain("Turn this material into a concise study note.");
   expect(materialRequest.postData).toContain("name=\"theme\"");
   expect(materialRequest.postData).toContain("dark");
@@ -352,6 +403,17 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   await expect(page.locator("#ai-generation-detail")).toBeVisible();
   await expect(page.locator("#ai-generation-detail")).toContainText("LangGraph workflow");
   await expect(page.locator("#ai-generation-detail")).toContainText("StyleDesigner");
+  await expect(page.locator("#ai-generation-detail")).toContainText("Default skills");
+  await expect(page.locator("#ai-generation-detail")).toContainText("Enhanced skills");
+  await expect(page.locator("#ai-generation-detail")).toContainText("Triggered by: Explain runtime nodes, edges, and loops.");
+  await page.locator("#ai-generation-detail-close").click();
+  await expect(page.locator("#ai-generation-detail")).toBeHidden();
+  await page.locator("#ai-generation-list .ai-generation-row", { hasText: "active-source.md" }).getByRole("button", { name: "Details" }).click();
+  await expect(page.locator("#ai-generation-detail")).toBeVisible();
+  await expect(page.locator("#ai-generation-detail")).toContainText("Writing code");
+  await expect(page.locator("#ai-generation-detail")).toContainText("HTMLCoder");
+  await expect(page.locator("#ai-generation-detail")).toContainText("Running");
+  await expect(page.locator("#ai-generation-detail")).toContainText("Triggered by: Use grids, process flow, and comparison cards.");
   await page.locator("#ai-generation-detail-close").click();
   await expect(page.locator("#ai-generation-detail")).toBeHidden();
   await page.locator("[data-settings-tab='ai-runs']").click();
@@ -455,6 +517,69 @@ test("workspace material generation failure refreshes AI run history", async ({ 
   await expect(page.locator("#ai-run-list")).toContainText("Retryable");
   await expect(page.locator("#ai-run-list")).toContainText("Not cancellable");
   await expect(page.locator("#ai-run-list")).not.toContainText("private source");
+});
+
+test("workspace source file selection shows upload limit before submitting", async ({ page }) => {
+  await page.addInitScript(() => localStorage.clear());
+  await routeWorkspace(page);
+
+  let materialJobCalled = false;
+  await page.route("**/api/auth/status", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ enabled: false, authenticated: true, user: null, data_id: null }),
+    });
+  });
+  await page.route("**/api/ai/status", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        available: true,
+        provider: "fake",
+        model: "fake",
+        external_search: false,
+        limits: { max_upload_bytes: 1024 },
+      }),
+    });
+  });
+  await page.route("**/api/version", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ version: "0.9.0", latest_version: "0.9.0", update_available: false }),
+    });
+  });
+  await page.route("**/api/shares", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ shares: [], count: 0 }) });
+  });
+  await page.route("**/api/manifest", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ version: 2, title: "HTMlore Workspace", items: [] }) });
+  });
+  await page.route("**/api/ai/runs**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ runs: [], count: 0 }) });
+  });
+  await page.route("**/api/ai/jobs**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ jobs: [], count: 0 }) });
+  });
+  await page.route("**/api/ai/material-jobs", async (route) => {
+    materialJobCalled = true;
+    await route.abort();
+  });
+
+  await page.goto("/workspace/", { waitUntil: "domcontentloaded" });
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.locator("#new-file-trigger").click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles({
+    name: "too-large.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.alloc(2048, "x"),
+  });
+
+  await expect(page.locator("#new-file-name")).toContainText("too-large.md");
+  await expect(page.locator("#new-file-status")).toContainText("exceeds");
+  await page.locator("#new-item-form button[type='submit']").click();
+  await expect(page.locator("#new-feedback")).toContainText("Material note generation failed.");
+  expect(materialJobCalled).toBe(false);
 });
 
 test("workspace text-only create mode uses the AI generation endpoint", async ({ page }) => {

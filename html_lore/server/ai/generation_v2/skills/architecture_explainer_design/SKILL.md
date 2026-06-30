@@ -29,6 +29,8 @@ This skill is project-internal original guidance. It does not copy external proj
 - Use consistent names for nodes and edges. Do not rename code concepts for decoration.
 - Explain loops with trigger, route-back target, stop condition, and max attempts.
 - Keep diagrams honest: no missing nodes, fake services, or invented edges.
+- Expose control ownership: user-controlled inputs, code/runtime-controlled state and safety gates, model-controlled judgment, and tool-controlled deterministic execution.
+- If the workflow is fixed by code, explain what Planner still decides inside that fixed topology.
 
 ## Layout Patterns
 
@@ -38,6 +40,7 @@ This skill is project-internal original guidance. It does not copy external proj
 - `boundary_table`: code-controlled vs model-controlled vs user-controlled parameters.
 - `node_cards`: each agent/node with responsibility, inputs, outputs, and failure modes.
 - `trace_panel`: example run showing stage order and artifacts.
+- `edge_list`: compact table of edge conditions, route-back targets, retry caps, and terminal states.
 
 Use cards only when the relationship is "many similar nodes". Use tables for boundaries and responsibilities. Use flows for edges, loops, and ordering. A grid of cards is not a substitute for an architecture map when the user needs to understand control flow.
 
@@ -51,6 +54,9 @@ Use cards only when the relationship is "many similar nodes". Use tables for bou
 - Keep connector lines behind nodes and away from text. If nodes are translucent, either remove background lines beneath them or make the node surface opaque.
 - Place loop labels such as "retry", "capability loop", or "route back" outside the title collision zone.
 - When a stage card has little content, make it compact or group it with related stages rather than stretching it across a wide column.
+- Give every diagram label a protected area. Labels should sit in a badge row, side gutter, or dedicated edge label, not on top of headings.
+- Use solid or high-opacity node surfaces when connectors or background grids pass behind them.
+- When the diagram becomes too dense, split it into overview flow plus a boundary table instead of forcing every edge into one graphic.
 
 ## Review Checklist
 
@@ -58,6 +64,7 @@ Use cards only when the relationship is "many similar nodes". Use tables for bou
 - Are runtime, agent, and tool responsibilities distinct?
 - Are loop conditions and stop conditions explicit?
 - Are code-controlled and model-controlled parameters separated?
+- Does the page explain what is fixed workflow topology versus what the model decides dynamically?
 - Are flows, tables, and cards used for the right relationships?
 - Are diagram labels, badges, and connector lines free of text collisions?
 - Do node surfaces protect text from background lines or patterns?

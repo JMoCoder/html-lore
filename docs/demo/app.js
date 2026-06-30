@@ -156,6 +156,9 @@ const i18n = {
     aiGenerationDetailMetadata: "Metadata",
     aiGenerationDetailNoStage: "No workflow stage has been recorded yet.",
     aiGenerationDetailNoData: "No detailed record yet.",
+    aiGenerationDefaultSkills: "Default skills",
+    aiGenerationEnhancedSkills: "Enhanced skills",
+    aiGenerationSkillTriggeredBy: "Triggered by",
     aiGenerationDetailLoading: "Loading generation details...",
     aiGenerationDetailLoadFailed: "Generation details could not be loaded.",
     aiGenerationDetailCreated: "Created",
@@ -388,6 +391,9 @@ const i18n = {
     chooseFile: "Choose file",
     noFileSelected: "No file selected",
     fileSelected: "{name}",
+    filesSelected: "{name} + {count} more",
+    fileReadyStatus: "{size} selected",
+    filesReadyStatus: "{count} files · {size} selected",
     removeFile: "Remove file",
     chooseReferenceFile: "Upload style",
     referenceFileHint: "Optional style reference. Supports JPG/PNG, HTML, PDF, PPT/PPTX.",
@@ -647,6 +653,9 @@ const i18n = {
     aiGenerationDetailMetadata: "元数据",
     aiGenerationDetailNoStage: "暂无工作流阶段记录。",
     aiGenerationDetailNoData: "暂无详细记录。",
+    aiGenerationDefaultSkills: "默认技能",
+    aiGenerationEnhancedSkills: "增强技能",
+    aiGenerationSkillTriggeredBy: "触发原因",
     aiGenerationDetailLoading: "正在加载生成详情...",
     aiGenerationDetailLoadFailed: "无法加载生成详情。",
     aiGenerationDetailCreated: "创建",
@@ -879,6 +888,9 @@ const i18n = {
     chooseFile: "选择文件",
     noFileSelected: "未选择文件",
     fileSelected: "{name}",
+    filesSelected: "{name} 等 {count} 个文件",
+    fileReadyStatus: "已选择 {size}",
+    filesReadyStatus: "{count} 个文件 · 已选择 {size}",
     removeFile: "移除文件",
     chooseReferenceFile: "上传样式",
     referenceFileHint: "可选样式参考，支持 JPG/PNG、HTML、PDF、PPT/PPTX。",
@@ -1138,6 +1150,9 @@ const i18n = {
     aiGenerationDetailMetadata: "メタデータ",
     aiGenerationDetailNoStage: "ワークフロー段階はまだ記録されていません。",
     aiGenerationDetailNoData: "詳細記録はまだありません。",
+    aiGenerationDefaultSkills: "デフォルトスキル",
+    aiGenerationEnhancedSkills: "拡張スキル",
+    aiGenerationSkillTriggeredBy: "トリガー",
     aiGenerationDetailLoading: "生成詳細を読み込み中...",
     aiGenerationDetailLoadFailed: "生成詳細を読み込めませんでした。",
     aiGenerationDetailCreated: "作成",
@@ -1370,6 +1385,9 @@ const i18n = {
     chooseFile: "ファイルを選択",
     noFileSelected: "ファイル未選択",
     fileSelected: "{name}",
+    filesSelected: "{name} ほか {count} 件",
+    fileReadyStatus: "{size} を選択済み",
+    filesReadyStatus: "{count} 件 · {size} を選択済み",
     removeFile: "ファイルを削除",
     chooseReferenceFile: "スタイルをアップロード",
     referenceFileHint: "任意のスタイル参考。JPG/PNG、HTML、PDF、PPT/PPTX に対応。",
@@ -1542,7 +1560,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.1",
+  currentVersion: "1.1.2",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1619,7 +1637,7 @@ const state = {
   fileEditorHistoryTimer: 0,
   fileEditorPanelWidth: getInitialFileEditorPanelWidth(),
   fileEditorPanelCollapsed: false,
-  pendingMaterialFile: null,
+  pendingMaterialFiles: [],
   pendingReferenceFile: null,
   shares: [],
   sharingItemId: "",
@@ -1757,6 +1775,8 @@ const elements = {
   newFileTrigger: document.querySelector("#new-file-trigger"),
   newFileRow: document.querySelector("#new-file-row"),
   newFileName: document.querySelector("#new-file-name"),
+  newFileStatus: document.querySelector("#new-file-status"),
+  newFileProgress: document.querySelector("#new-file-progress"),
   newFileRemove: document.querySelector("#new-file-remove"),
   newReferenceTrigger: document.querySelector("#new-reference-trigger"),
   newReferenceName: document.querySelector("#new-reference-name"),
@@ -2742,12 +2762,12 @@ function openFromHash() {
 async function submitNewItem(event) {
   event.preventDefault();
   const input = elements.newItemInput.value.trim();
-  if (!state.pendingMaterialFile && !input) {
+  if (!state.pendingMaterialFiles.length && !input) {
     setFeedback("emptyInput");
     return;
   }
 
-  await generateNoteFromMaterialFile(state.pendingMaterialFile);
+  await generateNoteFromMaterialFiles(state.pendingMaterialFiles);
 }
 
 function openHtmlImportPicker() {
@@ -2769,8 +2789,8 @@ function openMaterialReferencePicker() {
   elements.materialReferenceFile.click();
 }
 
-function setPendingMaterialFile(file) {
-  state.pendingMaterialFile = file || null;
+function setPendingMaterialFiles(files) {
+  state.pendingMaterialFiles = Array.from(files || []).filter(Boolean);
   updateNewFileMode();
 }
 
@@ -2779,14 +2799,15 @@ function setPendingReferenceFile(file) {
   updateNewReferenceFile();
 }
 
-async function generateNoteFromMaterialFile(file) {
+async function generateNoteFromMaterialFiles(files) {
   if (!state.agentUrl) {
     setFeedback("agentNotConfigured");
     return;
   }
+  const selectedFiles = Array.from(files || []).filter(Boolean);
   setFeedback("generatingMaterialNote");
   const formData = new FormData();
-  if (file) formData.append("file", file);
+  selectedFiles.forEach((file) => formData.append("file", file));
   formData.append("instruction", elements.newItemInput.value.trim());
   formData.append("theme", elements.newGenerateTheme?.value || "default");
   formData.append("target_use", elements.newGenerateTargetUse?.value || "default");
@@ -2812,7 +2833,7 @@ async function generateNoteFromMaterialFile(file) {
     startAiJobPolling();
     elements.newItemInput.value = "";
     resetNewItemInputHeight();
-    setPendingMaterialFile(null);
+    setPendingMaterialFiles([]);
     setPendingReferenceFile(null);
     setFeedback("queuedJob", { jobId: result.job_id || "" });
   } catch (error) {
@@ -2823,13 +2844,33 @@ async function generateNoteFromMaterialFile(file) {
 }
 
 function updateNewFileMode() {
-  const hasFile = Boolean(state.pendingMaterialFile);
+  const files = Array.from(state.pendingMaterialFiles || []).filter(Boolean);
+  const hasFile = files.length > 0;
   elements.newFileTrigger?.classList.toggle("has-file", hasFile);
   if (elements.newFileRow) elements.newFileRow.hidden = !hasFile;
   if (elements.newFileName) {
-    elements.newFileName.textContent = hasFile ? t("fileSelected", { name: state.pendingMaterialFile.name }) : "";
-    elements.newFileName.title = state.pendingMaterialFile?.name || "";
+    elements.newFileName.textContent = hasFile ? materialFilesLabel(files) : "";
+    elements.newFileName.title = files.map((file) => file.name).join("\n");
   }
+  if (elements.newFileStatus) {
+    const totalSize = files.reduce((sum, file) => sum + Number(file.size || 0), 0);
+    elements.newFileStatus.textContent = hasFile
+      ? files.length === 1
+        ? t("fileReadyStatus", { size: formatBytes(totalSize) })
+        : t("filesReadyStatus", { count: files.length, size: formatBytes(totalSize) })
+      : "";
+  }
+  if (elements.newFileProgress) {
+    elements.newFileProgress.hidden = true;
+    elements.newFileProgress.querySelector("span").style.width = "0%";
+  }
+}
+
+function materialFilesLabel(files) {
+  const selectedFiles = Array.from(files || []).filter(Boolean);
+  if (!selectedFiles.length) return "";
+  if (selectedFiles.length === 1) return t("fileSelected", { name: selectedFiles[0].name });
+  return t("filesSelected", { name: selectedFiles[0].name, count: selectedFiles.length });
 }
 
 function updateNewReferenceFile() {
@@ -6330,9 +6371,24 @@ function renderAiGenerationDetailActions(job) {
 }
 
 function getAiGenerationStages(job) {
-  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace : [];
+  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace.map((entry) => ({ ...entry })) : [];
+  const currentStage = String(job?.current_stage || "").trim();
+  if (currentStage && !isTerminalAiJobStatus(job?.status)) {
+    const hasActiveCurrent = traces.some((entry) => String(entry.stage || entry.node || "") === currentStage && !isTerminalAiStageStatus(entry.status));
+    const last = traces[traces.length - 1] || null;
+    const lastStage = String(last?.stage || last?.node || "");
+    const lastIsCompletedCurrent = lastStage === currentStage && isTerminalAiStageStatus(last?.status);
+    if (!hasActiveCurrent && !lastIsCompletedCurrent) {
+      traces.push({
+        stage: currentStage,
+        agent: aiGenerationAgentForStage(currentStage),
+        status: job.status === "pending" ? "pending" : "running",
+        message: job.message || getAiGenerationCurrentAction(job),
+      });
+    }
+  }
   if (traces.length > 0) return traces;
-  if (job?.current_stage) return [{ stage: job.current_stage, status: job.status || "pending", message: job.message || "" }];
+  if (currentStage) return [{ stage: currentStage, status: job.status || "pending", message: job.message || "" }];
   return [];
 }
 
@@ -6442,7 +6498,56 @@ function renderAiGenerationDetailSkills(job) {
     elements.aiGenerationDetailSkills.innerHTML = `<p>${escapeHtml(t("aiGenerationDetailNoData"))}</p>`;
     return;
   }
-  elements.aiGenerationDetailSkills.innerHTML = `<ul class="ai-generation-chip-list">${items.map((item) => `<li><span>${escapeHtml(item.title || item.id || "")}</span><em>${escapeHtml(item.agent || item.source || "")}</em></li>`).join("")}</ul>`;
+  elements.aiGenerationDetailSkills.innerHTML = renderAiGenerationSkillGroups(items);
+}
+
+function renderAiGenerationSkillGroups(items) {
+  const defaultSkills = [];
+  const enhancedSkills = [];
+  items.forEach((item) => {
+    if (isDefaultAiGenerationSkill(item)) {
+      defaultSkills.push(item);
+    } else {
+      enhancedSkills.push(item);
+    }
+  });
+  return [
+    defaultSkills.length ? renderAiGenerationSkillGroup(t("aiGenerationDefaultSkills"), defaultSkills) : "",
+    enhancedSkills.length ? renderAiGenerationSkillGroup(t("aiGenerationEnhancedSkills"), enhancedSkills) : "",
+  ].filter(Boolean).join("");
+}
+
+function renderAiGenerationSkillGroup(title, items) {
+  return `
+    <section class="ai-generation-skill-group">
+      <h4>${escapeHtml(title)}</h4>
+      <ul class="ai-generation-skill-list">
+        ${items.map(renderAiGenerationSkillItem).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+function renderAiGenerationSkillItem(item) {
+  const title = item.title || item.id || "";
+  const meta = [item.agent || "", item.version ? `v${item.version}` : "", item.source || ""].filter(Boolean).join(" · ");
+  const reason = item.trigger_reason || "";
+  return `
+    <li>
+      <div>
+        <span>${escapeHtml(title)}</span>
+        ${meta ? `<em>${escapeHtml(meta)}</em>` : ""}
+      </div>
+      ${reason ? `<small>${escapeHtml(t("aiGenerationSkillTriggeredBy"))}: ${escapeHtml(reason)}</small>` : ""}
+    </li>
+  `;
+}
+
+function isDefaultAiGenerationSkill(item) {
+  const kind = String(item?.kind || "").toLowerCase();
+  if (kind === "default") return true;
+  if (kind === "enhanced") return false;
+  return ["html_page_design", "safe_static_html", "content_quality_review"].includes(String(item?.id || ""));
 }
 
 function toggleAiJobDetails(jobId) {
@@ -6486,12 +6591,8 @@ function renderAiJobDetails(job) {
     const status = item.status || (item.completed ? "completed" : "");
     return `<li><span>${escapeHtml(label)}</span>${status ? `<em>${escapeHtml(status)}</em>` : ""}</li>`;
   }).join("");
-  const skills = Array.isArray(job.skill_trace) ? job.skill_trace.slice(0, 5) : [];
-  const skillRows = skills.map((skill) => {
-    const title = skill.title || skill.id || "";
-    const agent = skill.agent || "";
-    return `<li><span>${escapeHtml(title)}</span>${agent ? `<em>${escapeHtml(agent)}</em>` : ""}</li>`;
-  }).join("");
+  const skills = Array.isArray(job.skill_trace) ? job.skill_trace : [];
+  const skillRows = skills.length ? renderAiGenerationSkillGroups(skills) : "";
   const artifacts = Array.isArray(job.agent_artifacts) ? job.agent_artifacts.slice(-8) : [];
   const artifactRows = artifacts.map(renderAiAgentArtifact).join("");
   return `
@@ -6500,9 +6601,33 @@ function renderAiJobDetails(job) {
       ${traceRows ? `<section><h4>${escapeHtml(t("aiJobTrace"))}</h4><ol class="ai-job-trace">${traceRows}</ol></section>` : ""}
       ${artifactRows ? `<section><h4>${escapeHtml(t("aiJobArtifacts"))}</h4><ol class="ai-job-artifacts">${artifactRows}</ol></section>` : ""}
       ${checklistRows ? `<section><h4>${escapeHtml(t("aiJobChecklist"))}</h4><ul class="ai-job-checklist">${checklistRows}</ul></section>` : ""}
-      ${skillRows ? `<section><h4>${escapeHtml(t("aiJobSkills"))}</h4><ul class="ai-job-checklist">${skillRows}</ul></section>` : ""}
+      ${skillRows ? `<section><h4>${escapeHtml(t("aiJobSkills"))}</h4>${skillRows}</section>` : ""}
     </div>
   `;
+}
+
+function isTerminalAiJobStatus(status) {
+  return ["completed", "failed", "cancelled", "canceled"].includes(String(status || "").toLowerCase());
+}
+
+function isTerminalAiStageStatus(status) {
+  return ["completed", "failed", "warning", "skipped"].includes(String(status || "").toLowerCase());
+}
+
+function aiGenerationAgentForStage(stage) {
+  const map = {
+    parsing: "Ingest",
+    analyzing_requirements: "RequirementAnalyst",
+    planning: "Planner",
+    writing_content: "ContentWriter",
+    designing_style: "StyleDesigner",
+    coding_html: "HTMLCoder",
+    verifying: "Verifier",
+    safety_checking: "SafetyReviewer",
+    finalizing: "Finalizer",
+    writing: "WriteGateway",
+  };
+  return map[String(stage || "")] || "";
 }
 
 function renderAiAgentArtifact(artifact) {
@@ -7319,7 +7444,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.1-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.2-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
@@ -7427,6 +7552,20 @@ function formatDuration(value) {
   if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "";
   if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`;
   return `${(milliseconds / 1000).toFixed(milliseconds < 10_000 ? 1 : 0)}s`;
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let current = bytes;
+  let index = 0;
+  while (current >= 1024 && index < units.length - 1) {
+    current /= 1024;
+    index += 1;
+  }
+  const digits = current >= 10 || index === 0 ? 0 : 1;
+  return `${current.toFixed(digits)} ${units[index]}`;
 }
 
 function escapeHtml(value) {
@@ -7541,7 +7680,7 @@ elements.newItemInput.addEventListener("input", resizeNewItemInput);
 elements.newPromptResize?.addEventListener("pointerdown", startNewPromptResize);
 elements.newPromptResize?.addEventListener("mousedown", startNewPromptResize);
 elements.newFileTrigger?.addEventListener("click", openMaterialGeneratePicker);
-elements.newFileRemove?.addEventListener("click", () => setPendingMaterialFile(null));
+elements.newFileRemove?.addEventListener("click", () => setPendingMaterialFiles([]));
 elements.newReferenceTrigger?.addEventListener("click", openMaterialReferencePicker);
 elements.newReferenceRemove?.addEventListener("click", () => setPendingReferenceFile(null));
 elements.readerClose.addEventListener("click", closeReader);
@@ -7637,7 +7776,7 @@ elements.importEntries.forEach((button) => {
   button.addEventListener("click", openHtmlImportPicker);
 });
 elements.htmlImportFile.addEventListener("change", (event) => importHtmlFile(event.target.files?.[0]));
-elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFile(event.target.files?.[0]));
+elements.materialGenerateFile.addEventListener("change", (event) => setPendingMaterialFiles(event.target.files));
 elements.materialReferenceFile?.addEventListener("change", (event) => setPendingReferenceFile(event.target.files?.[0]));
 window.addEventListener("hashchange", openFromHash);
 window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {

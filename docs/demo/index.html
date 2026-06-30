@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600;900&family=Noto+Serif+JP:wght@600;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.1.1">
+  <link rel="stylesheet" href="style.css?v=1.1.2">
 </head>
 <body>
   <a class="demo-home-link" href="../" aria-label="HTMlore homepage" title="HTMlore homepage">
@@ -204,7 +204,7 @@
       </header>
 
       <input id="html-import-file" type="file" accept=".html,.htm,text/html" hidden>
-      <input id="material-generate-file" type="file" accept=".html,.htm,.md,.markdown,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,text/html,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg,image/png" hidden>
+      <input id="material-generate-file" type="file" multiple accept=".html,.htm,.md,.markdown,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,text/html,text/markdown,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg,image/png" hidden>
       <input id="material-reference-file" type="file" accept=".jpg,.jpeg,.png,.html,.htm,.pdf,.ppt,.pptx,image/jpeg,image/png,text/html,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
 
       <section class="new-card" id="new-card">
@@ -234,7 +234,11 @@
           </button>
           <button type="submit" data-i18n="create"></button>
           <div class="new-file-row" id="new-file-row" hidden>
-            <span class="new-file-name" id="new-file-name"></span>
+            <div class="new-file-main">
+              <span class="new-file-name" id="new-file-name"></span>
+              <span class="new-file-status" id="new-file-status"></span>
+              <span class="new-file-progress" id="new-file-progress" hidden><span></span></span>
+            </div>
             <button type="button" class="new-file-remove" id="new-file-remove" aria-label="Remove source file" title="Remove source file" data-i18n-attr="aria-label:removeFile,title:removeFile">×</button>
           </div>
           <div class="new-generation-drawer" id="new-generation-options" hidden>
@@ -1045,6 +1049,6 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=1.1.1" type="module"></script>
+  <script src="app.js?v=1.1.2" type="module"></script>
 </body>
 </html>

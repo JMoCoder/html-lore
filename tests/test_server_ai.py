@@ -197,6 +197,8 @@ def test_ai_status_is_unavailable_without_provider(tmp_path: Path) -> None:
         assert status["provider"]["model"] == "gpt-5.5"
         assert status["external_search_available"] is False
         assert status["external_search"] == {"provider": "disabled", "available": False, "max_results": 5}
+        assert status["limits"]["max_upload_bytes"] == 100 * 1024 * 1024
+        assert status["limits"]["max_upload_total_bytes"] == 500 * 1024 * 1024
         assert "api_key" not in status["provider"]
     finally:
         server.close()
@@ -3724,6 +3726,56 @@ def test_ai_material_job_v2_accepts_reference_style_file(tmp_path: Path) -> None
         server.close()
 
 
+def test_ai_material_job_v2_accepts_multiple_material_files(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-generation-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        ai_generation_model="fake-generation-model",
+        document_parser="basic",
+    )
+    try:
+        queued = server.multipart(
+            "/api/ai/material-jobs",
+            fields={
+                "instruction": "Create a concise knowledge note from both files.",
+                "theme": "default",
+                "target_use": "default",
+                "style_preference": "default",
+            },
+            file_field="file",
+            filename="overview.md",
+            content=b"# Overview\n\nPrivate source alpha.",
+            content_type="text/markdown",
+            extra_files=[
+                {
+                    "field": "file",
+                    "filename": "appendix.md",
+                    "content": b"# Appendix\n\nPrivate source beta.",
+                    "content_type": "text/markdown",
+                },
+            ],
+        )
+
+        job = wait_for_ai_job(server, queued["job_id"])
+        run = server.request("GET", f"/api/ai/runs/{job['run_id']}")["run"]
+        raw_jobs = (meta_dir / "ai" / "jobs.json").read_text(encoding="utf-8")
+
+        assert job["status"] == "completed"
+        assert job["label"] == "overview.md + 1 more"
+        assert run["material"]["filenames"] == ["overview.md", "appendix.md"]
+        assert [item["filename"] for item in run["spec"]["materials"]] == ["overview.md", "appendix.md"]
+        assert "Private source alpha" not in raw_jobs
+        assert "Private source beta" not in raw_jobs
+    finally:
+        server.close()
+
+
 def test_ai_material_job_v2_accepts_text_prompt_without_file(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = make_dirs(tmp_path)
     server = run_api_server(
@@ -3759,6 +3811,79 @@ def test_ai_material_job_v2_accepts_text_prompt_without_file(tmp_path: Path) -> 
         assert run["spec"]["target_use"] == "website"
         assert run["spec"]["style_preference"] == "business"
         assert "private prompt topic alpha" not in raw_jobs
+    finally:
+        server.close()
+
+
+def test_ai_material_job_rejects_oversized_upload_before_job_creation(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        max_upload_bytes=32,
+        ai_provider="fake",
+        ai_model="fake-generation-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        ai_generation_model="fake-generation-model",
+        document_parser="basic",
+    )
+    try:
+        status, error = server.multipart_error(
+            "/api/ai/material-jobs",
+            fields={"instruction": "Create a note."},
+            file_field="file",
+            filename="large.md",
+            content=b"# Large\n\n" + (b"x" * 128),
+            content_type="text/markdown",
+        )
+        jobs = server.request("GET", "/api/ai/jobs")
+
+        assert status == 413
+        assert "exceeds the configured size limit" in error["detail"]
+        assert jobs["count"] == 0
+    finally:
+        server.close()
+
+
+def test_ai_material_job_rejects_total_upload_limit_before_job_creation(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        max_upload_bytes=128,
+        max_upload_total_bytes=96,
+        ai_provider="fake",
+        ai_model="fake-generation-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        ai_generation_model="fake-generation-model",
+        document_parser="basic",
+    )
+    try:
+        status, error = server.multipart_error(
+            "/api/ai/material-jobs",
+            fields={"instruction": "Create a note."},
+            file_field="file",
+            filename="part-a.md",
+            content=b"a" * 64,
+            content_type="text/markdown",
+            extra_files=[
+                {
+                    "field": "file",
+                    "filename": "part-b.md",
+                    "content": b"b" * 64,
+                    "content_type": "text/markdown",
+                },
+            ],
+        )
+        jobs = server.request("GET", "/api/ai/jobs")
+
+        assert status == 413
+        assert "total size limit" in error["detail"]
+        assert jobs["count"] == 0
     finally:
         server.close()
 

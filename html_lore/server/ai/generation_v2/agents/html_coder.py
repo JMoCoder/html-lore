@@ -58,6 +58,7 @@ class HTMLCoderAgent(GenerationAgent):
         return replace(
             state,
             html_draft=output,
+            visual_check_report=None,
             validation_report=None,
             safety_report=None,
             create_note_proposal=None,

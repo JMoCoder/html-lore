@@ -59,6 +59,7 @@ Choose only patterns that serve the content:
 
 - `article`: long-form explanation with readable line length.
 - `report_grid`: summary, findings, risks, recommendations.
+- `business_matrix`: responsibilities, assumptions, parameters, decision boundaries, or KPI categories.
 - `process_flow`: step-by-step workflow, state machine, pipeline, or loop.
 - `comparison`: before/after, options, trade-offs, pros/cons.
 - `timeline`: phased plan, history, release sequence.
@@ -68,17 +69,34 @@ Choose only patterns that serve the content:
 
 For architecture or workflow pages, include a diagram-like section when it helps. Use simple HTML/CSS boxes or inline SVG only when it improves comprehension. Do not make the page prose-heavy if the user's goal is to understand a system quickly.
 
+## Capability Map
+
+Use internal capability labels as design intent, not as vendor or template names:
+
+- `business_report`: conclusion-forward report, executive summary, risks, recommendations, matrices, and next actions.
+- `plan_roadmap`: phases, dependencies, acceptance checks, and honest unknowns.
+- `architecture_explainer`: nodes, edges, control boundaries, loop paths, and runtime/tool/model separation.
+- `presentation_surface`: slide-like rhythm, first-viewport value framing, and talk-track hierarchy.
+- `component_patterns`: dense but coherent cards, tables, timelines, comparisons, flows, and callouts.
+- `reference_style`: uploaded style evidence used for palette, typography rhythm, spacing, component shape, and density.
+
+The default design path remains model-led. Capability labels only make the design contract explicit for downstream agents.
+
 ## Layout Quality Contract
 
 Every StyleBrief should give HTMLCoder a usable layout contract, not only a mood:
 
 - Define the intended representation for each major section.
+- Name the capability labels that matter and explain why they matter for this source material.
 - Match container width to content amount. Short text should not sit in a wide empty card; use compact cards, split grids, callouts, or prose blocks instead.
 - Keep grouped components visually consistent. When two panels explain one idea, share border, radius, padding, background behavior, and type scale unless contrast is intentional.
 - Reserve collision-safe space for labels, badges, numbers, arrows, and decorative marks. They must not overlap or crowd headings.
 - Keep background layers subordinate to content. Do not put transparent or glass cards over strong connector lines, patterns, or high-contrast decoration unless the card has an opaque enough surface or local mask.
 - Use whitespace intentionally. Large blank areas are acceptable only when they support emphasis, not when they reveal a mismatched grid.
 - Prefer fewer, better-composed components over many uniformly styled boxes.
+- Describe each high-risk section as: section -> representation -> layout constraint -> visual risk to avoid.
+- When a table is the right representation, say so directly. Do not let HTMLCoder turn matrices into card grids for decoration.
+- When a flow or timeline is the right representation, include sequence direction, wrapping behavior, and label placement.
 
 ## Visual System
 
@@ -141,4 +159,5 @@ When producing a StyleBrief, make it concrete enough for HTMLCoder:
 - responsive rules,
 - specific avoid styles,
 - layout quality notes covering density, collision avoidance, grouped-component consistency, and background/content layering,
+- section-level contracts for cards, tables, flows, timelines, architecture maps, and report matrices,
 - implementation notes for diagrams, tables, timelines, or comparison blocks.

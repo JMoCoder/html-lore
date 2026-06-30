@@ -34,6 +34,8 @@ class ApiServer:
         users_file: Path | None = None,
         user_data_dir: Path | None = None,
         session_secret: str = "",
+        max_upload_bytes: int | None = None,
+        max_upload_total_bytes: int | None = None,
         ai_provider: str = "",
         ai_base_url: str = "",
         ai_api_key: str = "",
@@ -89,6 +91,10 @@ class ApiServer:
         )
         if ai_max_context_items is not None:
             env["HTML_LORE_AI_MAX_CONTEXT_ITEMS"] = str(ai_max_context_items)
+        if max_upload_bytes is not None:
+            env["HTML_LORE_MAX_UPLOAD_BYTES"] = str(max_upload_bytes)
+        if max_upload_total_bytes is not None:
+            env["HTML_LORE_MAX_UPLOAD_TOTAL_BYTES"] = str(max_upload_total_bytes)
         if ai_external_search_max_results is not None:
             env["HTML_LORE_AI_EXTERNAL_SEARCH_MAX_RESULTS"] = str(ai_external_search_max_results)
         if ai_external_search_depth is not None:
@@ -233,9 +239,19 @@ class ApiServer:
             ),
         )
 
-    def multipart_error(self, path: str, *, fields: dict[str, str], file_field: str, filename: str, content: bytes, content_type: str) -> tuple[int, Any]:
+    def multipart_error(
+        self,
+        path: str,
+        *,
+        fields: dict[str, str],
+        file_field: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+        extra_files: list[dict[str, Any]] | None = None,
+    ) -> tuple[int, Any]:
         try:
-            self.multipart_text(path, fields=fields, file_field=file_field, filename=filename, content=content, content_type=content_type)
+            self.multipart_text(path, fields=fields, file_field=file_field, filename=filename, content=content, content_type=content_type, extra_files=extra_files)
         except urllib.error.HTTPError as exc:
             return exc.code, json.loads(exc.read().decode("utf-8"))
         raise AssertionError("Expected HTTP error response.")
@@ -308,6 +324,8 @@ def run_api_server(
     users_file: Path | None = None,
     user_data_dir: Path | None = None,
     session_secret: str = "",
+    max_upload_bytes: int | None = None,
+    max_upload_total_bytes: int | None = None,
     ai_provider: str = "",
     ai_base_url: str = "",
     ai_api_key: str = "",
@@ -346,6 +364,8 @@ def run_api_server(
         users_file=users_file,
         user_data_dir=user_data_dir,
         session_secret=session_secret,
+        max_upload_bytes=max_upload_bytes,
+        max_upload_total_bytes=max_upload_total_bytes,
         ai_provider=ai_provider,
         ai_base_url=ai_base_url,
         ai_api_key=ai_api_key,

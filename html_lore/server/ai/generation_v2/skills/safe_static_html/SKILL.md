@@ -55,6 +55,9 @@ If a requested visual effect would require unsafe scripting, replace it with sta
 - Use tables only for tabular data. Use lists, grids, or cards for conceptual grouping.
 - For diagrams, prefer semantic HTML boxes and CSS connectors. Inline SVG is acceptable for compact diagrams, but keep it simple and accessible.
 - Use icons only if they can be represented safely with text, CSS, or inline SVG. Do not fetch icon libraries.
+- Follow StyleBrief section contracts. If a section is specified as a table, flow, timeline, or architecture map, implement that representation instead of flattening it into generic cards.
+- Reserve safe space for badges, loop labels, arrows, counters, and connector labels.
+- Keep repeated component groups visually coherent through shared classes and tokens.
 
 ## Visual Restraint
 

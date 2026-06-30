@@ -188,6 +188,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
     common_input = {
         "instruction": state.input.instruction,
         "filename": state.input.filename,
+        "materials": public_material_inputs(state.input.materials),
         "content_type": state.input.content_type,
         "theme": state.input.theme,
         "target_use": state.input.target_use,
@@ -201,6 +202,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
         state_view = {
             "input": common_input,
             "html_draft": compact_html_draft(state.html_draft),
+            "visual_check_report": public_value(state.visual_check_report),
             "validation_report": public_value(state.validation_report),
             "safety_report": public_value(state.safety_report),
             "content_draft": compact_content_draft(state.content_draft),
@@ -216,6 +218,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "input": common_input,
             "validation_report": public_value(state.validation_report),
             "safety_report": public_value(state.safety_report),
+            "visual_check_report": public_value(state.visual_check_report),
             "content_draft": public_value(state.content_draft),
             "style_brief": public_value(state.style_brief),
             "requirement_brief": public_value(state.requirement_brief),
@@ -235,12 +238,29 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "content_draft": public_value(state.content_draft),
             "style_brief": public_value(state.style_brief),
             "html_draft": trim_html_draft(state.html_draft),
+            "visual_check_report": public_value(state.visual_check_report),
             "validation_report": public_value(state.validation_report),
             "safety_report": public_value(state.safety_report),
             "execution_checklist": public_value(state.execution_checklist),
             "revision_round": state.revision_round,
         }
     return normalize_for_json(state_view)
+
+
+def public_material_inputs(materials: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for item in materials:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        result.append(
+            {
+                "filename": str(item.get("filename") or ""),
+                "content_type": str(item.get("content_type") or ""),
+                "size": len(content) if isinstance(content, bytes) else int(item.get("size") or 0),
+            },
+        )
+    return result
 
 
 def public_value(value: Any) -> Any:

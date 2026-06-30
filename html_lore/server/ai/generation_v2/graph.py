@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 from typing import Callable
 from uuid import uuid4
 
@@ -15,10 +15,11 @@ from .agents.verifier import VerifierAgent
 from .fake_model import FakeGenerationModelClient
 from .model_client import GenerationJsonModelClient
 from .orchestrator import GenerationOrchestrator
-from .schemas import GenerationInput, GenerationStage, GenerationState
+from .schemas import AgentArtifact, GenerationInput, GenerationStage, GenerationState, ParsedDocument, ParseWarning
 from .state import complete_stage, start_stage
 from .tools.document_parser import parse_document
 from .tools.style_hint_extractor import extract_style_hints
+from .tools.visual_check import run_visual_check
 
 
 StateCallback = Callable[[GenerationState], None]
@@ -27,10 +28,22 @@ StateCallback = Callable[[GenerationState], None]
 class HtmlGenerationV2Graph:
     name = "HtmlGenerationV2.alpha"
 
-    def __init__(self, *, model_client: GenerationJsonModelClient | None = None, parser_mode: str = "markitdown", on_state: StateCallback | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        model_client: GenerationJsonModelClient | None = None,
+        parser_mode: str = "markitdown",
+        on_state: StateCallback | None = None,
+        visual_check_mode: str = "off",
+        visual_check_browser_channel: str = "chrome",
+        visual_check_timeout_seconds: int = 20,
+    ) -> None:
         self.model_client = model_client or FakeGenerationModelClient()
         self.parser_mode = parser_mode
         self.on_state = on_state
+        self.visual_check_mode = str(visual_check_mode or "off")
+        self.visual_check_browser_channel = str(visual_check_browser_channel or "chrome")
+        self.visual_check_timeout_seconds = max(1, int(visual_check_timeout_seconds or 20))
         self.orchestrator = GenerationOrchestrator()
         self.agents = {
             "requirement_analyst": RequirementAnalystAgent(self.model_client),
@@ -61,11 +74,16 @@ class HtmlGenerationV2Graph:
             agent = self.agents.get(decision.next_node)
             if agent is None:
                 return replace(next_state, failed_steps=[*next_state.failed_steps, decision.next_node])
+            next_state = replace(next_state, current_step=agent.stage.value)
+            self.emit_state(next_state)
             result = agent.run(next_state)
             next_state = result.state
             self.emit_state(next_state)
             if next_state.failed_steps:
                 return next_state
+            if decision.next_node == "html_coder":
+                next_state = self.run_visual_check(next_state)
+                self.emit_state(next_state)
         return replace(next_state, failed_steps=[*next_state.failed_steps, "max_graph_steps"])
 
     def emit_state(self, state: GenerationState) -> None:
@@ -75,12 +93,17 @@ class HtmlGenerationV2Graph:
 
     def run_ingest(self, state: GenerationState) -> GenerationState:
         next_state = start_stage(state, GenerationStage.PARSING, agent="Ingest", message="Parsing uploaded material.")
-        parsed = parse_document(
-            filename=state.input.filename or "source.txt",
-            content=state.input.content,
-            content_type=state.input.content_type,
-            parser_mode=self.parser_mode,
-        )
+        parsed_items = []
+        for material in material_inputs(state):
+            parsed_items.append(
+                parse_document(
+                    filename=str(material.get("filename") or "source.txt"),
+                    content=material.get("content") if isinstance(material.get("content"), bytes) else b"",
+                    content_type=str(material.get("content_type") or ""),
+                    parser_mode=self.parser_mode,
+                ),
+            )
+        parsed = merge_parsed_documents(parsed_items)
         parsed = replace(parsed, style_hints=extract_style_hints(parsed, role="material"))
         parsed_style_reference = None
         if state.input.reference_style == "file" and state.input.reference_file_name and state.input.reference_content:
@@ -94,3 +117,91 @@ class HtmlGenerationV2Graph:
             parsed_style_reference = replace(parsed_style_reference, style_hints=extract_style_hints(parsed_style_reference, role="style_reference"))
         next_state = replace(next_state, parsed_document=parsed, parsed_style_reference=parsed_style_reference)
         return complete_stage(next_state, GenerationStage.PARSING, message="Uploaded material parsed.")
+
+    def run_visual_check(self, state: GenerationState) -> GenerationState:
+        if state.html_draft is None:
+            return state
+        report = run_visual_check(
+            state.html_draft.html,
+            mode=self.visual_check_mode,
+            browser_channel=self.visual_check_browser_channel,
+            timeout_seconds=self.visual_check_timeout_seconds,
+        )
+        if report.mode == "off":
+            return replace(state, visual_check_report=report)
+        summary = "skipped"
+        if not report.skipped:
+            summary = "passed" if report.ok else "issues found"
+        artifact = AgentArtifact(
+            agent="VisualCheckTool",
+            stage=GenerationStage.VERIFYING,
+            title="Browser visual check",
+            summary=summary,
+            input_summary="HTML draft rendered in browser viewports",
+            output_summary=visual_check_output_summary(report),
+            quality_score=1.0 if report.ok else 0.55,
+            warnings=[issue.message for issue in report.issues[:4] if issue.severity != "error"] + report.warnings[:4],
+            data={
+                "mode": report.mode,
+                "available": report.available,
+                "skipped": report.skipped,
+                "ok": report.ok,
+                "reason": report.reason,
+                "duration_ms": report.duration_ms,
+                "viewports": [asdict(item) for item in report.viewports],
+                "issues": [asdict(item) for item in report.issues[:12]],
+            },
+        )
+        return replace(state, visual_check_report=report, agent_artifacts=[*state.agent_artifacts, artifact])
+
+
+def visual_check_output_summary(report) -> str:
+    if report.skipped:
+        return report.reason or "Visual check skipped"
+    if not report.issues:
+        return "passed: rendered, no blocking visual issues"
+    return f"{len(report.issues)} visual issue(s): " + "; ".join(issue.code for issue in report.issues[:3])
+
+
+def material_inputs(state: GenerationState) -> list[dict[str, object]]:
+    materials = [item for item in state.input.materials if isinstance(item, dict)]
+    if materials:
+        return materials
+    return [{"filename": state.input.filename or "source.txt", "content": state.input.content, "content_type": state.input.content_type}]
+
+
+def merge_parsed_documents(items: list[ParsedDocument]) -> ParsedDocument:
+    if not items:
+        return ParsedDocument(warnings=[ParseWarning(code="no_material", message="No uploaded material was available to parse.", severity="warning")])
+    if len(items) == 1:
+        return items[0]
+    text_parts: list[str] = []
+    source_files = []
+    outline = []
+    images = []
+    links = []
+    tables = []
+    style_hints = []
+    warnings = []
+    for index, item in enumerate(items, start=1):
+        source_files.extend(item.source_files)
+        label = item.source_files[0].filename if item.source_files else f"material-{index}"
+        if item.plain_text:
+            text_parts.append(f"Source file: {label}\n{item.plain_text}")
+        outline.extend(item.outline)
+        images.extend(item.images)
+        links.extend(item.links)
+        tables.extend(item.tables)
+        style_hints.extend(item.style_hints)
+        warnings.extend(item.warnings)
+    warnings.append(ParseWarning(code="multiple_materials", message=f"Parsed {len(items)} uploaded material files.", severity="info"))
+    return ParsedDocument(
+        source_files=source_files,
+        plain_text="\n\n".join(text_parts),
+        outline=outline,
+        images=images,
+        links=links,
+        tables=tables,
+        style_hints=style_hints,
+        warnings=warnings,
+    )

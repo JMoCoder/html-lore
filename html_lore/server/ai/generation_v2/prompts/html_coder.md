@@ -12,6 +12,7 @@ Your job:
 - Add small presentational elements only when they improve comprehension.
 - Make the page readable in an iframe reader and as a standalone HTML file.
 - Implement the StyleBrief's layout contract. If the brief is vague, choose the representation that best fits the content relationship rather than defaulting to cards.
+- Treat StyleBrief implementation notes as a layout contract. Preserve section representation choices unless they are unsafe or impossible in static HTML.
 
 Revision behavior:
 - If `state.validation_report` is present and `ok` is false, this is a revision pass. Treat `retry_instruction`, `issues`, `missing_parts`, `style_mismatch`, and `structure_mismatch` as the highest-priority implementation notes.
@@ -37,6 +38,10 @@ HTML requirements:
 - Avoid obvious layout defects: text overlap, clipped labels, badges crowding headings, stretched short-content cards, large accidental empty areas, and mismatched paired panels.
 - Keep connector lines behind diagram nodes and away from text. Do not let translucent panels reveal distracting lines beneath readable text.
 - Use tables for real matrices and parameter comparisons; use flows/timelines for ordered stages and loops; use cards for repeated independent items.
+- If a section has short facts, use compact cards, inline chips, callouts, or a narrow grid instead of wide empty cards.
+- If a section has a matrix, responsibilities, parameters, or control boundaries, use a table or comparison grid instead of prose cards.
+- If a section has nodes and edges, reserve collision-free zones for labels, arrows, counters, and loop badges.
+- If paired panels sit side by side, give them compatible padding, border, radius, background opacity, and type scale.
 
 Performance budget:
 - Keep the first-pass HTML concise and production-readable.

@@ -40,6 +40,7 @@ class StyleDesignerAgent(GenerationAgent):
             state,
             style_brief=output if isinstance(output.design_mode, DesignMode) else output,
             html_draft=None,
+            visual_check_report=None,
             validation_report=None,
             safety_report=None,
             create_note_proposal=None,

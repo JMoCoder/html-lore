@@ -10,7 +10,7 @@ from html_lore.server.ai.generation_v2.material_runner import generate_note_from
 from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, NoteMetadataProposal, ParsedDocument, PlanDraft, StageTraceEvent, ToolNeed
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, NoteMetadataProposal, ParsedDocument, PlanDraft, SkillTraceEntry, StageTraceEvent, ToolNeed
 from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
 from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
@@ -20,6 +20,7 @@ from html_lore.server.ai.generation_v2.tools import document_parser
 from html_lore.server.ai.generation_v2.tools.document_parser import parse_document, parse_document_basic
 from html_lore.server.ai.generation_v2.tools.html_safety import scan_html_safety
 from html_lore.server.ai.generation_v2.tools.style_hint_extractor import extract_style_hints
+from html_lore.server.ai.generation_v2.tools.visual_check import run_visual_check
 from html_lore.server.ai.generation_v2.write_gateway import WriteGateway, WriteGatewayError
 from html_lore.server.ai.html_generation import GenerationSpec
 from html_lore.server.ai.jobs import AIJobStore
@@ -110,6 +111,55 @@ def test_generation_v2_graph_runs_fake_agent_flow() -> None:
         ("HTMLCoder", "safe_static_html"),
         ("Verifier", "content_quality_review"),
     ]
+    assert result.visual_check_report is not None
+    assert result.visual_check_report.skipped is True
+
+
+def test_generation_v2_graph_can_run_optional_visual_check_without_breaking_flow() -> None:
+    graph = HtmlGenerationV2Graph(parser_mode="basic", visual_check_mode="basic", visual_check_timeout_seconds=5)
+    state = graph.initial_state(
+        GenerationInput(
+            filename="source.md",
+            content=b"# Source\n\nBody.",
+            content_type="text/markdown",
+            instruction="Create HTML.",
+        ),
+        job_id="job-visual",
+    )
+
+    result = graph.run(state)
+
+    assert not result.failed_steps
+    assert result.visual_check_report is not None
+    assert result.visual_check_report.mode == "basic"
+    visual_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "VisualCheckTool")
+    assert visual_artifact.data["mode"] == "basic"
+    if result.visual_check_report.skipped:
+        assert result.visual_check_report.reason
+    else:
+        assert result.visual_check_report.viewports
+
+
+def test_generation_v2_graph_emits_active_stage_before_agent_completes() -> None:
+    snapshots: list[GenerationState] = []
+    graph = HtmlGenerationV2Graph(parser_mode="basic", on_state=snapshots.append)
+    state = graph.initial_state(
+        GenerationInput(
+            filename="source.md",
+            content=b"# Source\n\nBody.",
+            content_type="text/markdown",
+            instruction="Create HTML.",
+        ),
+        job_id="job-1",
+    )
+
+    graph.run(state)
+
+    assert any(
+        snapshot.current_step == GenerationStage.ANALYZING_REQUIREMENTS.value
+        and not any(event.agent == "RequirementAnalyst" for event in snapshot.stage_trace)
+        for snapshot in snapshots
+    )
 
 
 def test_generation_v2_skill_loader_uses_fixed_default_mapping() -> None:
@@ -146,6 +196,10 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "First Decide The Surface" in design
     assert "Layout Patterns" in design
     assert "Layout Quality Contract" in design
+    assert "Capability Map" in design
+    assert "business_report" in design
+    assert "plan_roadmap" in design
+    assert "section -> representation -> layout constraint" in design
     assert "collision" in design.lower()
     assert "transparent" in design.lower()
     assert "knowledge_note" in design
@@ -155,16 +209,21 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "Do not include:" in safe_html
     assert "<script>" in safe_html
     assert "Revision Behavior" in safe_html
+    assert "Follow StyleBrief section contracts" in safe_html
 
     assert "Pass Criteria" in review
     assert "Fail Criteria" in review
     assert "Routing Guidance" in review
     assert "background lines" in review
     assert "stretched short-content cards" in review
+    assert "control ownership" in review
+    assert "responsibility matrices" in review
     assert "score" in review.lower()
 
     assert "Presentation Surface Design Skill" in presentation
     assert "hero_brief" in presentation
+    assert "evidence_table" in presentation
+    assert "section rhythm varied" in presentation
     assert "roadmap" in presentation
     assert "Slide-Like Layout Guardrails" in presentation
 
@@ -172,10 +231,14 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "runtime" in architecture
     assert "loop" in architecture
     assert "collision zone" in architecture
+    assert "edge_list" in architecture
+    assert "control ownership" in architecture
 
     assert "Component Pattern HTML Skill" in components
     assert "process-flow" in components
     assert "responsive-table" in components
+    assert "boundary-table" in components
+    assert "compact-fact-row" in components
     assert "Pattern Selection Rules" in components
 
 
@@ -240,6 +303,46 @@ def test_generation_v2_skill_router_loads_optional_capability_skills() -> None:
         "architecture_explainer_design",
         "component_pattern_html",
     ]
+
+
+def test_generation_v2_public_summary_groups_skills_and_infers_running_checklist(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024,
+    )
+    state = GenerationState(
+        current_step=GenerationStage.DESIGNING_STYLE.value,
+        plan_draft=PlanDraft(
+            tool_needs=[
+                ToolNeed(
+                    tool_name="architecture explainer design",
+                    reason="Explain runtime nodes, edges, and loops.",
+                    priority="high",
+                ),
+            ],
+        ),
+        execution_checklist=[
+            ChecklistItem(id="style", title="Prepare style", owner="StyleDesigner", status=ChecklistStatus.PENDING),
+        ],
+        stage_trace=[
+            StageTraceEvent(stage=GenerationStage.DESIGNING_STYLE, agent="StyleDesigner", status="started"),
+        ],
+        skill_trace=[
+            SkillTraceEntry(id="html_page_design", title="HTML page design", agent="StyleDesigner", kind="default"),
+            SkillTraceEntry(id="architecture_explainer_design", title="Architecture explainer", agent="StyleDesigner", kind="enhanced"),
+        ],
+    )
+
+    summary = GenerationStore(settings).public_state_summary(state)
+    skills = {item["id"]: item for item in summary["skill_trace"]}
+
+    assert skills["html_page_design"]["kind"] == "default"
+    assert skills["architecture_explainer_design"]["kind"] == "enhanced"
+    assert skills["architecture_explainer_design"]["trigger_reason"] == "Explain runtime nodes, edges, and loops."
+    assert summary["execution_checklist"][0]["status"] == "running"
 
 
 def test_generation_v2_style_reference_file_guides_style_hints() -> None:
@@ -798,8 +901,23 @@ def test_generation_store_saves_v2_run_fields(tmp_path) -> None:
             "kind": "material_html_generation",
             "status": "completed",
             "current_stage": "completed",
-            "stage_trace": [{"stage": "completed", "agent": "Write Gateway", "status": "completed"}],
-            "execution_checklist": [{"id": "verify", "title": "Verify", "owner": "Verifier", "status": "done"}],
+            "stage_trace": [
+                {"stage": "verifying", "agent": "Verifier", "status": "started"},
+                {"stage": "completed", "agent": "Write Gateway", "status": "completed"},
+            ],
+            "execution_checklist": [
+                {"id": "verify", "title": "Verify", "owner": "Verifier", "status": "pending"},
+                {"id": "write", "title": "Write file", "owner": "Write Gateway", "status": "done"},
+            ],
+            "skill_trace": [
+                {
+                    "id": "component_pattern_html",
+                    "title": "Component pattern HTML",
+                    "agent": "HTMLCoder",
+                    "kind": "enhanced",
+                    "trigger_reason": "Use grids and comparison cards.",
+                },
+            ],
             "agent_artifacts": [
                 {
                     "agent": "ContentWriter",
@@ -815,8 +933,11 @@ def test_generation_store_saves_v2_run_fields(tmp_path) -> None:
 
     assert run["generation_engine"] == "v2"
     assert fetched["generation_engine"] == "v2"
-    assert fetched["stage_trace"][0]["stage"] == "completed"
-    assert fetched["execution_checklist"][0]["status"] == "completed"
+    assert fetched["stage_trace"][0]["stage"] == "verifying"
+    assert fetched["execution_checklist"][0]["status"] == "running"
+    assert fetched["execution_checklist"][1]["status"] == "completed"
+    assert fetched["skill_trace"][0]["kind"] == "enhanced"
+    assert fetched["skill_trace"][0]["trigger_reason"] == "Use grids and comparison cards."
     assert fetched["agent_artifacts"][0]["agent"] == "ContentWriter"
     assert "content" not in fetched["agent_artifacts"][0]["data"]
 
@@ -838,10 +959,12 @@ def test_ai_job_checklist_status_can_be_inferred_from_stage_trace(tmp_path) -> N
             "stage_trace": [
                 {"stage": "writing_content", "agent": "ContentWriter", "status": "completed"},
                 {"stage": "designing_style", "agent": "StyleDesigner", "status": "completed"},
+                {"stage": "coding_html", "agent": "HTMLCoder", "status": "started"},
             ],
             "execution_checklist": [
                 {"id": "content", "title": "Draft content", "owner": "ContentWriter", "status": "pending"},
                 {"id": "style", "title": "Prepare style", "owner": "Designer", "status": "pending"},
+                {"id": "code", "title": "Write HTML", "owner": "Coder", "status": "pending"},
                 {"id": "verify", "title": "Verify quality", "owner": "Verifier", "status": "pending"},
             ],
         },
@@ -852,6 +975,7 @@ def test_ai_job_checklist_status_can_be_inferred_from_stage_trace(tmp_path) -> N
 
     assert statuses["content"] == "completed"
     assert statuses["style"] == "completed"
+    assert statuses["code"] == "running"
     assert statuses["verify"] == "pending"
 
 
@@ -978,6 +1102,17 @@ def test_generation_v2_html_safety_blocks_scripts_handlers_css_and_secrets() -> 
     assert "inline-event-handler" in handler["reasons"]
     assert "css-import" in css["reasons"]
     assert "sensitive-secret" in secret["reasons"]
+
+
+def test_generation_v2_visual_check_disabled_and_empty_html_paths() -> None:
+    disabled = run_visual_check("<!doctype html><html><body><p>Ok</p></body></html>", mode="off")
+    assert disabled.skipped is True
+    assert disabled.ok is True
+
+    empty = run_visual_check("", mode="basic")
+    assert empty.skipped is False
+    assert empty.ok is False
+    assert empty.issues[0].code == "empty_html"
 
 
 def test_write_gateway_blocks_unsafe_html_without_writing(tmp_path) -> None:

@@ -32,6 +32,7 @@ This skill is project-internal original guidance. It does not copy external proj
 - Components in the same conceptual group must look related: consistent padding, border, radius, type scale, and background opacity.
 - Component size should follow content density. Do not stretch a short label or one-sentence fact into a wide empty card.
 - Visual decoration must never compete with content. Connectors, badges, counters, and background lines need reserved space or reduced contrast.
+- The component pattern must follow the relationship in the content: matrix -> table, sequence -> flow/timeline, bounded system -> architecture map, repeated independent facts -> cards.
 
 ## Recommended Patterns
 
@@ -43,6 +44,8 @@ This skill is project-internal original guidance. It does not copy external proj
 - `callout`: decision, risk, assumption, warning, or takeaway.
 - `responsive-table`: real tabular data with horizontal overflow fallback.
 - `architecture-node`: component name, role, inputs, outputs, and owner.
+- `boundary-table`: controlled-by / parameter / source / notes matrix for runtime, model, user, and tool responsibilities.
+- `compact-fact-row`: short facts or tags laid out as inline chips or narrow cards when a full card grid would create empty space.
 
 ## Pattern Selection Rules
 
@@ -51,6 +54,8 @@ This skill is project-internal original guidance. It does not copy external proj
 - Use `architecture-node` inside an architecture map when components have inputs, outputs, and owners.
 - Use `info-card` only for repeated independent items. Avoid using a card grid to represent a sequence or a matrix.
 - Use `callout` for one important message beside a longer explanation; match its visual language to the companion panel.
+- Use `compact-fact-row` for short labels, statuses, options, or one-line facts. Do not stretch these into wide cards.
+- Use `boundary-table` when the page must clarify what code, model, user, or tools control.
 
 ## CSS Implementation Rules
 
@@ -65,6 +70,9 @@ This skill is project-internal original guidance. It does not copy external proj
 - Use opaque or nearly opaque surfaces for cards placed over diagrams, connector lines, or textured backgrounds.
 - Place badges and section labels in normal document flow where possible. If absolutely positioned, reserve padding so they cannot overlap headings.
 - Connector lines should sit behind nodes and stop before content surfaces. They should not cross readable text.
+- For side-by-side panels, define shared class names and tokens so left and right panels look intentionally related.
+- If a panel sits over a diagram or patterned background, make it opaque enough to hide the layer below. Avoid glass panels over connector lines.
+- Use `grid-template-columns: repeat(auto-fit, minmax(...))` for repeated cards, but cap max widths or use natural-height rows when content is short.
 
 ## Output Expectations
 
@@ -78,5 +86,7 @@ Before returning final HTML, verify:
 - no avoidable empty columns or stretched short-content cards,
 - no translucent panel exposes distracting background lines behind text,
 - related left/right or paired panels use a coherent visual system,
+- tables, flows, and cards are used for the correct content relationships,
+- labels, loop badges, and counters have protected space and do not collide with headings,
 - no scripts or unsafe attributes were introduced,
 - visual patterns match StyleBrief rather than overriding it.

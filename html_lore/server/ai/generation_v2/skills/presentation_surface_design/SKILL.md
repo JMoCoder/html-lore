@@ -28,6 +28,8 @@ This skill is project-internal original guidance. It may be informed by common p
 - Prefer short section titles, concise claims, and visually grouped supporting points.
 - Use layout to create a talk track: problem, opportunity, solution, capability, roadmap, proof, next action.
 - Avoid turning every paragraph into a card. Use cards for repeated proof points, metrics, capabilities, roadmap steps, or stakeholder views.
+- For business presentations, put the decision or conclusion near the top; do not bury the user's practical ask under atmosphere.
+- For technical presentations, make architecture, workflow, or trade-off relationships visible before adding visual drama.
 
 ## Visual Patterns
 
@@ -40,6 +42,7 @@ Choose patterns that support presentation use:
 - `comparison_panel`: before/after, current/future, or option trade-offs.
 - `talk_track_band`: full-width section with a single takeaway and supporting bullets.
 - `executive_summary`: compact conclusion and decision points near the top.
+- `evidence_table`: compact matrix for proof, constraints, scope, or responsibilities when tabular comparison is clearer than cards.
 
 ## Slide-Like Layout Guardrails
 
@@ -48,6 +51,8 @@ Choose patterns that support presentation use:
 - When placing a badge or label near a headline, keep it above or beside the title in normal flow unless there is clear reserved space.
 - If a section uses connector lines, loops, or diagram backgrounds, keep text panels opaque enough to hide visual noise.
 - Keep companion panels visually aligned. A summary panel and a key insight panel should share the same design language unless the contrast is the message.
+- Avoid split layouts where one side is dense and the other is mostly empty. Use asymmetric grids only when the sparse side carries a deliberate hero claim or visual anchor.
+- Keep section rhythm varied: combine hero, summary band, matrix/table, roadmap, and capability map instead of repeating the same card grid.
 
 ## Style Rules
 
@@ -67,4 +72,5 @@ StyleBrief should include:
 - component patterns for value, capability, roadmap, and summary blocks,
 - responsive behavior for slide-like sections,
 - layout guardrails for density, badge placement, panel pairing, and background layering,
+- table or matrix guidance when presentation content has responsibilities, options, phases, or decision criteria,
 - avoid styles that would make the artifact look like a fake marketing page.

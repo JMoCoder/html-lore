@@ -46,8 +46,10 @@ Ask these in order:
 7. Does the visual representation match the content relationship: table for matrices, flow for sequence/loops, cards for repeated independent items, prose/callout for narrative emphasis?
 8. Are layout basics sound: no obvious text overlap, no crowded labels, no stretched short-content cards, no large accidental blank areas, and no distracting background lines behind readable text?
 9. Are grouped or paired components visually coherent?
-10. Are omissions honest and acceptable for the available material?
-11. Is the artifact complete enough to write into the knowledge base?
+10. For architecture/workflow pages, are nodes, edges, loops, ownership boundaries, and stop conditions represented clearly enough?
+11. For business/report pages, are conclusions, risks, recommendations, and responsibility/parameter matrices represented with suitable density?
+12. Are omissions honest and acceptable for the available material?
+13. Is the artifact complete enough to write into the knowledge base?
 
 ## Pass Criteria
 
@@ -80,6 +82,8 @@ Fail and route back when:
 - the layout pattern harms comprehension, such as using generic cards for a process that needs a flow or a matrix that needs a table,
 - visible text overlaps labels, badges, connector lines, or decorative backgrounds,
 - short-content cards or paired panels create major empty-space imbalance or inconsistent component language,
+- architecture or workflow pages hide edge conditions, loop stop conditions, or control ownership that the user explicitly asked to understand,
+- business/report pages turn responsibility matrices, assumptions, or option comparisons into vague prose or decorative cards,
 - the page is malformed or not a complete HTML document,
 - the style brief was substantially ignored,
 - reviewer feedback from a prior pass was not addressed.

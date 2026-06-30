@@ -10,7 +10,7 @@ from ..model_client import GenerationJsonModelClient, agent_payload
 from ..schema_loader import AgentOutputSchemaError, parse_dataclass_json
 from ..schemas import AgentArtifact, ChecklistStatus, GenerationStage, GenerationState, SkillTraceEntry, normalize_for_json
 from ..skill_router import resolve_skills_for_agent
-from ..skills.loader import LoadedSkill
+from ..skills.loader import LoadedSkill, iter_skill_registry_items
 from ..state import complete_stage, fail_stage, retry_stage, start_stage
 
 
@@ -333,7 +333,9 @@ def checklist_item_owner_matches_agent(owner: str, agent_name: str) -> bool:
 
 
 def skill_trace_entry(agent_name: str, skill: LoadedSkill) -> SkillTraceEntry:
-    return SkillTraceEntry(id=skill.id, title=skill.title, agent=agent_name, version=skill.version, source=skill.source)
+    default_skill_ids = {item.id for item in iter_skill_registry_items() if item.default_enabled}
+    kind = "default" if skill.id in default_skill_ids else "enhanced"
+    return SkillTraceEntry(id=skill.id, title=skill.title, agent=agent_name, version=skill.version, source=skill.source, kind=kind)
 
 
 def first_non_empty(*values: str) -> str:

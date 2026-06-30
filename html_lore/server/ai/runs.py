@@ -87,7 +87,10 @@ def sanitize_run(run: dict[str, Any]) -> dict[str, Any]:
         "generation_engine": str(run.get("generation_engine") or "")[:40],
         "current_stage": str(run.get("current_stage") or "")[:80],
         "stage_trace": sanitize_generation_stage_trace(run.get("stage_trace")),
-        "execution_checklist": sanitize_execution_checklist(run.get("execution_checklist")),
+        "execution_checklist": sanitize_execution_checklist(
+            run.get("execution_checklist"),
+            stage_trace=sanitize_generation_stage_trace(run.get("stage_trace")),
+        ),
         "agent_trace": sanitize_trace_list(run.get("agent_trace"), allowed_keys={"id", "version", "role", "prompt_template", "input_schema", "output_schema"}),
         "prompt_trace": sanitize_trace_list(run.get("prompt_trace"), allowed_keys={"id", "version", "path"}),
         "skill_trace": sanitize_skill_trace(run.get("skill_trace")),
@@ -145,6 +148,8 @@ def sanitize_skill_trace(value: Any) -> list[dict[str, Any]]:
                 "agent": str(entry.get("agent") or "")[:120],
                 "version": str(entry.get("version") or "")[:40],
                 "source": str(entry.get("source") or "")[:40],
+                "kind": str(entry.get("kind") or "")[:40],
+                "trigger_reason": str(entry.get("trigger_reason") or "")[:240],
             }
             if clean_v2["id"]:
                 sanitized.append(clean_v2)
@@ -332,9 +337,10 @@ def sanitize_stage_metadata(value: Any) -> dict[str, Any]:
     return result
 
 
-def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:
+def sanitize_execution_checklist(value: Any, *, stage_trace: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
     if not isinstance(value, list):
         return []
+    inferred_status = checklist_status_from_trace(stage_trace or [])
     sanitized: list[dict[str, str]] = []
     for entry in value[:120]:
         if not isinstance(entry, dict):
@@ -343,12 +349,45 @@ def sanitize_execution_checklist(value: Any) -> list[dict[str, str]]:
         title = str(entry.get("title") or "")[:160]
         if not item_id and not title:
             continue
+        status = str(entry.get("status") or "pending")[:40]
+        if status == "done":
+            status = "completed"
+        if status in {"", "pending", "running"}:
+            status = inferred_checklist_status(str(entry.get("owner") or ""), inferred_status) or status
         sanitized.append(
             {
                 "id": item_id,
                 "title": title,
                 "owner": str(entry.get("owner") or "")[:80],
-                "status": str(entry.get("status") or "")[:40],
+                "status": status,
             },
         )
     return sanitized
+
+
+def checklist_status_from_trace(stage_trace: list[dict[str, Any]]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for event in stage_trace:
+        if not isinstance(event, dict):
+            continue
+        agent = str(event.get("agent") or "").strip()
+        status = str(event.get("status") or "").strip().lower()
+        if agent and status in {"completed", "failed", "warning", "started", "running", "retrying"}:
+            result[normalize_checklist_owner(agent)] = "running" if status == "started" else status
+    return result
+
+
+def inferred_checklist_status(owner: str, trace_status: dict[str, str]) -> str:
+    normalized = normalize_checklist_owner(owner)
+    if not normalized:
+        return ""
+    aliases = {
+        "writer": "contentwriter",
+        "designer": "styledesigner",
+        "coder": "htmlcoder",
+    }
+    return trace_status.get(normalized) or trace_status.get(aliases.get(normalized, ""), "")
+
+
+def normalize_checklist_owner(value: str) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())

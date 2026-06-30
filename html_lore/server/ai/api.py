@@ -55,6 +55,12 @@ class AIService:
             "qa_engine": qa_engine_status(self.settings.ai_qa_engine),
             "external_search_available": external_status["available"],
             "external_search": external_status,
+            "limits": {
+                "max_upload_bytes": self.settings.max_upload_bytes,
+                "max_upload_total_bytes": self.settings.max_upload_total_bytes,
+                "max_prompt_chars": self.settings.ai_max_prompt_chars,
+                "max_message_chars": self.settings.ai_max_message_chars,
+            },
         }
 
     def test_provider(self) -> dict[str, Any]:
@@ -97,6 +103,46 @@ def sync_v2_job_from_run(settings: ServerSettings, job_id: str, run: object, *, 
     if status == "failed" and isinstance(run.get("error"), dict):
         values["error"] = run.get("error")
     AIJobStore(settings).update(job_id, values)
+
+
+def normalize_material_inputs(materials: list[dict[str, Any]] | None, *, filename: str = "", content: bytes = b"") -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for index, raw in enumerate(materials or []):
+        if not isinstance(raw, dict):
+            continue
+        raw_content = raw.get("content")
+        if not isinstance(raw_content, bytes):
+            continue
+        result.append(
+            {
+                "filename": str(raw.get("filename") or f"material-{index + 1}.txt"),
+                "content": raw_content,
+                "content_type": str(raw.get("content_type") or ""),
+            },
+        )
+    if result:
+        return result
+    return [{"filename": filename or "material.txt", "content": content, "content_type": ""}]
+
+
+def material_label(materials: list[dict[str, Any]]) -> str:
+    names = [str(item.get("filename") or "").strip() for item in materials if str(item.get("filename") or "").strip()]
+    if not names:
+        return "Uploaded material"
+    if len(names) == 1:
+        return names[0]
+    return f"{names[0]} + {len(names) - 1} more"
+
+
+def combine_materials_for_legacy(materials: list[dict[str, Any]]) -> dict[str, Any]:
+    if len(materials) == 1:
+        return materials[0]
+    parts: list[bytes] = []
+    for item in materials:
+        name = str(item.get("filename") or "material")
+        content = item.get("content") if isinstance(item.get("content"), bytes) else b""
+        parts.append(f"\n\n--- SOURCE FILE: {name} ---\n".encode("utf-8") + content)
+    return {"filename": "materials.txt", "content": b"".join(parts), "content_type": "text/plain"}
 
 
 class AIConversationService:
@@ -218,24 +264,28 @@ class AIConversationService:
         ai_job_queue.enqueue(settings=self.settings, job=job, task=self._conversation_generation_task(conversation_id, spec.as_dict()))
         return {"job": job, "job_id": job["job_id"]}
 
-    def generate_note_from_material(self, *, filename: str, content: bytes, instruction: str, values: dict[str, Any]) -> dict[str, Any]:
+    def generate_note_from_material(self, *, materials: list[dict[str, Any]] | None = None, filename: str = "", content: bytes = b"", instruction: str, values: dict[str, Any]) -> dict[str, Any]:
         spec = GenerationSpec.from_values(values)
+        material_list = normalize_material_inputs(materials, filename=filename, content=content)
+        primary = material_list[0]
         try:
             if self.settings.ai_generation_engine == "v2":
                 result = generate_note_from_material_v2(
                     settings=self.settings,
-                    filename=filename,
-                    content=content,
+                    filename=str(primary.get("filename") or "material.txt"),
+                    content=primary.get("content") if isinstance(primary.get("content"), bytes) else b"",
+                    materials=material_list,
                     instruction=instruction,
                     spec=spec,
                     reference_content=values.get("reference_file_content") if isinstance(values.get("reference_file_content"), bytes) else b"",
                     model_client=self._generation_v2_model_client(),
                 )
             else:
+                combined = combine_materials_for_legacy(material_list)
                 result = generate_note_from_material(
                     settings=self.settings,
-                    filename=filename,
-                    content=content,
+                    filename=str(combined.get("filename") or "materials.txt"),
+                    content=combined.get("content") if isinstance(combined.get("content"), bytes) else b"",
                     instruction=instruction,
                     spec=spec,
                 )
@@ -245,12 +295,15 @@ class AIConversationService:
         run = self.run_store.add(result["run"])
         return {"run": run, "item": result["item"]}
 
-    def enqueue_generate_note_from_material(self, *, filename: str, content: bytes, instruction: str, values: dict[str, Any]) -> dict[str, Any]:
+    def enqueue_generate_note_from_material(self, *, materials: list[dict[str, Any]] | None = None, filename: str = "", content: bytes = b"", instruction: str, values: dict[str, Any]) -> dict[str, Any]:
         spec = GenerationSpec.from_values(values)
         store = AIJobStore(self.settings)
+        material_list = normalize_material_inputs(materials, filename=filename, content=content)
+        primary = material_list[0]
+        label = material_label(material_list)
         payload = {
             "type": "material_html_generation",
-            "filename": filename,
+            "filename": label,
             "spec": spec.as_dict(),
             "engine": self.settings.ai_generation_engine,
         }
@@ -259,9 +312,9 @@ class AIConversationService:
 
             from .generation_v2.store import GenerationStore
 
-            job = GenerationStore(self.settings).create_job(kind="material_html_generation", label=filename or "Uploaded material", payload=payload, current_stage=GenerationStage.QUEUED)
+            job = GenerationStore(self.settings).create_job(kind="material_html_generation", label=label or "Uploaded material", payload=payload, current_stage=GenerationStage.QUEUED)
         else:
-            job = store.create(kind="material_html_generation", label=filename or "Uploaded material", payload=payload)
+            job = store.create(kind="material_html_generation", label=label or "Uploaded material", payload=payload)
 
         def task() -> dict[str, Any]:
             try:
@@ -273,8 +326,9 @@ class AIConversationService:
 
                     result = generate_note_from_material_v2(
                         settings=self.settings,
-                        filename=filename,
-                        content=content,
+                        filename=str(primary.get("filename") or "material.txt"),
+                        content=primary.get("content") if isinstance(primary.get("content"), bytes) else b"",
+                        materials=material_list,
                         instruction=instruction,
                         spec=spec,
                         reference_content=values.get("reference_file_content") if isinstance(values.get("reference_file_content"), bytes) else b"",
@@ -283,10 +337,11 @@ class AIConversationService:
                         on_state=sync_v2_state,
                     )
                 else:
+                    combined = combine_materials_for_legacy(material_list)
                     result = generate_note_from_material(
                         settings=self.settings,
-                        filename=filename,
-                        content=content,
+                        filename=str(combined.get("filename") or "materials.txt"),
+                        content=combined.get("content") if isinstance(combined.get("content"), bytes) else b"",
                         instruction=instruction,
                         spec=spec,
                     )
