@@ -525,6 +525,23 @@ test("workspace material generation failure refreshes AI run history", async ({ 
   await page.route("**/api/ai/jobs**", async (route) => {
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ jobs: [], count: 0 }) });
   });
+  await page.route("**/api/ai/material-uploads", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        uploads: [
+          {
+            upload_id: "upload-private-source",
+            filename: "private-source.pdf",
+            size: 33,
+            content_type: "application/pdf",
+          },
+        ],
+        count: 1,
+        total_size: 33,
+      }),
+    });
+  });
   await page.route("**/api/ai/material-jobs", async (route) => {
     await route.fulfill({
       status: 400,

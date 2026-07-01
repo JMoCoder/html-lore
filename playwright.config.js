@@ -5,6 +5,7 @@ const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
 module.exports = defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
+  workers: 1,
   expect: {
     timeout: 5_000,
   },
