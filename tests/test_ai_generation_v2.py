@@ -510,6 +510,20 @@ class AlwaysReviseVerifierClient(FakeGenerationModelClient):
         return super().complete_json(node=node, schema_name=schema_name, payload=payload, attempt=attempt)
 
 
+class EmptyRouteVerifierClient(FakeGenerationModelClient):
+    def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
+        if node == "Verifier":
+            return (
+                '{"ok": false, "score": 0.72, '
+                '"checked_items": [{"id": "source", "title": "Source fidelity", "passed": false}], '
+                '"missing_parts": ["Need source evidence for exact figures."], '
+                '"unsupported_claims": ["Exact value requires verification."], '
+                '"issues": [{"code": "evidence_gap", "message": "Need source evidence.", "severity": "major"}], '
+                '"route_back_to": "", "retry_instruction": "Check source evidence before final approval."}'
+            )
+        return super().complete_json(node=node, schema_name=schema_name, payload=payload, attempt=attempt)
+
+
 def test_generation_v2_stops_when_validation_revisions_do_not_converge() -> None:
     graph = HtmlGenerationV2Graph(model_client=AlwaysReviseVerifierClient(), parser_mode="basic")
     state = graph.initial_state(
@@ -521,6 +535,21 @@ def test_generation_v2_stops_when_validation_revisions_do_not_converge() -> None
 
     assert "max_revision_rounds" in result.failed_steps
     assert result.revision_round == 2
+
+
+def test_generation_v2_falls_back_when_verifier_returns_empty_route() -> None:
+    graph = HtmlGenerationV2Graph(model_client=EmptyRouteVerifierClient(), parser_mode="basic")
+    state = graph.initial_state(
+        GenerationInput(filename="source.txt", content=b"Source text", content_type="text/plain", instruction="Create HTML."),
+        job_id="job-1",
+    )
+
+    result = graph.run(state)
+
+    assert "max_revision_rounds" in result.failed_steps
+    assert "" not in result.failed_steps
+    assert result.revision_round == 2
+    assert any(event.agent == "ContentWriter" and event.status == "completed" for event in result.stage_trace)
 
 
 def test_generation_v2_provider_model_client_extracts_json_and_includes_schema() -> None:

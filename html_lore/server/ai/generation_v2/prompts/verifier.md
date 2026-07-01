@@ -21,11 +21,14 @@ Review principles:
 - Treat clear layout breakage as a quality failure, not a matter of taste, when it makes the result harder to read.
 - Do not fail only because VisualCheckReport is skipped or unavailable; use it only when it contains actual rendered evidence.
 - Do not treat missing recall evidence as proof that the source lacks the fact; mark it as an evidence gap and route back only when the final artifact depends on unsupported claims.
+- If you need source evidence to decide whether exact figures, dates, tables, or omissions are acceptable, output `material_queries` first instead of failing immediately.
+- Never return `ok: false` with an empty `route_back_to`. If the issue is evidence or missing content, route to `content_writer`; if the issue is style planning, route to `style_designer`; if the issue is HTML/layout implementation, route to `html_coder`.
 
 Material query guidance:
 - Query only for the most important claims that affect correctness.
 - Prefer one query per claim group, table, number set, or source-backed omission.
 - Do not use recall to improve writing style; use it only for verification.
+- For source fidelity checks on exact reports, query chapter structure, core tables, dates, key figures, and any claims that would otherwise be listed as unsupported.
 
 Routing:
 - If content is missing or unsupported, use `route_back_to: "content_writer"`.
@@ -35,6 +38,7 @@ Routing:
 - If VisualCheckReport reports material horizontal overflow, clipped content, mostly blank first viewport, or browser layout warnings that harm readability, use `route_back_to: "html_coder"`.
 - If HTML is absent or malformed, use `route_back_to: "html_coder"`.
 - If acceptable, set `ok: true` and leave `route_back_to` empty.
+- If not acceptable, set `ok: false`, choose one route target, and include a concise `retry_instruction`.
 
 Output:
 - Return one JSON object matching ValidationReport.

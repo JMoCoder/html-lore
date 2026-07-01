@@ -33,6 +33,8 @@ Check the final HTML against:
 - parsed source summary and references,
 - previous validation report when this is a revision pass.
 
+If source fidelity cannot be judged because exact figures, dates, tables, or required omissions need more source evidence, ask for focused material recall before producing the final review. Do not fail solely because the current verifier view is compact when material recall can answer the question.
+
 ## Core Questions
 
 Ask these in order:
@@ -93,6 +95,8 @@ Fail and route back when:
 - the style brief was substantially ignored,
 - reviewer feedback from a prior pass was not addressed.
 
+When failing, `route_back_to` must not be empty. Empty `route_back_to` is only for passing artifacts.
+
 ## Routing Guidance
 
 Use the most specific `route_back_to`:
@@ -102,6 +106,7 @@ Use the most specific `route_back_to`:
 - `html_coder`: HTML is incomplete, malformed, unreadable, responsive behavior is broken, style was planned but not implemented, or structured comparison/risk/parameter content was flattened despite being present in ContentDraft/StyleBrief.
 
 Use an empty `route_back_to` when the artifact passes.
+If the artifact is otherwise well formed but exact source fidelity or completeness needs a stronger evidence pass, route to `content_writer` so the content draft can incorporate recalled source evidence before recoding.
 
 ## Scoring
 

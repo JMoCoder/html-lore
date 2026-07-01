@@ -44,4 +44,5 @@ class StyleDesignerAgent(GenerationAgent):
             validation_report=None,
             safety_report=None,
             create_note_proposal=None,
+            revision_round=state.revision_round + 1 if state.validation_report or state.safety_report else state.revision_round,
         )
