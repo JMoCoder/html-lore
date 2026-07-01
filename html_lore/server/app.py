@@ -511,6 +511,7 @@ def create_app() -> FastAPI:
         reference_file_type: Annotated[str, Form()] = "",
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
+        audience: Annotated[str, Form()] = "default",
     ) -> dict:
         uploaded_materials = read_uploaded_generation_materials(service.settings, upload_id)
         materials = uploaded_materials or await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
@@ -527,6 +528,7 @@ def create_app() -> FastAPI:
                     "reference_note_id": reference_note_id,
                     **uploaded_reference,
                     "style_preference": style_preference,
+                    "audience": audience,
                 },
             )
             for uploaded_id in upload_id or []:
@@ -581,6 +583,7 @@ def create_app() -> FastAPI:
         reference_file_type: Annotated[str, Form()] = "",
         reference_file_size: Annotated[int, Form()] = 0,
         style_preference: Annotated[str, Form()] = "default",
+        audience: Annotated[str, Form()] = "default",
     ) -> dict:
         uploaded_materials = read_uploaded_generation_materials(service.settings, upload_id)
         materials = uploaded_materials or await read_generation_materials(file or [], instruction, service.settings.max_upload_bytes, service.settings.max_upload_total_bytes)
@@ -597,6 +600,7 @@ def create_app() -> FastAPI:
                     "reference_note_id": reference_note_id,
                     **uploaded_reference,
                     "style_preference": style_preference,
+                    "audience": audience,
                 },
             )
             for uploaded_id in upload_id or []:

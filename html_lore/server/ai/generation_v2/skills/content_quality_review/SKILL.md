@@ -48,8 +48,10 @@ Ask these in order:
 9. Are grouped or paired components visually coherent?
 10. For architecture/workflow pages, are nodes, edges, loops, ownership boundaries, and stop conditions represented clearly enough?
 11. For business/report pages, are conclusions, risks, recommendations, and responsibility/parameter matrices represented with suitable density?
-12. Are omissions honest and acceptable for the available material?
-13. Is the artifact complete enough to write into the knowledge base?
+12. If the user requested comparison, analysis, suitability, pricing, parameters, risk, or recommendations, does the artifact preserve enough analytical detail to support that purpose?
+13. If the source material is multi-file or dense, has the artifact avoided over-compressing distinct sources, evidence, dimensions, and unknowns into a generic summary?
+14. Are omissions honest and acceptable for the available material?
+15. Is the artifact complete enough to write into the knowledge base?
 
 ## Pass Criteria
 
@@ -61,6 +63,7 @@ Pass when:
 - the HTML is complete enough to read and navigate,
 - visual treatment improves comprehension or at least does not harm it,
 - layout choices are readable and do not introduce obvious collisions, empty-card imbalance, or background interference,
+- report depth matches the request and source complexity well enough for the target audience,
 - remaining issues are minor and can be edited later.
 
 Do not block for:
@@ -84,6 +87,8 @@ Fail and route back when:
 - short-content cards or paired panels create major empty-space imbalance or inconsistent component language,
 - architecture or workflow pages hide edge conditions, loop stop conditions, or control ownership that the user explicitly asked to understand,
 - business/report pages turn responsibility matrices, assumptions, or option comparisons into vague prose or decorative cards,
+- comparison, fit, pricing, parameter, or risk reports flatten important dimensions into a short summary and do not provide enough structured evidence for the requested audience,
+- a multi-source report blends different source files together without clarifying what each source supports, when that distinction matters to the user request,
 - the page is malformed or not a complete HTML document,
 - the style brief was substantially ignored,
 - reviewer feedback from a prior pass was not addressed.
@@ -92,9 +97,9 @@ Fail and route back when:
 
 Use the most specific `route_back_to`:
 
-- `content_writer`: missing sections, unsupported claims, weak source fidelity, wrong audience, or bad content strategy.
+- `content_writer`: missing sections, unsupported claims, weak source fidelity, wrong audience, bad content strategy, over-compressed analysis, or insufficient source/evidence distinction.
 - `style_designer`: visual strategy is wrong, style mode is mismatched, reference style was misunderstood.
-- `html_coder`: HTML is incomplete, malformed, unreadable, responsive behavior is broken, or style was planned but not implemented.
+- `html_coder`: HTML is incomplete, malformed, unreadable, responsive behavior is broken, style was planned but not implemented, or structured comparison/risk/parameter content was flattened despite being present in ContentDraft/StyleBrief.
 
 Use an empty `route_back_to` when the artifact passes.
 
@@ -108,12 +113,14 @@ Use a 0 to 1 score:
 - `<0.55`: major mismatch or incomplete artifact.
 
 Scores should reflect usefulness and fidelity, not decorative preference.
+Do not award a high score to a thin artifact solely because it is factually safe. A report can be safe and still inadequate if it lacks the analytical depth, source distinction, or structured evidence needed for the user's stated purpose.
 
 ## Review Style
 
 - Be concrete and actionable.
 - Keep `retry_instruction` short enough for the next agent to use.
 - Mention exact missing parts or mismatches.
+- When the issue is insufficient depth, state which dimensions should be expanded and whether the next pass should go to ContentWriter, StyleDesigner, or HTMLCoder.
 - Avoid vague feedback like "make it better".
 - If the source is thin, say what cannot be verified instead of demanding impossible detail.
 

@@ -43,6 +43,10 @@ Instead, preserve the upstream content structure and improve its report surface.
 - Prefer a calm, credible visual system over decorative spectacle.
 - Do not invent metrics, dates, budgets, owners, market claims, citations, or confidence levels for visual balance.
 - When evidence is thin, use honest lightweight framing instead of fake completeness.
+- Match report depth to source complexity and user intent. A short memo can stay short; a multi-source comparison, adaptation analysis, pricing review, technical parameter review, or risk assessment should not be collapsed into a thin summary.
+- Preserve the analytical chain when the user asks for comparison, suitability, fit, risk, price, parameters, trade-offs, or recommendations: source fact -> comparison dimension -> interpretation -> risk or next check.
+- Separate source facts from model judgment. If the report includes an adaptation view or recommendation, make clear which parts are directly sourced and which parts are cautious analysis.
+- When multiple source files or options are involved, make the relationship between sources visible instead of blending them into generic prose.
 
 ## Representation Rules
 
@@ -57,6 +61,15 @@ Choose the visual representation from the content relationship:
 - source limitations or unknowns -> explicit caveat band or appendix note.
 
 Cards are useful for repeated findings, but they are not a replacement for tables, matrices, timelines, or analysis prose.
+
+For analytical reports, choose the representation by decision need:
+
+- source scope or evidence coverage -> source table or scope band,
+- equipment lists, product parameters, prices, quantities, dates, owners, or model variants -> structured table,
+- two-source or multi-option comparison -> side-by-side matrix with matching dimensions,
+- suitability or fit analysis -> fit matrix that separates matched points, gaps, risks, and evidence source,
+- risk discussion -> risk register, caution stack, or verification checklist with explicit follow-up actions,
+- management recommendation -> concise decision summary backed by the preceding evidence, not a decorative slogan.
 
 ## Visual Direction
 
@@ -81,6 +94,8 @@ When this skill is loaded, StyleDesigner should include:
 - rules for when a section may use a narrow reading measure, an aside, or a full-width panel, and how those variants should align with the main canvas,
 - which upstream sections need summary, finding, matrix, risk, recommendation, roadmap, or appendix treatment,
 - table/matrix guidance when the plan contains comparisons, responsibilities, options, parameters, or evidence categories,
+- analysis-depth guidance when source material is complex: whether the report should read as a short memo, standard report, deep comparison, technical review, or decision brief, and how much detail should be preserved,
+- explicit source-vs-judgment guidance when the page contains suitability, risk, or recommendation language,
 - density rules for findings, callouts, and long analysis sections,
 - mobile handling for tables, matrices, and multi-column report areas,
 - visual risk notes for empty cards, over-wide short content, weak contrast, and decorative elements that reduce credibility,
@@ -91,6 +106,8 @@ When this skill is loaded, StyleDesigner should include:
 - Does the page look like a readable report rather than styled Markdown or a generic landing page?
 - Are the upstream conclusions, findings, risks, recommendations, or open questions easy to scan when present?
 - Are tables, matrices, timelines, cards, and prose used for the right content relationships?
+- If the source material is complex or multi-source, does the surface preserve enough detail to support decision reading rather than reducing everything to a generic summary?
+- Are comparison, fit, pricing, parameter, and risk relationships visually explicit when the upstream content calls for them?
 - Is the report credible without inventing metrics or unsupported certainty?
 - Are dense sections readable on mobile?
 - Is the visual hierarchy strong enough for decision reading, but not so decorative that it weakens trust?

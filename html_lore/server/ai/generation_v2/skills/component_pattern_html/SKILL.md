@@ -47,16 +47,25 @@ This skill is project-internal original guidance. It does not copy external proj
 - `architecture-node`: component name, role, inputs, outputs, and owner.
 - `boundary-table`: controlled-by / parameter / source / notes matrix for runtime, model, user, and tool responsibilities.
 - `compact-fact-row`: short facts or tags laid out as inline chips or narrow cards when a full card grid would create empty space.
+- `fit-matrix`: requirement / option / evidence / fit / gap table for suitability or adaptation analysis.
+- `risk-register`: risk / evidence / impact / follow-up action table or compact list for decision review.
+- `source-scope-table`: source file / what it provides / what it does not provide / how it is used.
+- `price-parameter-table`: model / parameter / price / caveat table for product, equipment, financial, or specification comparisons.
 
 ## Pattern Selection Rules
 
 - Use `responsive-table` for matrices, responsibilities, parameter boundaries, node/edge conditions, and concept comparisons.
+- Use `price-parameter-table` or `responsive-table` when the source contains prices, product models, equipment quantities, capacities, ranges, operating assumptions, or other structured numbers. Do not hide these relationships inside prose.
+- Use `fit-matrix` when the page evaluates whether one option, product, architecture, or plan fits another requirement. Keep matched evidence, gaps, and unknowns separate.
+- Use `risk-register` when risks have causes, impacts, mitigations, or follow-up checks. A plain bullet list is acceptable for a lightweight memo, but complex decision reports usually need a more structured risk component.
+- Use `source-scope-table` when more than one source file contributes different kinds of evidence or when some data is missing.
 - Use `process-flow` or `timeline` for ordered stages, loops, dependencies, and state transitions.
 - Use `architecture-node` inside an architecture map when components have inputs, outputs, and owners.
 - Use `info-card` only for repeated independent items. Avoid using a card grid to represent a sequence or a matrix.
 - Use `callout` for one important message beside a longer explanation; match its visual language to the companion panel.
 - Use `compact-fact-row` for short labels, statuses, options, or one-line facts. Do not stretch these into wide cards.
 - Use `boundary-table` when the page must clarify what code, model, user, or tools control.
+- Use cards for conclusions, highlights, or independent findings, but do not use cards as the primary vehicle for dense comparison, pricing, parameter, or risk evidence.
 
 ## CSS Implementation Rules
 
@@ -90,6 +99,8 @@ Before returning final HTML, verify:
 - related left/right or paired panels use a coherent visual system,
 - main section widths and edge alignment match the selected layout system unless a deliberate variant is named in the StyleBrief,
 - tables, flows, and cards are used for the correct content relationships,
+- structured facts from the ContentDraft or PlanDraft remain structured in the HTML instead of being flattened into generic paragraphs,
+- comparison, fit, price, parameter, and risk relationships are implemented with a component that preserves their dimensions,
 - labels, loop badges, and counters have protected space and do not collide with headings,
 - no scripts or unsafe attributes were introduced,
 - visual patterns match StyleBrief rather than overriding it.
