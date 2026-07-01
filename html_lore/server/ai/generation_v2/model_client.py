@@ -21,10 +21,24 @@ class GenerationJsonModelClient(Protocol):
 
 
 class ProviderGenerationModelClient:
-    def __init__(self, model_client: ModelClient, *, max_prompt_chars: int = 12000, max_tokens: int = 4096) -> None:
+    def __init__(
+        self,
+        model_client: ModelClient,
+        *,
+        max_prompt_chars: int = 12000,
+        max_tokens: int = 4096,
+        json_max_tokens: int | None = None,
+        html_max_tokens: int | None = None,
+        json_timeout_seconds: int | None = None,
+        html_timeout_seconds: int | None = None,
+    ) -> None:
         self.model_client = model_client
         self.max_prompt_chars = max(2000, int(max_prompt_chars or 12000))
         self.max_tokens = max(512, int(max_tokens or 4096))
+        self.json_max_tokens = max(512, int(json_max_tokens or self.max_tokens))
+        self.html_max_tokens = max(512, int(html_max_tokens or self.max_tokens))
+        self.json_timeout_seconds = max(1, int(json_timeout_seconds or 0)) if json_timeout_seconds else None
+        self.html_timeout_seconds = max(1, int(html_timeout_seconds or 0)) if html_timeout_seconds else None
         self._last_usage_by_node: dict[str, dict[str, Any]] = {}
 
     def complete_json(self, *, node: str, schema_name: str, payload: dict[str, Any], attempt: int = 0) -> str:
@@ -64,7 +78,7 @@ class ProviderGenerationModelClient:
             if isinstance(skill, dict) and skill.get("content"):
                 messages.append({"role": "system", "content": f"Skill: {skill.get('title') or skill.get('id')}\n\n{skill.get('content')}"})
         messages.append({"role": "user", "content": trim_prompt(json.dumps(user_payload, ensure_ascii=False), self.max_prompt_chars)})
-        response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.max_tokens)
+        response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.json_max_tokens, timeout_seconds=self.json_timeout_seconds)
         self._record_usage(node, response.get("usage"))
         return extract_json_object(str(response.get("content") or ""))
 
@@ -98,7 +112,7 @@ class ProviderGenerationModelClient:
             if isinstance(skill, dict) and skill.get("content"):
                 messages.append({"role": "system", "content": f"Skill: {skill.get('title') or skill.get('id')}\n\n{skill.get('content')}"})
         messages.append({"role": "user", "content": trim_prompt(json.dumps(user_payload, ensure_ascii=False), self.max_prompt_chars)})
-        response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.max_tokens)
+        response = self.model_client.chat(messages=messages, temperature=0.2, max_tokens=self.html_max_tokens, timeout_seconds=self.html_timeout_seconds)
         self._record_usage(node, response.get("usage"))
         return extract_html_document(str(response.get("content") or ""))
 
@@ -111,8 +125,25 @@ class ProviderGenerationModelClient:
             self._last_usage_by_node[str(node or "")] = normalized
 
 
-def build_provider_generation_client(model_client: ModelClient, *, max_prompt_chars: int, max_tokens: int) -> ProviderGenerationModelClient:
-    return ProviderGenerationModelClient(model_client, max_prompt_chars=max_prompt_chars, max_tokens=max_tokens)
+def build_provider_generation_client(
+    model_client: ModelClient,
+    *,
+    max_prompt_chars: int,
+    max_tokens: int,
+    json_max_tokens: int | None = None,
+    html_max_tokens: int | None = None,
+    json_timeout_seconds: int | None = None,
+    html_timeout_seconds: int | None = None,
+) -> ProviderGenerationModelClient:
+    return ProviderGenerationModelClient(
+        model_client,
+        max_prompt_chars=max_prompt_chars,
+        max_tokens=max_tokens,
+        json_max_tokens=json_max_tokens,
+        html_max_tokens=html_max_tokens,
+        json_timeout_seconds=json_timeout_seconds,
+        html_timeout_seconds=html_timeout_seconds,
+    )
 
 
 def normalize_provider_usage(usage: Any) -> dict[str, int]:
@@ -145,7 +176,15 @@ def retry_output_rules(attempt: int) -> list[str]:
     ]
 
 
-def agent_payload(*, node: str, schema: type[Any], state: GenerationState, fallback: dict[str, Any], skills: tuple[LoadedSkill, ...]) -> dict[str, Any]:
+def agent_payload(
+    *,
+    node: str,
+    schema: type[Any],
+    state: GenerationState,
+    fallback: dict[str, Any],
+    skills: tuple[LoadedSkill, ...],
+    material_recall_phase: str = "",
+) -> dict[str, Any]:
     return normalize_for_json(
         {
             **fallback,
@@ -153,6 +192,7 @@ def agent_payload(*, node: str, schema: type[Any], state: GenerationState, fallb
             "_schema": dataclass_shape(schema),
             "_state": public_generation_state_for_agent(state, node=node),
             "_skills": [public_skill(skill) for skill in skills],
+            "_material_recall_phase": material_recall_phase or "query_or_direct",
         }
     )
 
@@ -185,6 +225,8 @@ def public_skill(skill: LoadedSkill) -> dict[str, str]:
 def public_generation_state_for_agent(state: GenerationState, *, node: str = "") -> dict[str, Any]:
     parsed = state.parsed_document
     style_ref = state.parsed_style_reference
+    material_context = state.temporary_material_context
+    material_recall_results = compact_material_recall_results(state.material_recall_results, node=node)
     common_input = {
         "instruction": state.input.instruction,
         "filename": state.input.filename,
@@ -210,6 +252,8 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "requirement_brief": public_value(state.requirement_brief),
             "plan_draft": compact_plan_draft(state.plan_draft),
             "parsed_document": compact_parsed_document(parsed),
+            "temporary_material_context": compact_temporary_material_context(material_context),
+            "material_recall_results": material_recall_results,
             "execution_checklist": public_value(state.execution_checklist),
             "revision_round": state.revision_round,
         }
@@ -225,13 +269,18 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "plan_draft": compact_plan_draft(state.plan_draft),
             "html_draft": compact_html_draft(state.html_draft),
             "parsed_document": compact_parsed_document(parsed),
+            "temporary_material_context": compact_temporary_material_context(material_context),
+            "material_recall_results": material_recall_results,
             "parsed_style_reference": compact_parsed_document(style_ref),
             "revision_round": state.revision_round,
         }
     else:
+        task_material_context = public_value(material_context) if node in {"RequirementAnalyst", "Planner", "ContentWriter"} else compact_temporary_material_context(material_context)
         state_view = {
             "input": common_input,
-            "parsed_document": public_parsed_document(parsed),
+            "parsed_document": compact_parsed_document(parsed),
+            "temporary_material_context": task_material_context,
+            "material_recall_results": material_recall_results,
             "parsed_style_reference": public_parsed_document(style_ref),
             "requirement_brief": public_value(state.requirement_brief),
             "plan_draft": public_value(state.plan_draft),
@@ -285,6 +334,51 @@ def compact_parsed_document(parsed: Any) -> dict[str, Any]:
     data = public_value(parsed)
     data["plain_text"] = trim_text(str(data.get("plain_text") or ""), 1200)
     return data
+
+
+def compact_temporary_material_context(context: Any) -> dict[str, Any]:
+    if context is None:
+        return {}
+    data = public_value(context)
+    if isinstance(data.get("selected_chunks"), list):
+        chunks = []
+        for chunk in data["selected_chunks"][:8]:
+            if not isinstance(chunk, dict):
+                continue
+            chunks.append({**chunk, "text": trim_text(str(chunk.get("text") or ""), 500)})
+        data["selected_chunks"] = chunks
+    if isinstance(data.get("files"), list):
+        data["files"] = [{**item, "preview": trim_text(str(item.get("preview") or ""), 300)} for item in data["files"][:8] if isinstance(item, dict)]
+    return data
+
+
+def compact_material_recall_results(results: list[Any], *, node: str = "") -> list[dict[str, Any]]:
+    if not results:
+        return []
+    visible_agents = {
+        "RequirementAnalyst": {"RequirementAnalyst"},
+        "Planner": {"RequirementAnalyst"},
+        "ContentWriter": {"RequirementAnalyst", "ContentWriter"},
+        "StyleDesigner": {"RequirementAnalyst", "ContentWriter"},
+        "HTMLCoder": {"RequirementAnalyst", "ContentWriter"},
+        "Verifier": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+        "SafetyReviewer": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+        "Finalizer": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+    }.get(node, {"RequirementAnalyst", "ContentWriter", "Verifier"})
+    compact: list[dict[str, Any]] = []
+    text_limit = 900 if node in {"RequirementAnalyst", "ContentWriter", "Verifier"} else 360
+    for result in results:
+        data = public_value(result)
+        if not isinstance(data, dict) or str(data.get("agent") or "") not in visible_agents:
+            continue
+        chunks = []
+        for chunk in data.get("chunks", [])[:3] if isinstance(data.get("chunks"), list) else []:
+            if not isinstance(chunk, dict):
+                continue
+            chunks.append({**chunk, "text": trim_text(str(chunk.get("text") or ""), text_limit)})
+        data["chunks"] = chunks
+        compact.append(data)
+    return compact[-10:]
 
 
 def compact_plan_draft(draft: Any) -> dict[str, Any]:

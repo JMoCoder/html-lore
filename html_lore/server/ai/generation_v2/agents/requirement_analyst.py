@@ -10,7 +10,10 @@ class RequirementAnalystAgent(GenerationAgent):
     output_schema = RequirementBrief
 
     def fake_payload(self, state):
-        source = state.parsed_document.plain_text if state.parsed_document else ""
+        source = material_context_text(state) or (state.parsed_document.plain_text if state.parsed_document else "")
+        recall_source = material_recall_text(state)
+        if recall_source:
+            source = recall_source
         style_preferences = []
         if state.input.theme != "default":
             style_preferences.append(f"theme: {state.input.theme}")
@@ -36,7 +39,30 @@ class RequirementAnalystAgent(GenerationAgent):
             "style_preferences": style_preferences,
             "reference_style_files": [state.input.reference_file_name] if state.input.reference_file_name else [],
             "success_criteria": ["Preserve source intent.", "Produce readable static HTML.", "Avoid unsupported claims."],
+            "material_queries": [] if state.material_recall_results else [{"id": "source_overview", "query": first_non_empty(state.input.instruction, state.input.filename, "uploaded material overview"), "purpose": "Confirm the most relevant uploaded material evidence before finalizing requirements."}],
         }
 
     def apply_output(self, state, output):
         return replace(state, requirement_brief=output)
+
+
+def material_context_text(state) -> str:
+    context = state.temporary_material_context
+    if not context:
+        return ""
+    parts: list[str] = []
+    for file in context.files:
+        parts.append(f"File: {file.filename}\nPreview: {file.preview}")
+    for chunk in context.selected_chunks:
+        parts.append(f"Chunk {chunk.id} from {chunk.filename}\n{chunk.text}")
+    return "\n\n".join(parts)
+
+
+def material_recall_text(state) -> str:
+    parts = []
+    for result in state.material_recall_results:
+        if result.agent != "RequirementAnalyst":
+            continue
+        for chunk in result.chunks:
+            parts.append(f"{chunk.filename}: {chunk.text}")
+    return "\n\n".join(parts)

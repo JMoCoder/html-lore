@@ -116,7 +116,7 @@ class AIProviderConfigStore:
 
 
 class ProviderAdapter:
-    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024) -> dict[str, Any]:
+    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024, timeout_seconds: int | None = None) -> dict[str, Any]:
         raise NotImplementedError
 
     def embed(self, *, text: str) -> list[float]:
@@ -127,7 +127,7 @@ class FakeProviderAdapter(ProviderAdapter):
     def __init__(self, config: AIProviderConfig) -> None:
         self.config = config
 
-    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024) -> dict[str, Any]:
+    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024, timeout_seconds: int | None = None) -> dict[str, Any]:
         last_user = next((message.get("content", "") for message in reversed(messages) if message.get("role") == "user"), "")
         return {
             "model": self.config.model,
@@ -150,7 +150,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
     def __init__(self, config: AIProviderConfig) -> None:
         self.config = config
 
-    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024) -> dict[str, Any]:
+    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024, timeout_seconds: int | None = None) -> dict[str, Any]:
         if not self.config.api_key:
             raise ProviderCallError("AI API key is not configured.")
         if not self.config.base_url:
@@ -175,8 +175,9 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Accept": "application/json, text/event-stream",
             },
         )
+        request_timeout = max(1, int(timeout_seconds or self.config.timeout_seconds or 1))
         try:
-            with urllib.request.urlopen(request, timeout=self.config.timeout_seconds) as response:
+            with urllib.request.urlopen(request, timeout=request_timeout) as response:
                 raw_response = response.read().decode("utf-8")
                 data = parse_provider_response(raw_response)
         except urllib.error.HTTPError as exc:

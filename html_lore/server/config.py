@@ -51,6 +51,10 @@ class ServerSettings:
     ai_generation_engine: str = "legacy"
     ai_generation_model: str = "gpt-5.5"
     ai_generation_max_tokens: int = 12000
+    ai_generation_json_max_tokens: int = 5000
+    ai_generation_html_max_tokens: int = 12000
+    ai_generation_json_timeout_seconds: int = 180
+    ai_generation_html_timeout_seconds: int = 900
     ai_visual_check: str = "off"
     ai_visual_check_timeout_seconds: int = 20
     ai_visual_check_browser_channel: str = "chrome"
@@ -128,6 +132,10 @@ def load_settings() -> ServerSettings:
     ai_generation_engine = parse_choice(get_env("AI_GENERATION_ENGINE", "legacy"), {"legacy", "v2"}, "legacy")
     ai_generation_model = get_env("AI_GENERATION_MODEL", "gpt-5.5").strip() or "gpt-5.5"
     ai_generation_max_tokens = parse_positive_int(get_env("AI_GENERATION_MAX_TOKENS", "12000"), 12000)
+    ai_generation_json_max_tokens = parse_positive_int(get_env("AI_GENERATION_JSON_MAX_TOKENS", str(min(ai_generation_max_tokens, 5000))), min(ai_generation_max_tokens, 5000))
+    ai_generation_html_max_tokens = parse_positive_int(get_env("AI_GENERATION_HTML_MAX_TOKENS", str(ai_generation_max_tokens)), ai_generation_max_tokens)
+    ai_generation_json_timeout_seconds = parse_positive_int(get_env("AI_GENERATION_JSON_TIMEOUT_SECONDS", str(ai_provider_timeout_seconds)), ai_provider_timeout_seconds)
+    ai_generation_html_timeout_seconds = parse_positive_int(get_env("AI_GENERATION_HTML_TIMEOUT_SECONDS", "900"), 900)
     ai_visual_check = parse_choice(get_env("AI_VISUAL_CHECK", "off"), {"off", "basic", "strict"}, "off")
     ai_visual_check_timeout_seconds = parse_positive_int(get_env("AI_VISUAL_CHECK_TIMEOUT_SECONDS", "20"), 20)
     ai_visual_check_browser_channel = get_env("AI_VISUAL_CHECK_BROWSER_CHANNEL", get_env("PLAYWRIGHT_BROWSER_CHANNEL", "chrome")).strip() or "chrome"
@@ -177,6 +185,10 @@ def load_settings() -> ServerSettings:
         ai_generation_engine=ai_generation_engine,
         ai_generation_model=ai_generation_model,
         ai_generation_max_tokens=ai_generation_max_tokens,
+        ai_generation_json_max_tokens=ai_generation_json_max_tokens,
+        ai_generation_html_max_tokens=ai_generation_html_max_tokens,
+        ai_generation_json_timeout_seconds=ai_generation_json_timeout_seconds,
+        ai_generation_html_timeout_seconds=ai_generation_html_timeout_seconds,
         ai_visual_check=ai_visual_check,
         ai_visual_check_timeout_seconds=ai_visual_check_timeout_seconds,
         ai_visual_check_browser_channel=ai_visual_check_browser_channel,

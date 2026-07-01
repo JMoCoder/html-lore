@@ -830,10 +830,10 @@ def test_openai_compatible_adapter_uses_bearer_header_without_logging_key(monkey
         ),
     )
 
-    response = adapter.chat(messages=[{"role": "user", "content": "ping"}])
+    response = adapter.chat(messages=[{"role": "user", "content": "ping"}], timeout_seconds=360)
 
     assert seen["url"] == "https://api.example.test/v1/chat/completions"
-    assert seen["timeout"] == 240
+    assert seen["timeout"] == 360
     assert seen["authorization"] == "Bearer test-secret-key"
     assert seen["body"].count('"stream": true') == 1
     assert "HTMlore" in seen["user_agent"]

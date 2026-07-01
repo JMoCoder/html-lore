@@ -20,9 +20,9 @@ class ModelClient:
             return {"available": False, "message": "AI base URL is not configured."}
         return {"available": self.config.configured, "message": "AI provider is configured."}
 
-    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024) -> dict[str, Any]:
+    def chat(self, *, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 1024, timeout_seconds: int | None = None) -> dict[str, Any]:
         self._ensure_available()
-        return build_adapter(self.config).chat(messages=messages, temperature=temperature, max_tokens=max_tokens)
+        return build_adapter(self.config).chat(messages=messages, temperature=temperature, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
 
     def structured_output(self, *, messages: list[dict[str, str]], schema: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError("Structured output is not implemented yet.")

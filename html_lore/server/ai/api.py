@@ -474,6 +474,10 @@ class AIConversationService:
             ModelClient(config),
             max_prompt_chars=self.settings.ai_max_prompt_chars,
             max_tokens=self.settings.ai_generation_max_tokens,
+            json_max_tokens=self.settings.ai_generation_json_max_tokens,
+            html_max_tokens=self.settings.ai_generation_html_max_tokens,
+            json_timeout_seconds=self.settings.ai_generation_json_timeout_seconds,
+            html_timeout_seconds=self.settings.ai_generation_html_timeout_seconds,
         )
 
 

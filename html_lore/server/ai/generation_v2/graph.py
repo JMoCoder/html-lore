@@ -13,6 +13,7 @@ from .agents.safety_reviewer import SafetyReviewerAgent
 from .agents.style_designer import StyleDesignerAgent
 from .agents.verifier import VerifierAgent
 from .fake_model import FakeGenerationModelClient
+from .material_context import build_material_index, build_temporary_material_context
 from .model_client import GenerationJsonModelClient
 from .orchestrator import GenerationOrchestrator
 from .schemas import AgentArtifact, GenerationInput, GenerationStage, GenerationState, ParsedDocument, ParseWarning
@@ -105,6 +106,8 @@ class HtmlGenerationV2Graph:
             )
         parsed = merge_parsed_documents(parsed_items)
         parsed = replace(parsed, style_hints=extract_style_hints(parsed, role="material"))
+        material_index = build_material_index(parsed, instruction=state.input.instruction)
+        temporary_material_context = build_temporary_material_context(parsed, instruction=state.input.instruction)
         parsed_style_reference = None
         if state.input.reference_style == "file" and state.input.reference_file_name and state.input.reference_content:
             parsed_style_reference = parse_document(
@@ -115,8 +118,20 @@ class HtmlGenerationV2Graph:
                 parser_mode=self.parser_mode,
             )
             parsed_style_reference = replace(parsed_style_reference, style_hints=extract_style_hints(parsed_style_reference, role="style_reference"))
-        next_state = replace(next_state, parsed_document=parsed, parsed_style_reference=parsed_style_reference)
-        return complete_stage(next_state, GenerationStage.PARSING, message="Uploaded material parsed.")
+        next_state = replace(
+            next_state,
+            parsed_document=parsed,
+            material_index=material_index,
+            temporary_material_context=temporary_material_context,
+            parsed_style_reference=parsed_style_reference,
+        )
+        metadata = {
+            "file_count": len(temporary_material_context.files),
+            "total_chars": temporary_material_context.total_chars,
+            "selected_chunks": len(temporary_material_context.selected_chunks),
+            "selected_chars": temporary_material_context.selected_chars,
+        }
+        return complete_stage(next_state, GenerationStage.PARSING, message="Uploaded material parsed.", metadata=metadata)
 
     def run_visual_check(self, state: GenerationState) -> GenerationState:
         if state.html_draft is None:

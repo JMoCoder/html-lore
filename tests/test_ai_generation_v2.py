@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import json
+from dataclasses import fields
 from pathlib import Path
 
 from html_lore.server.ai.generation_v2.agents.requirement_analyst import RequirementAnalystAgent
 from html_lore.server.ai.generation_v2.agents.html_coder import HTMLCoderAgent
 from html_lore.server.ai.generation_v2.graph import HtmlGenerationV2Graph
 from html_lore.server.ai.generation_v2.fake_model import FakeGenerationModelClient
+from html_lore.server.ai.generation_v2.material_context import build_material_index, build_temporary_material_context, recall_material
 from html_lore.server.ai.generation_v2.material_runner import generate_note_from_material_v2
 from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, NoteMetadataProposal, ParsedDocument, PlanDraft, SkillTraceEntry, StageTraceEvent, ToolNeed
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, NoteMetadataProposal, ParsedDocument, PlanDraft, SourceFile, SkillTraceEntry, StageTraceEvent, ToolNeed
 from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
 from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
@@ -68,12 +71,19 @@ def test_generation_v2_graph_runs_fake_agent_flow() -> None:
 
     assert not result.failed_steps
     assert result.parsed_document is not None
+    assert result.material_index is not None
+    assert result.material_recall_results
+    assert {recall.agent for recall in result.material_recall_results} >= {"RequirementAnalyst", "ContentWriter", "Verifier"}
     assert result.requirement_brief is not None
+    assert result.requirement_brief.material_queries == []
     assert result.plan_draft is not None
+    assert "material_queries" not in {field.name for field in fields(PlanDraft)}
     assert result.content_draft is not None
+    assert result.content_draft.material_queries == []
     assert result.style_brief is not None
     assert result.html_draft is not None
     assert result.validation_report is not None and result.validation_report.ok
+    assert result.validation_report.material_queries == []
     assert result.safety_report is not None and result.safety_report.ok
     assert result.create_note_proposal is not None
     assert result.create_note_proposal.target_collection == "inbox"
@@ -478,9 +488,13 @@ class RecordingChatClient:
         self.content = content
         self.usage = usage or {}
         self.messages = []
+        self.max_tokens = 0
+        self.timeout_seconds = None
 
-    def chat(self, *, messages, temperature=0.2, max_tokens=1024):
+    def chat(self, *, messages, temperature=0.2, max_tokens=1024, timeout_seconds=None):
         self.messages = messages
+        self.max_tokens = max_tokens
+        self.timeout_seconds = timeout_seconds
         return {"content": self.content, "model": "fake", "usage": self.usage}
 
 
@@ -514,7 +528,7 @@ def test_generation_v2_provider_model_client_extracts_json_and_includes_schema()
         '```json\n{"user_goal":"Create a note","target_use":"default"}\n```',
         usage={"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20},
     )
-    client = ProviderGenerationModelClient(chat_client, max_prompt_chars=4000, max_tokens=512)
+    client = ProviderGenerationModelClient(chat_client, max_prompt_chars=4000, max_tokens=512, json_max_tokens=700, json_timeout_seconds=123)
 
     raw = client.complete_json(
         node="RequirementAnalyst",
@@ -531,6 +545,8 @@ def test_generation_v2_provider_model_client_extracts_json_and_includes_schema()
     assert raw == '{"user_goal":"Create a note","target_use":"default"}'
     assert "target_schema" in chat_client.messages[-1]["content"]
     assert "RequirementBrief" in chat_client.messages[-1]["content"]
+    assert chat_client.max_tokens == 700
+    assert chat_client.timeout_seconds == 123
     assert client.consume_last_usage("RequirementAnalyst") == {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
     assert client.consume_last_usage("RequirementAnalyst") == {}
 
@@ -538,7 +554,7 @@ def test_generation_v2_provider_model_client_extracts_json_and_includes_schema()
 def test_generation_v2_provider_model_client_returns_raw_html_text() -> None:
     html = "<!doctype html><html><head><title>Done</title></head><body><main>Done</main></body></html>"
     chat_client = RecordingChatClient(f"```html\n{html}\n```")
-    client = ProviderGenerationModelClient(chat_client, max_prompt_chars=4000, max_tokens=512)
+    client = ProviderGenerationModelClient(chat_client, max_prompt_chars=4000, max_tokens=512, html_max_tokens=900, html_timeout_seconds=456)
 
     raw = client.complete_text(
         node="HTMLCoder",
@@ -551,6 +567,8 @@ def test_generation_v2_provider_model_client_returns_raw_html_text() -> None:
 
     assert raw == html
     assert "Do not return JSON" in chat_client.messages[-1]["content"]
+    assert chat_client.max_tokens == 900
+    assert chat_client.timeout_seconds == 456
     assert "final complete HTML document only" in chat_client.messages[-1]["content"]
 
 
@@ -570,6 +588,103 @@ def test_generation_v2_verifier_state_keeps_html_visible_in_compact_view() -> No
     assert "<!doctype html>" in view["html_draft"]["html"]
     assert "html_tail" in view["html_draft"]
     assert len(view["parsed_document"]["plain_text"]) < 1300
+
+
+def test_generation_v2_temporary_material_context_keeps_later_file_table_evidence() -> None:
+    first_file = "Source file: guoneng.pdf\n" + ("三一方案 设备方案 电耗 换电站。 " * 900)
+    second_file = """Source file: saic.pptx
+<!-- Slide number: 11 -->
+2.3 电动矿卡产品配置价格
+
+| 技术指标 | 纯电动宽体自卸车配置表 |  |  |  |
+| --- | --- | --- | --- | --- |
+| 参数类别 | HY120E | HY120E | HY135E | HY155E |
+| 大客户价格（万元） | 190 | 195 | 210 | 230 |
+价格备注：
+车辆价格为全款价格。
+"""
+    parsed = ParsedDocument(
+        source_files=[
+            SourceFile(filename="guoneng.pdf", content_type="application/pdf", size=2000),
+            SourceFile(filename="saic.pptx", content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation", size=3000),
+        ],
+        plain_text=f"{first_file}\n\n{second_file}",
+    )
+
+    context = build_temporary_material_context(parsed, instruction="分析两个方案中的重卡报价对比")
+    selected_text = "\n".join(chunk.text for chunk in context.selected_chunks)
+
+    assert [item.filename for item in context.files] == ["guoneng.pdf", "saic.pptx"]
+    assert "大客户价格（万元）" in selected_text
+    assert "190" in selected_text and "230" in selected_text
+    assert any(chunk.filename == "saic.pptx" and "table_like" in chunk.token_hints for chunk in context.selected_chunks)
+    assert context.total_chars > 9000
+
+
+def test_generation_v2_material_recall_tool_uses_agent_query_for_later_file_evidence() -> None:
+    first_file = "Source file: first.pdf\n" + ("early context without the target table. " * 500)
+    second_file = """Source file: second.pptx
+<!-- Slide number: 8 -->
+Reference comparison table
+
+| Item | Alpha | Beta | Gamma |
+| --- | --- | --- | --- |
+| Budget | 120 | 240 | 360 |
+| Owner | Team A | Team B | Team C |
+"""
+    parsed = ParsedDocument(
+        source_files=[SourceFile(filename="first.pdf"), SourceFile(filename="second.pptx")],
+        plain_text=f"{first_file}\n\n{second_file}",
+    )
+    index = build_material_index(parsed, instruction="Create a comparison report.")
+
+    results = recall_material(
+        index,
+        [MaterialQuery(id="budget_table", query="Alpha Beta Gamma Budget 120 240 360", purpose="Find the comparison table.")],
+        agent="ContentWriter",
+        max_queries=1,
+        max_chars=3000,
+    )
+    recalled = "\n".join(chunk.text for result in results for chunk in result.chunks)
+
+    assert results[0].agent == "ContentWriter"
+    assert "Budget" in recalled
+    assert "120" in recalled and "360" in recalled
+    assert any(chunk.filename == "second.pptx" for chunk in results[0].chunks)
+
+
+def test_generation_v2_agent_state_uses_temporary_material_context_over_raw_prefix() -> None:
+    parsed = ParsedDocument(
+        source_files=[SourceFile(filename="first.md"), SourceFile(filename="second.md")],
+        plain_text="Source file: first.md\n" + ("early filler " * 1000) + "\n\nSource file: second.md\nimportant later table",
+    )
+    context = build_temporary_material_context(parsed, instruction="find later table")
+    state = GenerationState(input=GenerationInput(instruction="find later table"), parsed_document=parsed, temporary_material_context=context)
+
+    view = public_generation_state_for_agent(state, node="RequirementAnalyst")
+
+    assert "temporary_material_context" in view
+    assert view["temporary_material_context"]["files"][1]["filename"] == "second.md"
+    assert any("important later table" in chunk["text"] for chunk in view["temporary_material_context"]["selected_chunks"])
+    assert len(view["parsed_document"]["plain_text"]) < 1300
+
+
+def test_generation_v2_post_agent_state_compacts_temporary_material_context() -> None:
+    long_later_text = "important later evidence " * 120
+    parsed = ParsedDocument(
+        source_files=[SourceFile(filename="first.md"), SourceFile(filename="second.md")],
+        plain_text="Source file: first.md\n# Early\nsmall\n\nSource file: second.md\n" + long_later_text,
+    )
+    context = build_temporary_material_context(parsed, instruction="important later evidence")
+    state = GenerationState(input=GenerationInput(instruction="important later evidence"), parsed_document=parsed, temporary_material_context=context)
+
+    front_view = public_generation_state_for_agent(state, node="RequirementAnalyst")
+    verifier_view = public_generation_state_for_agent(state, node="Verifier")
+
+    front_text = "\n".join(chunk["text"] for chunk in front_view["temporary_material_context"]["selected_chunks"])
+    verifier_text = "\n".join(chunk["text"] for chunk in verifier_view["temporary_material_context"]["selected_chunks"])
+    assert len(front_text) > len(verifier_text)
+    assert len(verifier_view["temporary_material_context"]["selected_chunks"][0]["text"]) <= 520
 
 
 def test_generation_v2_extract_json_object_from_plain_text() -> None:
@@ -668,12 +783,14 @@ def test_generation_model_profile_defaults_to_quality_model(tmp_path) -> None:
 def test_generation_config_defaults_to_legacy(monkeypatch) -> None:
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_ENGINE", raising=False)
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_MODEL", raising=False)
+    monkeypatch.delenv("HTML_LORE_AI_GENERATION_HTML_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("HTML_LORE_DOCUMENT_PARSER", raising=False)
 
     settings = load_settings()
 
     assert settings.ai_generation_engine == "legacy"
     assert settings.ai_generation_model == DEFAULT_GENERATION_MODEL
+    assert settings.ai_generation_html_timeout_seconds == 900
     assert settings.document_parser == "markitdown"
 
 
@@ -681,7 +798,11 @@ def test_generation_config_accepts_v2(monkeypatch) -> None:
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_ENGINE", "v2")
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_MODEL", "custom-generation-model")
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_MAX_TOKENS", "16000")
+    monkeypatch.setenv("HTML_LORE_AI_GENERATION_JSON_MAX_TOKENS", "6000")
+    monkeypatch.setenv("HTML_LORE_AI_GENERATION_HTML_MAX_TOKENS", "18000")
     monkeypatch.setenv("HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS", "240")
+    monkeypatch.setenv("HTML_LORE_AI_GENERATION_JSON_TIMEOUT_SECONDS", "260")
+    monkeypatch.setenv("HTML_LORE_AI_GENERATION_HTML_TIMEOUT_SECONDS", "720")
     monkeypatch.setenv("HTML_LORE_DOCUMENT_PARSER", "basic")
 
     settings = load_settings()
@@ -689,7 +810,11 @@ def test_generation_config_accepts_v2(monkeypatch) -> None:
     assert settings.ai_generation_engine == "v2"
     assert settings.ai_generation_model == "custom-generation-model"
     assert settings.ai_generation_max_tokens == 16000
+    assert settings.ai_generation_json_max_tokens == 6000
+    assert settings.ai_generation_html_max_tokens == 18000
     assert settings.ai_provider_timeout_seconds == 240
+    assert settings.ai_generation_json_timeout_seconds == 260
+    assert settings.ai_generation_html_timeout_seconds == 720
     assert settings.document_parser == "basic"
 
 
@@ -1235,7 +1360,7 @@ def test_material_generation_v2_runner_writes_note_and_run(tmp_path) -> None:
     result = generate_note_from_material_v2(
         settings=settings,
         filename="source.md",
-        content=b"# Source\n\nGenerated body.",
+        content=b"# Source\n\nGenerated body with private runner evidence.",
         instruction="Create HTML.",
         spec=GenerationSpec(),
     )
@@ -1246,6 +1371,10 @@ def test_material_generation_v2_runner_writes_note_and_run(tmp_path) -> None:
     assert result["item"]["id"] == result["run"]["item_id"]
     assert (settings.content_dir / result["item"]["id"]).exists()
     assert "content" not in result["run"]["spec"]
+    raw_run = json.dumps(result["run"], ensure_ascii=False)
+    assert "temporary_material_context" not in raw_run
+    assert "material_recall_results" not in raw_run
+    assert "private runner evidence" not in raw_run
 
     stored = AIRunStore(settings).add(result["run"])
     assert stored["skill_trace"][0]["id"] == "html_page_design"

@@ -271,7 +271,11 @@ HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 HTML_LORE_AI_GENERATION_ENGINE=v2
 HTML_LORE_AI_GENERATION_MODEL=gpt-5.5
 HTML_LORE_AI_GENERATION_MAX_TOKENS=12000
+HTML_LORE_AI_GENERATION_JSON_MAX_TOKENS=5000
+HTML_LORE_AI_GENERATION_HTML_MAX_TOKENS=12000
 HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS=180
+HTML_LORE_AI_GENERATION_JSON_TIMEOUT_SECONDS=180
+HTML_LORE_AI_GENERATION_HTML_TIMEOUT_SECONDS=900
 HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS=45
 ```
 
@@ -283,12 +287,16 @@ HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS=45
   工作流；如果 LangGraph 不可用，则回退到 `agent_runtime`。开发排查时可用
   `HTML_LORE_AI_QA_ENGINE=langgraph` 强制启用 LangGraph；需要稳定回退时可用
   `HTML_LORE_AI_QA_ENGINE=agent_runtime`。
-- AI 生成与知识库问答共用服务商连接，但生成链路有独立模型和输出上限：
-  `HTML_LORE_AI_GENERATION_MODEL`、`HTML_LORE_AI_GENERATION_MAX_TOKENS`。
-  HTML 生成通常比问答耗时更长，默认 chat provider 等待时间为
-  `HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS=180` 秒；embedding 请求仍使用
-  `HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS=45` 秒。项目保留节点重试、最大图步数和
-  reviewer 修订轮次上限，但不设置整个生成任务的总耗时硬截断。
+- AI 生成与知识库问答共用服务商连接，但生成链路有独立模型、输出上限和
+  节点级等待时间。`HTML_LORE_AI_GENERATION_MAX_TOKENS` 是兼容旧配置的通用生成上限；
+  `HTML_LORE_AI_GENERATION_JSON_MAX_TOKENS` 控制 RequirementAnalyst / Planner /
+  ContentWriter / StyleDesigner / Verifier / SafetyReviewer / Finalizer 等 JSON 节点；
+  `HTML_LORE_AI_GENERATION_HTML_MAX_TOKENS` 控制 HTMLCoder。默认 chat provider 等待时间为
+  `HTML_LORE_AI_PROVIDER_TIMEOUT_SECONDS=180` 秒；生成链路可用
+  `HTML_LORE_AI_GENERATION_JSON_TIMEOUT_SECONDS` 和
+  `HTML_LORE_AI_GENERATION_HTML_TIMEOUT_SECONDS` 单独覆盖，其中 HTMLCoder 默认 900 秒。
+  embedding 请求仍使用 `HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS=45` 秒。项目保留节点重试、
+  最大图步数和 reviewer 修订轮次上限，但不设置整个生成任务的总耗时硬截断。
 - 启用外部搜索时使用独立的服务端 key。Tavily 与 Brave 都是可选服务商，不配置时程序仍可按本地资料库和模型知识最低可用运行。
 - smoke-test 命令会产生真实 provider 调用，只有确认当前环境模型和 key 都正确后再运行。
 

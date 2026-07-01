@@ -149,6 +149,70 @@ class ParsedDocument:
 
 
 @dataclass(frozen=True)
+class MaterialChunk:
+    id: str = ""
+    file_index: int = 0
+    filename: str = ""
+    locator: str = ""
+    heading: str = ""
+    text: str = ""
+    char_count: int = 0
+    token_hints: list[str] = field(default_factory=list)
+    score: float = 0.0
+
+
+@dataclass(frozen=True)
+class MaterialFileBrief:
+    file_index: int = 0
+    filename: str = ""
+    content_type: str = ""
+    size: int = 0
+    char_count: int = 0
+    chunk_count: int = 0
+    headings: list[str] = field(default_factory=list)
+    preview: str = ""
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MaterialIndex:
+    files: list[MaterialFileBrief] = field(default_factory=list)
+    chunks: list[MaterialChunk] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    total_chars: int = 0
+
+
+@dataclass(frozen=True)
+class TemporaryMaterialContext:
+    files: list[MaterialFileBrief] = field(default_factory=list)
+    selected_chunks: list[MaterialChunk] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    total_chars: int = 0
+    selected_chars: int = 0
+
+
+@dataclass(frozen=True)
+class MaterialQuery:
+    id: str = ""
+    query: str = ""
+    purpose: str = ""
+    target_files: list[str] = field(default_factory=list)
+    expected_evidence: str = ""
+    priority: str = "medium"
+
+
+@dataclass(frozen=True)
+class MaterialRecallResult:
+    agent: str = ""
+    query_id: str = ""
+    query: str = ""
+    purpose: str = ""
+    chunks: list[MaterialChunk] = field(default_factory=list)
+    total_chars: int = 0
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class RequirementBrief:
     user_goal: str = ""
     target_use: str = "default"
@@ -162,6 +226,7 @@ class RequirementBrief:
     reference_style_files: list[str] = field(default_factory=list)
     success_criteria: list[str] = field(default_factory=list)
     uncertainty: list[str] = field(default_factory=list)
+    material_queries: list[MaterialQuery] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -202,6 +267,7 @@ class PlanDraft:
     execution_checklist: list[ChecklistItem] = field(default_factory=list)
     risk_points: list[str] = field(default_factory=list)
     verification_targets: list[str] = field(default_factory=list)
+    evidence_needs: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -238,6 +304,8 @@ class ContentDraft:
     quotes: list[Quote] = field(default_factory=list)
     references_used: list[str] = field(default_factory=list)
     omitted_items: list[str] = field(default_factory=list)
+    material_queries: list[MaterialQuery] = field(default_factory=list)
+    evidence_used: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -345,6 +413,7 @@ class ValidationReport:
     structure_mismatch: list[str] = field(default_factory=list)
     route_back_to: str = ""
     retry_instruction: str = ""
+    material_queries: list[MaterialQuery] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -435,6 +504,9 @@ class GenerationState:
     run_id: str = ""
     input: GenerationInput = field(default_factory=GenerationInput)
     parsed_document: ParsedDocument | None = None
+    material_index: MaterialIndex | None = None
+    temporary_material_context: TemporaryMaterialContext | None = None
+    material_recall_results: list[MaterialRecallResult] = field(default_factory=list)
     parsed_style_reference: ParsedDocument | None = None
     requirement_brief: RequirementBrief | None = None
     plan_draft: PlanDraft | None = None

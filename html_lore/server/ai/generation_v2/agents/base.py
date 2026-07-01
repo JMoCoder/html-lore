@@ -6,6 +6,7 @@ from typing import Any
 from html_lore.server.ai.providers import ProviderCallError
 
 from ..fake_model import FakeGenerationModelClient
+from ..material_context import recall_material
 from ..model_client import GenerationJsonModelClient, agent_payload
 from ..schema_loader import AgentOutputSchemaError, parse_dataclass_json
 from ..schemas import AgentArtifact, ChecklistStatus, GenerationStage, GenerationState, SkillTraceEntry, normalize_for_json
@@ -16,6 +17,9 @@ from ..state import complete_stage, fail_stage, retry_stage, start_stage
 
 MAX_SCHEMA_RETRIES = 2
 MAX_PROVIDER_RETRIES = 2
+MATERIAL_RECALL_AGENTS = {"RequirementAnalyst", "ContentWriter", "Verifier"}
+MATERIAL_RECALL_QUERY_LIMITS = {"RequirementAnalyst": 3, "ContentWriter": 6, "Verifier": 4}
+MATERIAL_RECALL_CHAR_LIMITS = {"RequirementAnalyst": 9000, "ContentWriter": 12000, "Verifier": 8000}
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,7 @@ class GenerationAgent:
         skills = resolve_skills_for_agent(self.name, next_state)
         try:
             output = self.invoke_structured(next_state, skills=skills)
+            next_state, output = self.apply_material_recall_if_needed(next_state, output, skills=skills)
             next_state = self.apply_output(next_state, output)
             next_state = self.record_agent_artifact(next_state, output)
             next_state = self.record_skill_trace(next_state, skills=skills)
@@ -62,13 +67,20 @@ class GenerationAgent:
             next_state = fail_stage(next_state, self.stage, message=str(exc), retryable=True, metadata=self.error_metadata(exc, next_state))
             return GenerationAgentResult(state=next_state, message=str(exc))
 
-    def invoke_structured(self, state: GenerationState, *, skills: tuple[LoadedSkill, ...] = ()) -> Any:
+    def invoke_structured(self, state: GenerationState, *, skills: tuple[LoadedSkill, ...] = (), material_recall_phase: str = "") -> Any:
         if self.output_schema is None:
             raise AgentOutputSchemaError(f"{self.name} has no output schema.")
         raw = self.model_client.complete_json(
             node=self.name,
             schema_name=self.output_schema.__name__,
-            payload=agent_payload(node=self.name, schema=self.output_schema, state=state, fallback=self.fake_payload(state), skills=skills),
+            payload=agent_payload(
+                node=self.name,
+                schema=self.output_schema,
+                state=state,
+                fallback=self.fake_payload(state),
+                skills=skills,
+                material_recall_phase=material_recall_phase,
+            ),
             attempt=state.same_node_retries.get(self.name, 0),
         )
         return parse_dataclass_json(raw, self.output_schema)
@@ -78,6 +90,25 @@ class GenerationAgent:
 
     def apply_output(self, state: GenerationState, output: Any) -> GenerationState:
         raise NotImplementedError
+
+    def apply_material_recall_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...]) -> tuple[GenerationState, Any]:
+        if self.name not in MATERIAL_RECALL_AGENTS or state.material_index is None:
+            return state, output
+        queries = material_queries_from_output(output)
+        if not queries:
+            return state, output
+        results = recall_material(
+            state.material_index,
+            queries,
+            agent=self.name,
+            max_queries=MATERIAL_RECALL_QUERY_LIMITS.get(self.name, 3),
+            max_chars=MATERIAL_RECALL_CHAR_LIMITS.get(self.name, 9000),
+        )
+        if not results:
+            return state, output
+        recall_state = replace(state, material_recall_results=[*state.material_recall_results, *results])
+        final_output = self.invoke_structured(recall_state, skills=skills, material_recall_phase="final")
+        return recall_state, final_output
 
     def record_node_retry(self, state: GenerationState) -> GenerationState:
         retries = dict(state.same_node_retries)
@@ -556,6 +587,10 @@ def sensitive_phrases_for_state(state: GenerationState) -> list[str]:
             value = str(hint.value or "").strip()
             if value:
                 phrases.append(value)
+    for result in state.material_recall_results:
+        for chunk in result.chunks:
+            if chunk.text:
+                values.append(chunk.text)
     for value in values:
         text = " ".join(str(value or "").split())
         if not text:
@@ -688,3 +723,8 @@ def public_issues(issues: Any) -> list[dict[str, str]]:
 
 def public_dict(value: Any) -> dict[str, Any]:
     return normalize_for_json(asdict(value))
+
+
+def material_queries_from_output(output: Any) -> list[Any]:
+    queries = getattr(output, "material_queries", [])
+    return queries if isinstance(queries, list) else []
