@@ -160,6 +160,7 @@ class GenerationAgent:
             output_summary = summarize_list("success criteria", getattr(output, "success_criteria", [])) or summarize_list("must include", getattr(output, "must_include", []))
             warnings = safe_string_list(getattr(output, "uncertainty", []), limit=4)
             data = {
+                "user_instruction": short_text(state.input.instruction, 3000),
                 "target_use": str(getattr(output, "target_use", "") or ""),
                 "audience": short_text(getattr(output, "audience", ""), 160),
                 "output_type": str(getattr(output, "output_type", "") or ""),
@@ -569,7 +570,6 @@ def clamp_score(value: float) -> float:
 
 def sensitive_phrases_for_state(state: GenerationState) -> list[str]:
     values = [
-        state.input.instruction,
         state.input.filename,
         state.input.reference_file_name,
     ]
@@ -620,7 +620,10 @@ def redact_artifact_data(value: Any, phrases: list[str]) -> Any:
     if isinstance(value, dict):
         redacted: dict[str, Any] = {}
         for key, item in value.items():
-            redacted[key] = redact_artifact_data(item, phrases)
+            if key == "user_instruction":
+                redacted[key] = item
+            else:
+                redacted[key] = redact_artifact_data(item, phrases)
         return redacted
     if isinstance(value, list):
         return [redact_artifact_data(item, phrases) for item in value]

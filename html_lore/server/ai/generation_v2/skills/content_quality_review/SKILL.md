@@ -21,6 +21,8 @@ Use this skill in Verifier. The goal is not to demand perfection; it is to decid
 
 Safety scanning is handled elsewhere. Do not fail an artifact only because it lacks decorative polish.
 
+Verifier owns the validation decision. Do not route work back because you are unsure. Use the available draft, requirement brief, plan, style brief, visual check report, checklist, and material recall to identify the concrete confirmed problem first.
+
 ## Review Inputs
 
 Check the final HTML against:
@@ -34,6 +36,14 @@ Check the final HTML against:
 - previous validation report when this is a revision pass.
 
 If source fidelity cannot be judged because exact figures, dates, tables, or required omissions need more source evidence, ask for focused material recall before producing the final review. Do not fail solely because the current verifier view is compact when material recall can answer the question.
+
+Use a two-phase evidence policy:
+
+1. If a source-fidelity or completeness concern depends on evidence that is not currently visible, return focused `material_queries` first as Verifier's own lookup step.
+2. After Verifier-specific `material_recall_results` are present, decide whether there is a real defect, then route revisions if needed.
+
+Do not return a final `ok: false` for unsupported claims, missing source sections, missing tables, missing figures, or uncertain omissions until you have either used Verifier recall evidence or the issue can be judged without additional source evidence.
+For non-evidence issues such as requirement mismatch, wrong representation, ignored style brief, layout breakage, or incomplete HTML, inspect the current artifacts directly and route the confirmed problem without material recall.
 
 ## Core Questions
 
@@ -96,6 +106,7 @@ Fail and route back when:
 - reviewer feedback from a prior pass was not addressed.
 
 When failing, `route_back_to` must not be empty. Empty `route_back_to` is only for passing artifacts.
+The only non-passing response that may leave `route_back_to` empty is an evidence-retrieval response with non-empty `material_queries`, because the graph will retrieve material and call Verifier again. This is still part of Verifier's own review, not a revision request.
 
 ## Routing Guidance
 
@@ -128,6 +139,7 @@ Do not award a high score to a thin artifact solely because it is factually safe
 - When the issue is insufficient depth, state which dimensions should be expanded and whether the next pass should go to ContentWriter, StyleDesigner, or HTMLCoder.
 - Avoid vague feedback like "make it better".
 - If the source is thin, say what cannot be verified instead of demanding impossible detail.
+- If failing, name the concrete confirmed defect and the evidence used to reach that conclusion.
 
 ## Output
 

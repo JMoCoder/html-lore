@@ -3664,6 +3664,8 @@ def test_ai_material_job_v2_completes_with_stage_trace(tmp_path: Path) -> None:
         assert job["current_stage"] == "completed"
         assert any(event["agent"] == "Verifier" for event in fetched["stage_trace"])
         assert any(entry["agent"] == "HTMLCoder" for entry in fetched["skill_trace"])
+        requirement_artifact = next(entry for entry in fetched["agent_artifacts"] if entry["agent"] == "RequirementAnalyst")
+        assert requirement_artifact["data"]["user_instruction"] == "Create a concise knowledge note."
         assert any(entry["agent"] == "Planner" and entry["data"].get("section_plan") for entry in fetched["agent_artifacts"])
         html_artifact = next(entry for entry in fetched["agent_artifacts"] if entry["agent"] == "HTMLCoder")
         assert html_artifact["data"]["html_chars"] > 0
@@ -3865,7 +3867,7 @@ def test_ai_material_job_v2_accepts_text_prompt_without_file(tmp_path: Path) -> 
         assert run["spec"]["filename"] == "prompt.txt"
         assert run["spec"]["target_use"] == "webpage"
         assert run["spec"]["style_preference"] == "business"
-        assert "private prompt topic alpha" not in raw_jobs
+        assert "private prompt topic alpha" in raw_jobs
     finally:
         server.close()
 

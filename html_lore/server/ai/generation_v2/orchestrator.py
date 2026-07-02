@@ -14,7 +14,7 @@ class OrchestratorDecision:
 class GenerationOrchestrator:
     name = "GenerationOrchestrator.v2"
     max_revision_rounds = 2
-    validation_route_targets = {"content_writer", "style_designer", "html_coder"}
+    validation_route_targets = {"verifier", "content_writer", "style_designer", "html_coder"}
     safety_route_targets = {"html_coder"}
 
     def decide_next(self, state: GenerationState) -> OrchestratorDecision:
@@ -45,6 +45,8 @@ class GenerationOrchestrator:
     def validation_route_back_to(self, state: GenerationState) -> str:
         report = state.validation_report
         if report is None:
+            return "verifier"
+        if report.material_queries:
             return "verifier"
         route = str(report.route_back_to or "").strip()
         if route in self.validation_route_targets:

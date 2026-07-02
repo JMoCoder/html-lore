@@ -12,8 +12,9 @@ from html_lore.server.ai.generation_v2.material_context import build_material_in
 from html_lore.server.ai.generation_v2.material_runner import generate_note_from_material_v2
 from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
+from html_lore.server.ai.generation_v2.orchestrator import GenerationOrchestrator
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, NoteMetadataProposal, ParsedDocument, PlanDraft, SourceFile, SkillTraceEntry, StageTraceEvent, ToolNeed
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, NoteMetadataProposal, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport
 from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
 from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
@@ -552,6 +553,39 @@ def test_generation_v2_falls_back_when_verifier_returns_empty_route() -> None:
     assert any(event.agent == "ContentWriter" and event.status == "completed" for event in result.stage_trace)
 
 
+def test_generation_v2_orchestrator_routes_verifier_material_queries_back_to_verifier() -> None:
+    state = GenerationState(
+        parsed_document=ParsedDocument(plain_text="source"),
+        requirement_brief=RequirementBrief(user_goal="Convert source"),
+        plan_draft=PlanDraft(page_goal="Convert source"),
+        content_draft=ContentDraft(title="Source"),
+        style_brief=StyleBrief(style_goal="Light report"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>Source</body></html>"),
+        validation_report=ValidationReport(
+            ok=False,
+            material_queries=[MaterialQuery(id="verify-source", query="source table", purpose="Verify source completeness.")],
+        ),
+    )
+
+    decision = GenerationOrchestrator().decide_next(state)
+
+    assert decision.next_node == "verifier"
+
+
+def test_generation_v2_verifier_instructions_require_recall_before_source_failure() -> None:
+    prompt = Path("html_lore/server/ai/generation_v2/prompts/verifier.md").read_text(encoding="utf-8")
+    skill = Path("html_lore/server/ai/generation_v2/skills/content_quality_review/SKILL.md").read_text(encoding="utf-8")
+
+    assert "two-step process" in prompt
+    assert "output `material_queries` first instead of failing immediately" in prompt
+    assert "Before returning `ok: false` for source fidelity" in prompt
+    assert "lock down the concrete problem yourself" in prompt
+    assert "two-phase evidence policy" in skill
+    assert "return focused `material_queries` first" in skill
+    assert "Verifier owns the validation decision" in skill
+    assert "concrete confirmed defect" in skill
+
+
 def test_generation_v2_provider_model_client_extracts_json_and_includes_schema() -> None:
     chat_client = RecordingChatClient(
         '```json\n{"user_goal":"Create a note","target_use":"default"}\n```',
@@ -1065,6 +1099,18 @@ def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
                     "usage": {"retry_count": 1, "output_chars": 100, "cost": 0.1, "prompt": "private prompt"},
                     "warnings": ["render assumption"],
                     "data": {"html_chars": 100, "html": "<!doctype html><html>secret</html>"},
+                },
+                {
+                    "agent": "RequirementAnalyst",
+                    "stage": "analyzing_requirements",
+                    "title": "Requirement analysis",
+                    "summary": "requirements",
+                    "input_summary": "generation request",
+                    "output_summary": "requirements parsed",
+                    "quality_score": 0.8,
+                    "usage": {},
+                    "warnings": [],
+                    "data": {"user_instruction": "Please preserve this long user request. " * 30, "prompt": "private system prompt"},
                 }
             ]
         },
@@ -1089,6 +1135,9 @@ def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
     assert public_job["agent_artifacts"][0]["warnings"] == ["render assumption"]
     assert public_job["agent_artifacts"][0]["data"]["html_chars"] == 100
     assert "html" not in public_job["agent_artifacts"][0]["data"]
+    assert public_job["agent_artifacts"][1]["data"]["user_instruction"].startswith("Please preserve this long user request.")
+    assert len(public_job["agent_artifacts"][1]["data"]["user_instruction"]) > 360
+    assert "prompt" not in public_job["agent_artifacts"][1]["data"]
 
 
 def test_generation_store_saves_v2_run_fields(tmp_path) -> None:

@@ -246,6 +246,26 @@ test("workspace file create mode uploads material to the AI generation endpoint"
             created_at: "2026-06-07T02:03:00.000Z",
           },
           {
+            job_id: "ai-job-material-failed-no-retry",
+            kind: "material_html_generation",
+            status: "failed",
+            label: "failed-source.pdf",
+            generation_engine: "v2",
+            current_stage: "verifying",
+            stage_trace: [
+              { stage: "verifying", agent: "Verifier", status: "failed", message: "Validation failed." },
+            ],
+            agent_artifacts: [],
+            run_id: "run-material-failed-no-retry",
+            item_id: "",
+            cancellable: false,
+            retryable: false,
+            message: "Generation failed.",
+            error: { message: "Generation v2 did not produce a note proposal." },
+            created_at: "2026-06-07T02:04:00.000Z",
+            completed_at: "2026-06-07T02:05:00.000Z",
+          },
+          {
             job_id: "ai-job-material-test",
             kind: "material_html_generation",
             status: completed ? "completed" : "pending",
@@ -456,6 +476,13 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   await expect(page.locator("#ai-generation-detail")).toContainText("HTMLCoder");
   await expect(page.locator("#ai-generation-detail")).toContainText("Running");
   await expect(page.locator("#ai-generation-detail")).toContainText("Triggered by: Use grids, process flow, and comparison cards.");
+  await page.locator("#ai-generation-detail-close").click();
+  await expect(page.locator("#ai-generation-detail")).toBeHidden();
+  const noRetryRow = page.locator("#ai-generation-list .ai-generation-row", { hasText: "failed-source.pdf" });
+  await expect(noRetryRow.getByRole("button", { name: "Retry" })).toBeDisabled();
+  await noRetryRow.getByRole("button", { name: "Details" }).click();
+  await expect(page.locator("#ai-generation-detail")).toBeVisible();
+  await expect(page.locator("#ai-generation-detail").getByRole("button", { name: "Retry" })).toBeDisabled();
   await page.locator("#ai-generation-detail-close").click();
   await expect(page.locator("#ai-generation-detail")).toBeHidden();
   await page.locator("[data-settings-tab='ai-runs']").click();

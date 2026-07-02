@@ -9,6 +9,27 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-07-02
+
+### Changed
+
+- Strengthened AI generation v2 verification so evidence gaps trigger
+  Verifier-owned material recall before routing revisions back to upstream
+  agents.
+- Made failed AI generation retry controls consistent between the history list
+  and workflow detail dialog when a job is not retryable.
+- Preserved a truncated original user instruction in generation workflow
+  artifacts to improve local debugging without exposing raw uploaded content.
+- Removed local `mark/` working notes from repository tracking and ignored them
+  like other local development documents.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.1.6`.
+
+### Security
+
+- Local notes, AI provider keys, generated artifacts, and test observations
+  remain outside the release commit.
+
 ## [1.1.4] - 2026-06-30
 
 ### Added

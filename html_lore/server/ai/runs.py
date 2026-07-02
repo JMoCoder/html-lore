@@ -198,7 +198,10 @@ def sanitize_artifact_data(value: Any, *, depth: int = 0) -> Any:
             clean_key = str(key)[:80]
             if clean_key.lower() in {"html", "content", "reference_content", "prompt", "raw", "raw_output"}:
                 continue
-            result[clean_key] = sanitize_artifact_data(raw, depth=depth + 1)
+            if clean_key == "user_instruction" and depth == 0:
+                result[clean_key] = str(raw or "")[:3000]
+            else:
+                result[clean_key] = sanitize_artifact_data(raw, depth=depth + 1)
         return result
     if isinstance(value, list):
         return [sanitize_artifact_data(item, depth=depth + 1) for item in value[:20]]

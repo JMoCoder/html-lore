@@ -4,6 +4,26 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-07-02
+
+### Changed
+
+- AI generation v2 の Verifier を強化し、evidence gap がある場合は upstream
+  agent に戻す前に Verifier 自身が material recall を要求するようにしました。
+- failed AI generation job が retryable でない場合、history list と workflow
+  detail dialog の retry control が一貫して disabled になるようにしました。
+- local debugging のため、generation workflow artifact に切り詰めた original
+  user instruction を保持します。raw uploaded content は引き続き公開しません。
+- local `mark/` working notes を repository tracking から外し、他の local
+  development documents と同様に ignore しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.1.6` に更新しました。
+
+### Security
+
+- local notes、AI provider keys、generated artifacts、test observations は
+  release commit の外に残します。
+
 ## [1.1.4] - 2026-06-30
 
 ### Added
