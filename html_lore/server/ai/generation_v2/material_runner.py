@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
+from typing import Callable
 
 from html_lore.server.ai.material_generation import MaterialGenerationError
 from html_lore.server.ai.providers import AIProviderConfigError, ProviderCallError
@@ -11,6 +12,7 @@ from html_lore.server.config import ServerSettings
 
 from .graph import HtmlGenerationV2Graph
 from .graph import StateCallback
+from .material_bundle import MaterialBundleReference, build_material_bundle, cleanup_expired_failed_job_workspaces, write_job_material_bundle, write_job_workspace_json, write_job_workspace_jsonl, write_job_workspace_text
 from .model_client import GenerationJsonModelClient
 from .schemas import GenerationInput, GenerationState, normalize_for_json
 from .store import public_execution_checklist, public_skill_trace
@@ -29,12 +31,24 @@ def generate_note_from_material_v2(
     model_client: GenerationJsonModelClient | None = None,
     job_id: str = "",
     on_state: StateCallback | None = None,
+    on_material_bundle_ready: Callable[[MaterialBundleReference], None] | None = None,
 ) -> dict[str, Any]:
     started_at = datetime.now(timezone.utc)
+    def workspace_writer(state: GenerationState, relative_path: str, value: Any, mode: str) -> None:
+        if not state.job_id:
+            return
+        if mode == "jsonl":
+            write_job_workspace_jsonl(settings, state.job_id, relative_path, value if isinstance(value, list) else [value])
+        elif mode == "json":
+            write_job_workspace_json(settings, state.job_id, relative_path, value)
+        elif mode == "text":
+            write_job_workspace_text(settings, state.job_id, relative_path, str(value or ""))
+
     graph = HtmlGenerationV2Graph(
         model_client=model_client,
         parser_mode=settings.document_parser,
         on_state=on_state,
+        workspace_writer=workspace_writer,
         visual_check_mode=settings.ai_visual_check,
         visual_check_browser_channel=settings.ai_visual_check_browser_channel,
         visual_check_timeout_seconds=settings.ai_visual_check_timeout_seconds,
@@ -58,24 +72,48 @@ def generate_note_from_material_v2(
         source_type="ai_generated",
     )
     state = graph.initial_state(generation_input, job_id=job_id)
+    material_bundle_reference: MaterialBundleReference | None = None
+
+    def sync_state(next_state: GenerationState) -> None:
+        nonlocal material_bundle_reference
+        if on_state is not None:
+            on_state(next_state)
+        if material_bundle_reference is not None or next_state.parsed_document is None or not job_id:
+            return
+        bundle = build_material_bundle(next_state.parsed_document, run_id=next_state.run_id)
+        if bundle is None:
+            return
+        material_bundle_reference = write_job_material_bundle(settings, bundle, job_id=job_id)
+        if on_material_bundle_ready is not None:
+            on_material_bundle_ready(material_bundle_reference)
+
     try:
+        graph.on_state = sync_state
         state = graph.run(state)
     except (AIProviderConfigError, ProviderCallError) as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
         completed_at = datetime.now(timezone.utc)
         run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="provider_failed", error_message=str(exc))
         raise MaterialGenerationError(str(exc), run=run) from exc
     except Exception as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
         completed_at = datetime.now(timezone.utc)
         run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="generation_v2_failed", error_message=str(exc))
         raise MaterialGenerationError(str(exc), run=run) from exc
     if state.failed_steps or state.create_note_proposal is None:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
         completed_at = datetime.now(timezone.utc)
         message = ", ".join(state.failed_steps) or "Generation v2 did not produce a note proposal."
         run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="generation_v2_failed", error_message=message)
         raise MaterialGenerationError(message, run=run)
     try:
-        write_result = WriteGateway(settings).write(state.create_note_proposal)
+        if material_bundle_reference is None:
+            fallback_job_id = job_id or f"run_{state.run_id}"
+            bundle = build_material_bundle(state.parsed_document, run_id=state.run_id)
+            material_bundle_reference = write_job_material_bundle(settings, bundle, job_id=fallback_job_id) if bundle is not None else None
+        write_result = WriteGateway(settings).write(state.create_note_proposal, workspace_reference=material_bundle_reference)
     except Exception as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
         completed_at = datetime.now(timezone.utc)
         run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="write_gateway_failed", error_message=str(exc))
         raise MaterialGenerationError(str(exc), run=run) from exc

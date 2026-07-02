@@ -12,6 +12,7 @@ from html_lore.metadata import MetadataStore, dump_simple_yaml
 from html_lore.server.config import ServerSettings
 from html_lore.server.uploads import ensure_within
 
+from .material_bundle import MaterialBundleReference
 from .schemas import CreateNoteProposal
 from .tools.html_safety import scan_html_safety
 
@@ -36,7 +37,7 @@ class WriteGateway:
         self.settings = settings
         self.build_fn = build_fn
 
-    def write(self, proposal: CreateNoteProposal) -> WriteGatewayResult:
+    def write(self, proposal: CreateNoteProposal, *, workspace_reference: MaterialBundleReference | None = None) -> WriteGatewayResult:
         if not proposal.html.strip():
             raise WriteGatewayError("CreateNoteProposal.html is required.")
         if not proposal.title.strip():
@@ -59,7 +60,7 @@ class WriteGateway:
             content_path.write_text(proposal.html, encoding="utf-8")
             wrote_html = True
 
-            metadata = self.build_metadata(proposal, item_id=relative_path.as_posix(), now=now)
+            metadata = self.build_metadata(proposal, item_id=relative_path.as_posix(), now=now, workspace=workspace_reference)
             if metadata_path is not None:
                 ensure_within(metadata_path, self.settings.meta_dir)  # type: ignore[arg-type]
                 metadata_path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,9 +93,9 @@ class WriteGateway:
             return None
         return self.settings.meta_dir / "items" / relative_path.with_suffix(".yml")
 
-    def build_metadata(self, proposal: CreateNoteProposal, *, item_id: str, now: datetime) -> dict[str, object]:
+    def build_metadata(self, proposal: CreateNoteProposal, *, item_id: str, now: datetime, workspace: MaterialBundleReference | None = None) -> dict[str, object]:
         metadata = proposal.metadata
-        return {
+        values = {
             "id": item_id,
             "title": metadata.title or proposal.title,
             "summary": metadata.summary,
@@ -114,6 +115,14 @@ class WriteGateway:
                 "graph": "HtmlGenerationV2.alpha",
             },
         }
+        if workspace:
+            values["workspace"] = {
+                "job_id": workspace.job_id,
+                "path": workspace.workspace_path,
+                "merged_path": workspace.merged_path,
+                "manifest_path": workspace.manifest_path,
+            }
+        return values
 
 
 def next_generated_path(content_dir: Path, title: str, now: datetime) -> Path:

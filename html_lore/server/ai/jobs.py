@@ -168,15 +168,19 @@ class AIJobQueue:
         try:
             result = entry.task()
         except Exception as exc:  # pragma: no cover - defensive worker boundary
-            store.update(
-                entry.job_id,
-                {
-                    "status": "failed",
-                    "completed_at": utc_now(),
-                    "message": str(exc),
-                    "error": {"code": exc.__class__.__name__, "message": str(exc)},
-                },
-            )
+            try:
+                current = store.get(entry.job_id, include_private=True)
+            except AIJobError:
+                current = {}
+            updates: dict[str, Any] = {
+                "status": "failed",
+                "completed_at": utc_now(),
+                "cancellable": False,
+                "message": str(current.get("message") or "") or str(exc),
+            }
+            if not current.get("error"):
+                updates["error"] = {"code": exc.__class__.__name__, "message": str(exc)}
+            store.update(entry.job_id, updates)
             return
         run = result.get("run") if isinstance(result.get("run"), dict) else {}
         item = result.get("item") if isinstance(result.get("item"), dict) else {}
@@ -223,6 +227,9 @@ def sanitize_ai_job(job: dict[str, Any], *, include_private: bool = False) -> di
         "retryable": status == "failed" and is_retryable_payload(payload),
         "attempts": sanitize_int(job.get("attempts")),
     }
+    workspace = sanitize_workspace(job.get("workspace") or job.get("material_bundle"), include_private=include_private)
+    if workspace:
+        sanitized["workspace"] = workspace
     generation_engine = str(job.get("generation_engine") or "").strip()[:40]
     current_stage = sanitize_generation_stage(job.get("current_stage"))
     if generation_engine:
@@ -259,6 +266,29 @@ def ai_job_updates_from_run(run: dict[str, Any]) -> dict[str, Any]:
 
 def is_retryable_payload(payload: dict[str, Any]) -> bool:
     return str(payload.get("type") or "") == "conversation_html_generation" and bool(str(payload.get("conversation_id") or "").strip())
+
+
+def sanitize_workspace(value: Any, *, include_private: bool = False) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    status = str(value.get("status") or "").strip()[:40]
+    bundle_id = str(value.get("bundle_id") or "").strip()[:120]
+    result: dict[str, str] = {}
+    if status:
+        result["status"] = status
+    if bundle_id:
+        result["bundle_id"] = bundle_id
+    if include_private:
+        workspace_path = str(value.get("workspace_path") or "").strip()[:500]
+        merged_path = str(value.get("merged_path") or "").strip()[:500]
+        manifest_path = str(value.get("manifest_path") or "").strip()[:500]
+        if workspace_path:
+            result["workspace_path"] = workspace_path
+        if merged_path:
+            result["merged_path"] = merged_path
+        if manifest_path:
+            result["manifest_path"] = manifest_path
+    return result
 
 
 def sanitize_private_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -384,7 +414,7 @@ def sanitize_artifact_usage(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     result: dict[str, Any] = {}
-    for key in ("input_tokens", "output_tokens", "total_tokens", "duration_ms", "retry_count", "revision_round", "output_chars", "section_count"):
+    for key in ("input_tokens", "output_tokens", "total_tokens", "duration_ms", "retry_count", "revision_round", "output_chars", "section_count", "material_read_count", "material_read_chars"):
         raw = value.get(key)
         if isinstance(raw, bool):
             continue

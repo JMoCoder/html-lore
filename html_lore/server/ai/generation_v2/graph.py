@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
-from typing import Callable
+from typing import Any, Callable
 from uuid import uuid4
 
 from .agents.content_writer import ContentWriterAgent
@@ -16,7 +16,7 @@ from .fake_model import FakeGenerationModelClient
 from .material_context import build_material_index, build_temporary_material_context
 from .model_client import GenerationJsonModelClient
 from .orchestrator import GenerationOrchestrator
-from .schemas import AgentArtifact, GenerationInput, GenerationStage, GenerationState, ParsedDocument, ParseWarning
+from .schemas import AgentArtifact, GenerationInput, GenerationStage, GenerationState, ParsedDocument, ParsedMaterialItem, ParseWarning, SourceFile
 from .state import complete_stage, start_stage
 from .tools.document_parser import parse_document
 from .tools.style_hint_extractor import extract_style_hints
@@ -24,6 +24,7 @@ from .tools.visual_check import run_visual_check
 
 
 StateCallback = Callable[[GenerationState], None]
+WorkspaceWriter = Callable[[GenerationState, str, Any, str], None]
 
 
 class HtmlGenerationV2Graph:
@@ -35,6 +36,7 @@ class HtmlGenerationV2Graph:
         model_client: GenerationJsonModelClient | None = None,
         parser_mode: str = "markitdown",
         on_state: StateCallback | None = None,
+        workspace_writer: WorkspaceWriter | None = None,
         visual_check_mode: str = "off",
         visual_check_browser_channel: str = "chrome",
         visual_check_timeout_seconds: int = 20,
@@ -42,19 +44,20 @@ class HtmlGenerationV2Graph:
         self.model_client = model_client or FakeGenerationModelClient()
         self.parser_mode = parser_mode
         self.on_state = on_state
+        self.workspace_writer = workspace_writer
         self.visual_check_mode = str(visual_check_mode or "off")
         self.visual_check_browser_channel = str(visual_check_browser_channel or "chrome")
         self.visual_check_timeout_seconds = max(1, int(visual_check_timeout_seconds or 20))
         self.orchestrator = GenerationOrchestrator()
         self.agents = {
-            "requirement_analyst": RequirementAnalystAgent(self.model_client),
-            "planner": PlannerAgent(self.model_client),
-            "content_writer": ContentWriterAgent(self.model_client),
-            "style_designer": StyleDesignerAgent(self.model_client),
-            "html_coder": HTMLCoderAgent(self.model_client),
-            "verifier": VerifierAgent(self.model_client),
-            "safety_reviewer": SafetyReviewerAgent(self.model_client),
-            "finalizer": FinalizerAgent(self.model_client),
+            "requirement_analyst": RequirementAnalystAgent(self.model_client, workspace_writer=workspace_writer),
+            "planner": PlannerAgent(self.model_client, workspace_writer=workspace_writer),
+            "content_writer": ContentWriterAgent(self.model_client, workspace_writer=workspace_writer),
+            "style_designer": StyleDesignerAgent(self.model_client, workspace_writer=workspace_writer),
+            "html_coder": HTMLCoderAgent(self.model_client, workspace_writer=workspace_writer),
+            "verifier": VerifierAgent(self.model_client, workspace_writer=workspace_writer),
+            "safety_reviewer": SafetyReviewerAgent(self.model_client, workspace_writer=workspace_writer),
+            "finalizer": FinalizerAgent(self.model_client, workspace_writer=workspace_writer),
         }
 
     def initial_state(self, generation_input: GenerationInput, *, job_id: str = "", run_id: str = "") -> GenerationState:
@@ -188,8 +191,11 @@ def material_inputs(state: GenerationState) -> list[dict[str, object]]:
 def merge_parsed_documents(items: list[ParsedDocument]) -> ParsedDocument:
     if not items:
         return ParsedDocument(warnings=[ParseWarning(code="no_material", message="No uploaded material was available to parse.", severity="warning")])
-    if len(items) == 1:
-        return items[0]
+    annotated_items = [annotate_parsed_material(item, index) for index, item in enumerate(items, start=1)]
+    if len(annotated_items) == 1:
+        item = annotated_items[0]
+        material = parsed_material_item(item, 1, start_char=0, end_char=len(item.plain_text), content_start_char=0, content_end_char=len(item.plain_text))
+        return replace(item, materials=[material])
     text_parts: list[str] = []
     source_files = []
     outline = []
@@ -198,11 +204,32 @@ def merge_parsed_documents(items: list[ParsedDocument]) -> ParsedDocument:
     tables = []
     style_hints = []
     warnings = []
-    for index, item in enumerate(items, start=1):
+    materials = []
+    cursor = 0
+    for index, item in enumerate(annotated_items, start=1):
         source_files.extend(item.source_files)
         label = item.source_files[0].filename if item.source_files else f"material-{index}"
         if item.plain_text:
-            text_parts.append(f"Source file: {label}\n{item.plain_text}")
+            if text_parts:
+                cursor += 2
+            header = f"Source file: {label}\n"
+            part = f"{header}{item.plain_text}"
+            start_char = cursor
+            content_start_char = start_char + len(header)
+            content_end_char = content_start_char + len(item.plain_text)
+            end_char = start_char + len(part)
+            text_parts.append(part)
+            materials.append(
+                parsed_material_item(
+                    item,
+                    index,
+                    start_char=start_char,
+                    end_char=end_char,
+                    content_start_char=content_start_char,
+                    content_end_char=content_end_char,
+                )
+            )
+            cursor = end_char
         outline.extend(item.outline)
         images.extend(item.images)
         links.extend(item.links)
@@ -219,4 +246,52 @@ def merge_parsed_documents(items: list[ParsedDocument]) -> ParsedDocument:
         tables=tables,
         style_hints=style_hints,
         warnings=warnings,
+        materials=materials,
+    )
+
+
+def annotate_parsed_material(item: ParsedDocument, index: int) -> ParsedDocument:
+    source = item.source_files[0] if item.source_files else None
+    file_id = source.file_id if source and source.file_id else f"file-{index}"
+    filename = source.filename if source and source.filename else f"material-{index}"
+    content_type = source.content_type if source else ""
+    size = source.size if source else 0
+    role = source.role if source else "material"
+    source_files = [replace(file, file_id=file.file_id or file_id, file_index=file.file_index or index) for file in item.source_files]
+    if not source_files:
+        source_files = [SourceFile(filename=filename, content_type=content_type, size=size, role=role, file_id=file_id, file_index=index)]
+    return replace(
+        item,
+        source_files=source_files,
+        outline=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.outline],
+        images=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.images],
+        links=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.links],
+        tables=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.tables],
+        materials=[],
+    )
+
+
+def parsed_material_item(
+    item: ParsedDocument,
+    index: int,
+    *,
+    start_char: int,
+    end_char: int,
+    content_start_char: int,
+    content_end_char: int,
+) -> ParsedMaterialItem:
+    source = item.source_files[0] if item.source_files else None
+    file_id = source.file_id if source and source.file_id else f"file-{index}"
+    filename = source.filename if source and source.filename else f"material-{index}"
+    return ParsedMaterialItem(
+        file_id=file_id,
+        file_index=source.file_index if source and source.file_index else index,
+        filename=filename,
+        content_type=source.content_type if source else "",
+        size=source.size if source else 0,
+        start_char=start_char,
+        end_char=end_char,
+        content_start_char=content_start_char,
+        content_end_char=content_end_char,
+        char_count=max(0, content_end_char - content_start_char),
     )

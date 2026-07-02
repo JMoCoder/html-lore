@@ -1587,7 +1587,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.6",
+  currentVersion: "1.1.7",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -6760,7 +6760,7 @@ function renderAiGenerationDetailActions(job) {
 }
 
 function getAiGenerationStages(job) {
-  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace.map((entry) => ({ ...entry })) : [];
+  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace.map((entry, index) => ({ ...entry, _traceIndex: index })) : [];
   const currentStage = String(job?.current_stage || "").trim();
   if (currentStage && !isTerminalAiJobStatus(job?.status)) {
     const hasActiveCurrent = traces.some((entry) => String(entry.stage || entry.node || "") === currentStage && !isTerminalAiStageStatus(entry.status));
@@ -6773,11 +6773,12 @@ function getAiGenerationStages(job) {
         agent: aiGenerationAgentForStage(currentStage),
         status: job.status === "pending" ? "pending" : "running",
         message: job.message || getAiGenerationCurrentAction(job),
+        _traceIndex: traces.length,
       });
     }
   }
   if (traces.length > 0) return traces;
-  if (currentStage) return [{ stage: currentStage, status: job.status || "pending", message: job.message || "" }];
+  if (currentStage) return [{ stage: currentStage, status: job.status || "pending", message: job.message || "", _traceIndex: 0 }];
   return [];
 }
 
@@ -6851,12 +6852,32 @@ function findAiGenerationArtifact(job, stage) {
   if (!stage || artifacts.length === 0) return null;
   const stageKey = String(stage.stage || stage.node || "").toLowerCase();
   const agentKey = String(stage.agent || "").toLowerCase();
-  return artifacts.find((artifact) => {
+  const stageOrdinal = aiGenerationStageOrdinal(job, stage);
+  const matches = artifacts.filter((artifact) => {
     const artifactStage = String(artifact.stage || "").toLowerCase();
     const artifactAgent = String(artifact.agent || "").toLowerCase();
     return (stageKey && artifactStage && (artifactStage.includes(stageKey) || stageKey.includes(artifactStage))) ||
       (agentKey && artifactAgent && artifactAgent === agentKey);
-  }) || null;
+  });
+  if (matches.length === 0) return null;
+  return matches[Math.min(stageOrdinal, matches.length - 1)] || matches[matches.length - 1] || null;
+}
+
+function aiGenerationStageOrdinal(job, stage) {
+  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace : [];
+  const targetIndex = Number.isFinite(stage?._traceIndex) ? stage._traceIndex : traces.indexOf(stage);
+  const stageKey = String(stage?.stage || stage?.node || "").toLowerCase();
+  const agentKey = String(stage?.agent || "").toLowerCase();
+  let ordinal = 0;
+  for (let index = 0; index < traces.length && index < targetIndex; index += 1) {
+    const entry = traces[index];
+    const entryStage = String(entry?.stage || entry?.node || "").toLowerCase();
+    const entryAgent = String(entry?.agent || "").toLowerCase();
+    if ((stageKey && entryStage === stageKey) || (agentKey && entryAgent === agentKey)) {
+      ordinal += 1;
+    }
+  }
+  return ordinal;
 }
 
 function renderAiGenerationArtifactDetail(artifact) {
@@ -7849,7 +7870,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.6-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.7-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

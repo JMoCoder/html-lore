@@ -203,6 +203,7 @@ class ItemService:
             raise ItemDeleteError("Item not found.")
         if not bool(item.get("archived")):
             raise ItemDeleteError("Only archived items can be permanently deleted.")
+        existing_metadata = MetadataStore.load(self.settings.meta_dir).for_item(item_id)
 
         content_path = self.settings.content_dir / item_id
         ensure_within(content_path, self.settings.content_dir)
@@ -213,7 +214,7 @@ class ItemService:
         if metadata_path and metadata_path.exists():
             metadata_path.unlink()
             remove_empty_parents(metadata_path.parent, self.settings.meta_dir / "items")
-
+        delete_linked_workspace(self.settings, existing_metadata)
         build_site(
             content_dir=self.settings.content_dir,
             meta_dir=self.settings.meta_dir,
@@ -225,6 +226,16 @@ class ItemService:
 
 class ItemDeleteError(ValueError):
     pass
+
+
+def delete_linked_workspace(settings: ServerSettings, metadata: dict[str, Any]) -> None:
+    workspace = metadata.get("workspace") if isinstance(metadata.get("workspace"), dict) else {}
+    job_id = str(workspace.get("job_id") or "").strip()
+    if not job_id:
+        return
+    from html_lore.server.ai.generation_v2.material_bundle import delete_job_workspace
+
+    delete_job_workspace(settings, job_id)
 
 
 class ItemContentError(ValueError):

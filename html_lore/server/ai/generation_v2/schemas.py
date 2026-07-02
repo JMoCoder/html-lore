@@ -92,6 +92,8 @@ class SourceFile:
     content_type: str = ""
     size: int = 0
     role: str = "material"
+    file_id: str = ""
+    file_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -99,6 +101,9 @@ class OutlineItem:
     level: int = 1
     title: str = ""
     text: str = ""
+    file_id: str = ""
+    filename: str = ""
+    file_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -106,6 +111,9 @@ class DocumentImage:
     alt: str = ""
     description: str = ""
     source: str = ""
+    file_id: str = ""
+    filename: str = ""
+    file_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -113,6 +121,9 @@ class DocumentLink:
     text: str = ""
     url: str = ""
     source: str = ""
+    file_id: str = ""
+    filename: str = ""
+    file_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -120,6 +131,9 @@ class DocumentTable:
     title: str = ""
     headers: list[str] = field(default_factory=list)
     rows: list[list[str]] = field(default_factory=list)
+    file_id: str = ""
+    filename: str = ""
+    file_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -137,6 +151,20 @@ class ParseWarning:
 
 
 @dataclass(frozen=True)
+class ParsedMaterialItem:
+    file_id: str = ""
+    file_index: int = 0
+    filename: str = ""
+    content_type: str = ""
+    size: int = 0
+    start_char: int = 0
+    end_char: int = 0
+    content_start_char: int = 0
+    content_end_char: int = 0
+    char_count: int = 0
+
+
+@dataclass(frozen=True)
 class ParsedDocument:
     source_files: list[SourceFile] = field(default_factory=list)
     plain_text: str = ""
@@ -146,6 +174,7 @@ class ParsedDocument:
     tables: list[DocumentTable] = field(default_factory=list)
     style_hints: list[StyleHint] = field(default_factory=list)
     warnings: list[ParseWarning] = field(default_factory=list)
+    materials: list[ParsedMaterialItem] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -213,6 +242,33 @@ class MaterialRecallResult:
 
 
 @dataclass(frozen=True)
+class MaterialReadRequest:
+    id: str = ""
+    action: str = "read_span"
+    file_id: str = ""
+    filename: str = ""
+    offset: int = 0
+    limit: int = 24000
+    purpose: str = ""
+
+
+@dataclass(frozen=True)
+class MaterialReadResult:
+    agent: str = ""
+    request_id: str = ""
+    action: str = ""
+    file_id: str = ""
+    filename: str = ""
+    offset: int = 0
+    end_offset: int = 0
+    text: str = ""
+    char_count: int = 0
+    truncated: bool = False
+    next_offset: int = 0
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class RequirementBrief:
     user_goal: str = ""
     target_use: str = "default"
@@ -227,6 +283,7 @@ class RequirementBrief:
     success_criteria: list[str] = field(default_factory=list)
     uncertainty: list[str] = field(default_factory=list)
     material_queries: list[MaterialQuery] = field(default_factory=list)
+    material_read_requests: list[MaterialReadRequest] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -305,6 +362,7 @@ class ContentDraft:
     references_used: list[str] = field(default_factory=list)
     omitted_items: list[str] = field(default_factory=list)
     material_queries: list[MaterialQuery] = field(default_factory=list)
+    material_read_requests: list[MaterialReadRequest] = field(default_factory=list)
     evidence_used: list[str] = field(default_factory=list)
 
 
@@ -414,6 +472,7 @@ class ValidationReport:
     route_back_to: str = ""
     retry_instruction: str = ""
     material_queries: list[MaterialQuery] = field(default_factory=list)
+    material_read_requests: list[MaterialReadRequest] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -507,6 +566,7 @@ class GenerationState:
     material_index: MaterialIndex | None = None
     temporary_material_context: TemporaryMaterialContext | None = None
     material_recall_results: list[MaterialRecallResult] = field(default_factory=list)
+    material_read_results: list[MaterialReadResult] = field(default_factory=list)
     parsed_style_reference: ParsedDocument | None = None
     requirement_brief: RequirementBrief | None = None
     plan_draft: PlanDraft | None = None

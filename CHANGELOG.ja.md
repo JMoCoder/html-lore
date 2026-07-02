@@ -4,6 +4,35 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-07-02
+
+### Added
+
+- AI generation v2 の agent payload と workflow artifact に structured
+  material status を追加し、parser quality と prompt preview truncation を
+  agents が区別できるようにしました。
+- RequirementAnalyst、ContentWriter、Verifier 向けに bounded task-local
+  MaterialReadTool を追加し、startup chunks や recall snippets が不足する場合に
+  uploaded material を確認できるようにしました。
+- normalized material bundle、per-agent artifacts、material evidence logs を
+  保存する private generation job workspace を追加しました。
+
+### Changed
+
+- 複数 uploaded documents を merge した後も file-level identity と source span を
+  保持し、body text marker だけに依存しない source lookup にしました。
+- failed v2 generation job synchronization を改善し、terminal run が in-progress
+  のまま残らず failed/completed として表示されるようにしました。
+- repeated stages と長い skill list に対する generation workflow detail dialog の
+  表示を改善しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを
+  `1.1.7` に更新しました。
+
+### Security
+
+- Material workspaces は private metadata paths に保存され、public job payload
+  から private paths は除外されます。関連する generated note の削除時に一緒に削除されます。
+
 ## [1.1.6] - 2026-07-02
 
 ### Changed

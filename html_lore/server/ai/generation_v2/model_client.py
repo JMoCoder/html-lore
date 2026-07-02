@@ -25,7 +25,7 @@ class ProviderGenerationModelClient:
         self,
         model_client: ModelClient,
         *,
-        max_prompt_chars: int = 12000,
+        max_prompt_chars: int = 48000,
         max_tokens: int = 4096,
         json_max_tokens: int | None = None,
         html_max_tokens: int | None = None,
@@ -33,7 +33,7 @@ class ProviderGenerationModelClient:
         html_timeout_seconds: int | None = None,
     ) -> None:
         self.model_client = model_client
-        self.max_prompt_chars = max(2000, int(max_prompt_chars or 12000))
+        self.max_prompt_chars = max(2000, int(max_prompt_chars or 48000))
         self.max_tokens = max(512, int(max_tokens or 4096))
         self.json_max_tokens = max(512, int(json_max_tokens or self.max_tokens))
         self.html_max_tokens = max(512, int(html_max_tokens or self.max_tokens))
@@ -193,6 +193,7 @@ def agent_payload(
             "_state": public_generation_state_for_agent(state, node=node),
             "_skills": [public_skill(skill) for skill in skills],
             "_material_recall_phase": material_recall_phase or "query_or_direct",
+            "_available_material_tools": available_material_tools(node),
         }
     )
 
@@ -226,7 +227,9 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
     parsed = state.parsed_document
     style_ref = state.parsed_style_reference
     material_context = state.temporary_material_context
+    material_status = public_material_status(state)
     material_recall_results = compact_material_recall_results(state.material_recall_results, node=node)
+    material_read_results = compact_material_read_results(state.material_read_results, node=node)
     common_input = {
         "instruction": state.input.instruction,
         "filename": state.input.filename,
@@ -252,8 +255,10 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "requirement_brief": public_value(state.requirement_brief),
             "plan_draft": compact_plan_draft(state.plan_draft),
             "parsed_document": compact_parsed_document(parsed),
+            "material_status": material_status,
             "temporary_material_context": compact_temporary_material_context(material_context),
             "material_recall_results": material_recall_results,
+            "material_read_results": material_read_results,
             "execution_checklist": public_value(state.execution_checklist),
             "revision_round": state.revision_round,
         }
@@ -269,8 +274,10 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "plan_draft": compact_plan_draft(state.plan_draft),
             "html_draft": compact_html_draft(state.html_draft),
             "parsed_document": compact_parsed_document(parsed),
+            "material_status": material_status,
             "temporary_material_context": compact_temporary_material_context(material_context),
             "material_recall_results": material_recall_results,
+            "material_read_results": material_read_results,
             "parsed_style_reference": compact_parsed_document(style_ref),
             "revision_round": state.revision_round,
         }
@@ -279,8 +286,10 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
         state_view = {
             "input": common_input,
             "parsed_document": compact_parsed_document(parsed),
+            "material_status": material_status,
             "temporary_material_context": task_material_context,
             "material_recall_results": material_recall_results,
+            "material_read_results": material_read_results,
             "parsed_style_reference": public_parsed_document(style_ref),
             "requirement_brief": public_value(state.requirement_brief),
             "plan_draft": public_value(state.plan_draft),
@@ -294,6 +303,62 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "revision_round": state.revision_round,
         }
     return normalize_for_json(state_view)
+
+
+def public_material_status(state: GenerationState) -> dict[str, Any]:
+    parsed = state.parsed_document
+    context = state.temporary_material_context
+    total_chars = int(getattr(context, "total_chars", 0) or 0)
+    selected_chars = int(getattr(context, "selected_chars", 0) or 0)
+    parsed_chars = len(str(getattr(parsed, "plain_text", "") or ""))
+    total_chars = total_chars or parsed_chars
+    selected_chunk_count = len(getattr(context, "selected_chunks", []) or [])
+    file_count = len(getattr(context, "files", []) or getattr(parsed, "materials", []) or [])
+    parse_warnings = []
+    if parsed is not None:
+        parse_warnings = [
+            {
+                "code": str(getattr(warning, "code", "") or ""),
+                "message": str(getattr(warning, "message", "") or ""),
+                "severity": str(getattr(warning, "severity", "") or ""),
+            }
+            for warning in getattr(parsed, "warnings", [])[:12]
+        ]
+    selected_covers_full_text = material_selection_covers_full_text(total_chars=total_chars, selected_chars=selected_chars)
+    return {
+        "file_count": file_count,
+        "parsed_chars": parsed_chars,
+        "total_chars": total_chars,
+        "selected_chars": selected_chars,
+        "selected_chunk_count": selected_chunk_count,
+        "selected_covers_full_text": selected_covers_full_text,
+        "parsed_document_is_preview": True,
+        "parsed_text_preview_limit": 1200,
+        "parsed_text_preview_truncated": parsed_chars > 1200,
+        "full_text_available_via_material_read": parsed is not None and parsed_chars > 0,
+        "parse_warnings": parse_warnings,
+        "coverage_note": material_coverage_note(
+            total_chars=total_chars,
+            selected_chars=selected_chars,
+            selected_covers_full_text=selected_covers_full_text,
+        ),
+    }
+
+
+def material_coverage_note(*, total_chars: int, selected_chars: int, selected_covers_full_text: bool) -> str:
+    if total_chars <= 0:
+        return "No parsed material text is available."
+    if selected_covers_full_text:
+        return "temporary_material_context selected_chunks cover the full parsed text; parsed_document.plain_text is only a preview."
+    return "temporary_material_context is a partial selection; use MaterialReadTool when full source fidelity or completeness matters."
+
+
+def material_selection_covers_full_text(*, total_chars: int, selected_chars: int) -> bool:
+    if total_chars <= 0:
+        return False
+    if selected_chars >= total_chars:
+        return True
+    return (total_chars - selected_chars) <= max(64, int(total_chars * 0.01))
 
 
 def public_material_inputs(materials: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -312,6 +377,26 @@ def public_material_inputs(materials: list[dict[str, Any]]) -> list[dict[str, An
     return result
 
 
+def available_material_tools(node: str) -> list[dict[str, Any]]:
+    limits = {
+        "RequirementAnalyst": {"max_requests": 2, "max_chars": 48000},
+        "ContentWriter": {"max_requests": 4, "max_chars": 96000},
+        "Verifier": {"max_requests": 3, "max_chars": 96000},
+    }.get(node)
+    if not limits:
+        return []
+    return [
+        {
+            "name": "MaterialReadTool",
+            "description": "Read task-local uploaded material from the normalized merged source using file_id or filename. Use only when startup chunks and recall results are insufficient.",
+            "request_field": "material_read_requests",
+            "actions": ["read_outline", "read_span", "read_file"],
+            "limits": limits,
+            "offset_units": "characters relative to the selected file content span",
+        }
+    ]
+
+
 def public_value(value: Any) -> Any:
     if is_dataclass(value):
         return normalize_for_json(asdict(value))
@@ -325,6 +410,7 @@ def public_parsed_document(parsed: Any) -> dict[str, Any]:
         return {}
     data = public_value(parsed)
     data["plain_text"] = trim_text(str(data.get("plain_text") or ""), 9000)
+    data["materials"] = compact_parsed_materials(data, text_limit=1800)
     return data
 
 
@@ -333,7 +419,57 @@ def compact_parsed_document(parsed: Any) -> dict[str, Any]:
         return {}
     data = public_value(parsed)
     data["plain_text"] = trim_text(str(data.get("plain_text") or ""), 1200)
+    data["materials"] = compact_parsed_materials(public_value(parsed), text_limit=500)
     return data
+
+
+def compact_parsed_materials(parsed_data: Any, *, text_limit: int) -> list[dict[str, Any]]:
+    if not isinstance(parsed_data, dict):
+        return []
+    materials = parsed_data.get("materials")
+    if not isinstance(materials, list):
+        return []
+    plain_text = str(parsed_data.get("plain_text") or "")
+    compact: list[dict[str, Any]] = []
+    for item in materials[:8]:
+        if not isinstance(item, dict):
+            continue
+        content_start = int(item.get("content_start_char") or 0)
+        content_end = int(item.get("content_end_char") or 0)
+        preview = plain_text[max(0, content_start) : min(len(plain_text), content_end)] if content_end >= content_start else ""
+        file_id = str(item.get("file_id") or "")
+        filename = str(item.get("filename") or "")
+        outline = [
+            entry
+            for entry in parsed_data.get("outline", [])[:80]
+            if isinstance(entry, dict) and (entry.get("file_id") == file_id or entry.get("filename") == filename)
+        ][:12]
+        compact.append(
+            {
+                "file_id": file_id,
+                "file_index": int(item.get("file_index") or 0),
+                "filename": filename,
+                "content_type": str(item.get("content_type") or ""),
+                "size": int(item.get("size") or 0),
+                "start_char": int(item.get("start_char") or 0),
+                "end_char": int(item.get("end_char") or 0),
+                "content_start_char": content_start,
+                "content_end_char": content_end,
+                "char_count": int(item.get("char_count") or max(0, content_end - content_start)),
+                "preview": trim_text(preview, text_limit),
+                "outline": outline,
+                "table_count": count_items_for_file(parsed_data.get("tables"), file_id=file_id, filename=filename),
+                "image_count": count_items_for_file(parsed_data.get("images"), file_id=file_id, filename=filename),
+                "link_count": count_items_for_file(parsed_data.get("links"), file_id=file_id, filename=filename),
+            },
+        )
+    return compact
+
+
+def count_items_for_file(items: Any, *, file_id: str, filename: str) -> int:
+    if not isinstance(items, list):
+        return 0
+    return sum(1 for item in items if isinstance(item, dict) and (item.get("file_id") == file_id or item.get("filename") == filename))
 
 
 def compact_temporary_material_context(context: Any) -> dict[str, Any]:
@@ -379,6 +515,58 @@ def compact_material_recall_results(results: list[Any], *, node: str = "") -> li
         data["chunks"] = chunks
         compact.append(data)
     return compact[-10:]
+
+
+def compact_material_read_results(results: list[Any], *, node: str = "") -> list[dict[str, Any]]:
+    if not results:
+        return []
+    visible_agents = {
+        "RequirementAnalyst": {"RequirementAnalyst"},
+        "Planner": {"RequirementAnalyst"},
+        "ContentWriter": {"RequirementAnalyst", "ContentWriter"},
+        "StyleDesigner": {"RequirementAnalyst", "ContentWriter"},
+        "HTMLCoder": {"RequirementAnalyst", "ContentWriter"},
+        "Verifier": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+        "SafetyReviewer": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+        "Finalizer": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+    }.get(node, {"RequirementAnalyst", "ContentWriter", "Verifier"})
+    text_limit = material_read_text_limit(node)
+    total_budget = material_read_total_budget(node)
+    compact: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int]] = set()
+    used_chars = 0
+    for result in results:
+        data = public_value(result)
+        if not isinstance(data, dict) or str(data.get("agent") or "") not in visible_agents:
+            continue
+        key = (str(data.get("agent") or ""), str(data.get("file_id") or data.get("filename") or ""), int(data.get("offset") or 0))
+        if key in seen:
+            continue
+        seen.add(key)
+        remaining = max(0, total_budget - used_chars)
+        if remaining <= 0:
+            break
+        text = trim_text(str(data.get("text") or ""), min(text_limit, remaining))
+        data["text"] = text
+        used_chars += len(text)
+        compact.append(data)
+    return compact[-10:]
+
+
+def material_read_text_limit(node: str) -> int:
+    if node == "Verifier":
+        return 48000
+    if node in {"RequirementAnalyst", "ContentWriter"}:
+        return 24000
+    return 700
+
+
+def material_read_total_budget(node: str) -> int:
+    if node == "Verifier":
+        return 96000
+    if node in {"RequirementAnalyst", "ContentWriter"}:
+        return 72000
+    return 2100
 
 
 def compact_plan_draft(draft: Any) -> dict[str, Any]:

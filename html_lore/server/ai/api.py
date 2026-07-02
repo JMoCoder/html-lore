@@ -86,21 +86,27 @@ class AIService:
 def sync_v2_job_from_run(settings: ServerSettings, job_id: str, run: object, *, status: str, item_id: str = "") -> None:
     if not job_id or not isinstance(run, dict):
         return
+    run_status = str(run.get("status") or status or "").strip()
+    final_status = run_status if run_status in {"completed", "failed", "cancelled", "canceled"} else status
     values: dict[str, object] = {
-        "status": status,
+        "status": final_status,
         "run_id": str(run.get("id") or ""),
         "current_stage": str(run.get("current_stage") or ""),
         "stage_trace": run.get("stage_trace") if isinstance(run.get("stage_trace"), list) else [],
         "execution_checklist": run.get("execution_checklist") if isinstance(run.get("execution_checklist"), list) else [],
         "skill_trace": run.get("skill_trace") if isinstance(run.get("skill_trace"), list) else [],
         "agent_artifacts": run.get("agent_artifacts") if isinstance(run.get("agent_artifacts"), list) else [],
-        "message": "AI generation completed." if status == "completed" else str(run.get("error", {}).get("message") or "AI generation failed."),
-        "retryable": bool(run.get("retryable", status == "failed")),
+        "message": "AI generation completed." if final_status == "completed" else str(run.get("error", {}).get("message") or "AI generation failed."),
+        "retryable": bool(run.get("retryable", final_status == "failed")),
         "cancellable": bool(run.get("cancellable", False)),
     }
+    if final_status in {"completed", "failed", "cancelled", "canceled"}:
+        if run.get("completed_at"):
+            values["completed_at"] = str(run.get("completed_at") or "")
+        values["cancellable"] = False
     if item_id or run.get("item_id"):
         values["item_id"] = item_id or str(run.get("item_id") or "")
-    if status == "failed" and isinstance(run.get("error"), dict):
+    if final_status == "failed" and isinstance(run.get("error"), dict):
         values["error"] = run.get("error")
     AIJobStore(settings).update(job_id, values)
 
@@ -324,6 +330,20 @@ class AIConversationService:
                     def sync_v2_state(state) -> None:
                         generation_store.jobs.update(str(job["job_id"]), generation_store.public_state_summary(state))
 
+                    def sync_material_bundle(reference) -> None:
+                        generation_store.jobs.update(
+                            str(job["job_id"]),
+                            {
+                                "workspace": {
+                                    "status": "ready",
+                                    "bundle_id": str(getattr(reference, "bundle_id", "") or ""),
+                                    "workspace_path": str(getattr(reference, "workspace_path", "") or ""),
+                                    "merged_path": str(getattr(reference, "merged_path", "") or ""),
+                                    "manifest_path": str(getattr(reference, "manifest_path", "") or ""),
+                                }
+                            },
+                        )
+
                     result = generate_note_from_material_v2(
                         settings=self.settings,
                         filename=str(primary.get("filename") or "material.txt"),
@@ -335,6 +355,7 @@ class AIConversationService:
                         model_client=self._generation_v2_model_client(),
                         job_id=str(job["job_id"]),
                         on_state=sync_v2_state,
+                        on_material_bundle_ready=sync_material_bundle,
                     )
                 else:
                     combined = combine_materials_for_legacy(material_list)
@@ -470,9 +491,10 @@ class AIConversationService:
         config = replace(base_config, model=self.settings.ai_generation_model or base_config.model)
         if config.provider == "fake":
             return FakeGenerationModelClient()
+        generation_prompt_chars = max(self.settings.ai_max_prompt_chars, 48000)
         return build_provider_generation_client(
             ModelClient(config),
-            max_prompt_chars=self.settings.ai_max_prompt_chars,
+            max_prompt_chars=generation_prompt_chars,
             max_tokens=self.settings.ai_generation_max_tokens,
             json_max_tokens=self.settings.ai_generation_json_max_tokens,
             html_max_tokens=self.settings.ai_generation_html_max_tokens,

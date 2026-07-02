@@ -9,6 +9,35 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-07-02
+
+### Added
+
+- Added structured material status to AI generation v2 agent payloads and
+  workflow artifacts so agents can distinguish parser quality from prompt
+  preview truncation.
+- Added a bounded task-local MaterialReadTool for RequirementAnalyst,
+  ContentWriter, and Verifier to inspect uploaded material when startup chunks
+  or recall snippets are insufficient.
+- Added private generation job workspaces for normalized material bundles,
+  per-agent artifacts, and material evidence logs.
+
+### Changed
+
+- Preserved per-file material identity across merged uploaded documents so
+  multi-file jobs can locate source spans without relying on body text markers.
+- Improved failed v2 generation job synchronization so terminal runs stay
+  failed/completed instead of appearing stuck in progress.
+- Improved the generation workflow detail dialog for repeated stages and long
+  skill lists.
+- Updated package, app, PWA, demo, and provider user-agent versions to
+  `1.1.7`.
+
+### Security
+
+- Material workspaces are stored under private metadata paths, sanitized from
+  public job payloads, and removed with the associated generated note.
+
 ## [1.1.6] - 2026-07-02
 
 ### Changed

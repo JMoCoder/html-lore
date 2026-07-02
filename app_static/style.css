@@ -4283,7 +4283,7 @@ a.icon-action {
   height: min(920px, calc(100vh - 24px));
   min-height: min(720px, calc(100vh - 24px));
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(420px, 1fr) minmax(140px, 220px) auto;
   gap: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -4530,6 +4530,7 @@ a.icon-action {
 }
 
 .ai-generation-detail-footer {
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
@@ -4537,10 +4538,18 @@ a.icon-action {
 
 .ai-generation-detail-footer section {
   min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
   background: var(--panel);
+}
+
+.ai-generation-detail-footer section > div {
+  min-height: 0;
+  overflow: auto;
 }
 
 .ai-generation-detail-footer h3 {
@@ -4592,6 +4601,7 @@ a.icon-action {
 }
 
 .ai-generation-skill-list {
+  min-height: 0;
   display: grid;
   gap: 6px;
   margin: 0;
@@ -4891,6 +4901,7 @@ a.icon-action {
     width: 100%;
     height: calc(100vh - 24px);
     min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) minmax(140px, 220px) auto;
   }
 
   .ai-generation-detail-header,

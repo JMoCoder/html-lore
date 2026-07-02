@@ -109,6 +109,35 @@ def test_item_service_deletes_archived_item_and_rebuilds(tmp_path: Path) -> None
     assert all(item["id"] != "imported/docker-network.html" for item in manifest["items"])
 
 
+def test_item_service_deletes_workspace_with_archived_item(tmp_path: Path) -> None:
+    content_dir = tmp_path / "content"
+    meta_dir = tmp_path / "meta"
+    public_dir = tmp_path / "public"
+    shutil.copytree(ROOT / "examples" / "content", content_dir)
+    shutil.copytree(ROOT / "examples" / "meta", meta_dir)
+    archived_meta = meta_dir / "items" / "imported" / "docker-network.yml"
+    archived_meta.write_text(
+        archived_meta.read_text(encoding="utf-8") + "archived: true\nworkspace:\n  job_id: ai_job_delete\n",
+        encoding="utf-8",
+    )
+    workspace_dir = meta_dir / "ai" / "generation-jobs" / "ai_job_delete" / "workspace"
+    materials_dir = workspace_dir / "materials"
+    materials_dir.mkdir(parents=True)
+    (materials_dir / "merged.md").write_text("private source", encoding="utf-8")
+    (materials_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    settings = ServerSettings(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        site_title="Delete Test",
+        max_upload_bytes=10 * 1024 * 1024,
+    )
+
+    ItemService(settings).delete_item("imported/docker-network.html")
+
+    assert not workspace_dir.exists()
+
+
 def test_item_service_reads_item_content_safely() -> None:
     service = ItemService(SETTINGS)
 

@@ -150,6 +150,17 @@ def recall_score(chunk: MaterialChunk, query_tokens: set[str], target_files: set
 
 
 def split_parsed_document_by_file(parsed: ParsedDocument) -> list[tuple[str, str]]:
+    if parsed.materials:
+        sections = []
+        for index, material in enumerate(parsed.materials, start=1):
+            filename = material.filename or f"material-{index}"
+            start = max(0, material.content_start_char)
+            end = min(len(parsed.plain_text), material.content_end_char)
+            text = parsed.plain_text[start:end] if end >= start else ""
+            if text:
+                sections.append((filename, text.strip()))
+        if sections:
+            return sections
     text = parsed.plain_text or ""
     if not text:
         return []

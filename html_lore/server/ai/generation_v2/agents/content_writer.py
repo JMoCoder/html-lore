@@ -29,6 +29,7 @@ class ContentWriterAgent(GenerationAgent):
             "key_points": ["Parsed source material", "Structured HTML note", "Static output"],
             "references_used": [item.filename for item in (state.parsed_document.source_files if state.parsed_document else [])],
             "material_queries": [] if any(result.agent == "ContentWriter" for result in state.material_recall_results) else [{"id": "content_evidence", "query": first_non_empty(goal, state.input.instruction, "source evidence for planned sections"), "purpose": "Collect evidence needed to write the planned sections."}],
+            "material_read_requests": [],
             "evidence_used": [result.query for result in state.material_recall_results if result.agent in {"RequirementAnalyst", "ContentWriter"}],
         }
 

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
-from typing import Any
+from dataclasses import asdict, dataclass, is_dataclass, replace
+from typing import Any, Callable
 
 from html_lore.server.ai.providers import ProviderCallError
 
 from ..fake_model import FakeGenerationModelClient
 from ..material_context import recall_material
+from ..material_read import read_material
 from ..model_client import GenerationJsonModelClient, agent_payload
 from ..schema_loader import AgentOutputSchemaError, parse_dataclass_json
 from ..schemas import AgentArtifact, ChecklistStatus, GenerationStage, GenerationState, SkillTraceEntry, normalize_for_json
@@ -20,6 +21,9 @@ MAX_PROVIDER_RETRIES = 2
 MATERIAL_RECALL_AGENTS = {"RequirementAnalyst", "ContentWriter", "Verifier"}
 MATERIAL_RECALL_QUERY_LIMITS = {"RequirementAnalyst": 3, "ContentWriter": 6, "Verifier": 4}
 MATERIAL_RECALL_CHAR_LIMITS = {"RequirementAnalyst": 9000, "ContentWriter": 12000, "Verifier": 8000}
+MATERIAL_READ_AGENTS = {"RequirementAnalyst", "ContentWriter", "Verifier"}
+MATERIAL_READ_REQUEST_LIMITS = {"RequirementAnalyst": 2, "ContentWriter": 4, "Verifier": 3}
+MATERIAL_READ_CHAR_LIMITS = {"RequirementAnalyst": 48000, "ContentWriter": 96000, "Verifier": 96000}
 
 
 @dataclass(frozen=True)
@@ -33,17 +37,20 @@ class GenerationAgent:
     stage = GenerationStage.QUEUED
     output_schema: type[Any] | None = None
 
-    def __init__(self, model_client: GenerationJsonModelClient | None = None) -> None:
+    def __init__(self, model_client: GenerationJsonModelClient | None = None, *, workspace_writer: Callable[[GenerationState, str, Any, str], None] | None = None) -> None:
         self.model_client = model_client or FakeGenerationModelClient()
+        self.workspace_writer = workspace_writer
 
     def run(self, state: GenerationState) -> GenerationAgentResult:
         next_state = start_stage(state, self.stage, agent=self.name, message=f"{self.name} started.")
         skills = resolve_skills_for_agent(self.name, next_state)
         try:
             output = self.invoke_structured(next_state, skills=skills)
-            next_state, output = self.apply_material_recall_if_needed(next_state, output, skills=skills)
+            next_state, output = self.apply_material_access_if_needed(next_state, output, skills=skills)
             next_state = self.apply_output(next_state, output)
+            self.persist_agent_output(next_state, output)
             next_state = self.record_agent_artifact(next_state, output)
+            self.persist_agent_artifact(next_state)
             next_state = self.record_skill_trace(next_state, skills=skills)
             next_state = self.update_execution_checklist(next_state, ChecklistStatus.COMPLETED)
             next_state = complete_stage(next_state, self.stage, message=f"{self.name} completed.", metadata=self.output_metadata(output, next_state))
@@ -91,9 +98,48 @@ class GenerationAgent:
     def apply_output(self, state: GenerationState, output: Any) -> GenerationState:
         raise NotImplementedError
 
-    def apply_material_recall_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...]) -> tuple[GenerationState, Any]:
+    def apply_material_access_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...]) -> tuple[GenerationState, Any]:
+        read_state, read_output = self.apply_material_read_if_needed(state, output, skills=skills)
+        return self.apply_material_recall_if_needed(read_state, read_output, skills=skills)
+
+    def apply_material_read_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...], depth: int = 0) -> tuple[GenerationState, Any]:
+        if self.name not in MATERIAL_READ_AGENTS or state.parsed_document is None:
+            return state, output
+        if depth >= max_material_read_rounds(self.name):
+            return state, output
+        requests = material_read_requests_from_output(output)
+        if not requests:
+            return state, output
+        results = read_material(
+            state.parsed_document,
+            requests,
+            agent=self.name,
+            max_requests=MATERIAL_READ_REQUEST_LIMITS.get(self.name, 2),
+            max_chars=MATERIAL_READ_CHAR_LIMITS.get(self.name, 12000),
+        )
+        if not results:
+            return state, output
+        read_state = replace(state, material_read_results=[*state.material_read_results, *results])
+        self.persist_workspace_records(read_state, "evidence/material_reads.jsonl", results)
+        final_output = self.invoke_structured(read_state, skills=skills, material_recall_phase="final")
+        return self.apply_material_read_if_needed(read_state, final_output, skills=skills, depth=depth + 1)
+
+    def apply_material_recall_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...], depth: int = 0) -> tuple[GenerationState, Any]:
         if self.name not in MATERIAL_RECALL_AGENTS or state.material_index is None:
             return state, output
+        if self.name == "Verifier" and any(result.agent == self.name for result in state.material_read_results):
+            return state, strip_pending_material_queries(output)
+        if self.name == "Verifier" and material_recall_phase_is_final(state, self.name):
+            if material_read_requests_from_output(output):
+                state, output = self.apply_material_read_if_needed(state, output, skills=skills)
+                return state, strip_pending_material_queries(output)
+            if depth >= max_material_recall_rounds(self.name):
+                read_requests = material_read_requests_for_unresolved_queries(state, output, agent_name=self.name)
+                if read_requests:
+                    output = replace(output, material_queries=[], material_read_requests=read_requests)
+                    state, output = self.apply_material_read_if_needed(state, output, skills=skills)
+                    return state, strip_pending_material_queries(output)
+                return state, strip_pending_material_queries(output)
         queries = material_queries_from_output(output)
         if not queries:
             return state, output
@@ -107,8 +153,9 @@ class GenerationAgent:
         if not results:
             return state, output
         recall_state = replace(state, material_recall_results=[*state.material_recall_results, *results])
+        self.persist_workspace_records(recall_state, "evidence/material_recalls.jsonl", results)
         final_output = self.invoke_structured(recall_state, skills=skills, material_recall_phase="final")
-        return recall_state, final_output
+        return self.apply_material_recall_if_needed(recall_state, final_output, skills=skills, depth=depth + 1)
 
     def record_node_retry(self, state: GenerationState) -> GenerationState:
         retries = dict(state.same_node_retries)
@@ -145,6 +192,42 @@ class GenerationAgent:
             return state
         return replace(state, agent_artifacts=[*state.agent_artifacts, artifact])
 
+    def persist_agent_artifact(self, state: GenerationState) -> None:
+        if not state.job_id or not state.agent_artifacts:
+            return
+        self.persist_workspace_records(state, "trace/agent_artifacts.jsonl", [state.agent_artifacts[-1]])
+
+    def persist_agent_output(self, state: GenerationState, output: Any) -> None:
+        if not state.job_id or output is None:
+            return
+        path = workspace_artifact_path_for_agent(self.name, output)
+        if not path:
+            return
+        if path.endswith(".html"):
+            self.persist_workspace_value(state, path, str(getattr(output, "html", "") or ""), mode="text")
+        else:
+            self.persist_workspace_value(state, path, asdict(output) if is_dataclass(output) else output, mode="json")
+
+    def persist_workspace_records(self, state: GenerationState, relative_path: str, records: list[Any]) -> None:
+        if not state.job_id or not records:
+            return
+        if self.workspace_writer is None:
+            return
+        try:
+            self.workspace_writer(state, relative_path, records, "jsonl")
+        except Exception:
+            return
+
+    def persist_workspace_value(self, state: GenerationState, relative_path: str, value: Any, *, mode: str) -> None:
+        if not state.job_id:
+            return
+        if self.workspace_writer is None:
+            return
+        try:
+            self.workspace_writer(state, relative_path, value, mode)
+        except Exception:
+            return
+
     def build_agent_artifact(self, state: GenerationState, output: Any) -> AgentArtifact | None:
         if output is None:
             return None
@@ -169,6 +252,7 @@ class GenerationAgent:
                 "style_preferences": safe_string_list(getattr(output, "style_preferences", []), limit=6),
                 "uncertainty": safe_string_list(getattr(output, "uncertainty", []), limit=6),
                 "success_criteria": safe_string_list(getattr(output, "success_criteria", []), limit=8),
+                "material_status": public_material_status_for_artifact(state),
             }
         elif self.name == "Planner":
             title = "Plan"
@@ -197,6 +281,7 @@ class GenerationAgent:
                 "key_points": safe_string_list(getattr(output, "key_points", []), limit=8),
                 "references_used": safe_string_list(getattr(output, "references_used", []), limit=8),
                 "omitted_items": safe_string_list(getattr(output, "omitted_items", []), limit=8),
+                "material_status": public_material_status_for_artifact(state),
             }
         elif self.name == "StyleDesigner":
             title = "Style brief"
@@ -258,6 +343,7 @@ class GenerationAgent:
                 "unsupported_claims": safe_string_list(getattr(output, "unsupported_claims", []), limit=8),
                 "route_back_to": str(getattr(output, "route_back_to", "") or ""),
                 "retry_instruction": short_text(getattr(output, "retry_instruction", ""), 260),
+                "material_status": public_material_status_for_artifact(state),
             }
         elif self.name == "SafetyReviewer":
             title = "Safety review"
@@ -453,6 +539,17 @@ def build_usage_summary(agent_name: str, state: GenerationState, output: Any) ->
         usage["section_count"] = len(getattr(output, "sections") or [])
     elif hasattr(output, "section_plan"):
         usage["section_count"] = len(getattr(output, "section_plan") or [])
+    read_results = [result for result in state.material_read_results if result.agent == agent_name]
+    if read_results:
+        usage["material_read_count"] = len(read_results)
+        usage["material_read_chars"] = sum(result.char_count for result in read_results)
+    recall_results = [result for result in state.material_recall_results if result.agent == agent_name]
+    if recall_results:
+        usage["material_recall_count"] = len(recall_results)
+        usage["material_recall_chars"] = sum(result.total_chars for result in recall_results)
+    suppressed_queries = int(getattr(output, "_suppressed_material_query_count", 0) or 0)
+    if suppressed_queries:
+        usage["material_query_suppressed_count"] = suppressed_queries
     return usage
 
 
@@ -728,6 +825,132 @@ def public_dict(value: Any) -> dict[str, Any]:
     return normalize_for_json(asdict(value))
 
 
+def public_material_status_for_artifact(state: GenerationState) -> dict[str, Any]:
+    context = state.temporary_material_context
+    parsed = state.parsed_document
+    total_chars = int(getattr(context, "total_chars", 0) or 0) or len(str(getattr(parsed, "plain_text", "") or ""))
+    selected_chars = int(getattr(context, "selected_chars", 0) or 0)
+    return {
+        "file_count": len(getattr(context, "files", []) or getattr(parsed, "materials", []) or []),
+        "total_chars": total_chars,
+        "selected_chars": selected_chars,
+        "selected_covers_full_text": material_selection_covers_full_text(total_chars=total_chars, selected_chars=selected_chars),
+        "parsed_text_preview_truncated": len(str(getattr(parsed, "plain_text", "") or "")) > 1200,
+    }
+
+
+def material_selection_covers_full_text(*, total_chars: int, selected_chars: int) -> bool:
+    if total_chars <= 0:
+        return False
+    if selected_chars >= total_chars:
+        return True
+    return (total_chars - selected_chars) <= max(64, int(total_chars * 0.01))
+
+
 def material_queries_from_output(output: Any) -> list[Any]:
     queries = getattr(output, "material_queries", [])
     return queries if isinstance(queries, list) else []
+
+
+def material_recall_phase_is_final(state: GenerationState, agent_name: str) -> bool:
+    return any(result.agent == agent_name for result in state.material_recall_results)
+
+
+def material_read_requests_for_unresolved_queries(state: GenerationState, output: Any, *, agent_name: str) -> list[Any]:
+    if agent_name != "Verifier" or state.parsed_document is None:
+        return []
+    queries = material_queries_from_output(output)
+    if not queries:
+        return []
+    if any(result.agent == agent_name for result in state.material_read_results):
+        return []
+    materials = list(state.parsed_document.materials)
+    if not materials:
+        return []
+    requests = []
+    for index, query in enumerate(queries[: MATERIAL_READ_REQUEST_LIMITS.get(agent_name, 3)], start=1):
+        filenames = [str(name or "") for name in getattr(query, "target_files", []) if str(name or "")]
+        material = material_for_query(materials, filenames)
+        if material is None:
+            continue
+        requests.append(
+            material_read_request(
+                request_id=f"verify-source-{index}",
+                file_id=material.file_id,
+                filename=material.filename,
+                purpose=str(getattr(query, "purpose", "") or getattr(query, "query", "") or "Read original material to finish verification."),
+            )
+        )
+    if not requests and len(materials) == 1:
+        material = materials[0]
+        requests.append(
+            material_read_request(
+                request_id="verify-source",
+                file_id=material.file_id,
+                filename=material.filename,
+                purpose="Read original material to finish verifier source-fidelity decision.",
+            )
+        )
+    return requests
+
+
+def material_for_query(materials: list[Any], filenames: list[str]) -> Any:
+    if not filenames and len(materials) == 1:
+        return materials[0]
+    lowered_names = [name.lower() for name in filenames]
+    for material in materials:
+        filename = str(getattr(material, "filename", "") or "").lower()
+        if any(name and (name == filename or name in filename or filename in name) for name in lowered_names):
+            return material
+    return materials[0] if len(materials) == 1 else None
+
+
+def material_read_request(*, request_id: str, file_id: str, filename: str, purpose: str) -> Any:
+    from ..schemas import MaterialReadRequest
+
+    return MaterialReadRequest(id=request_id, action="read_file", file_id=file_id, filename=filename, limit=48000, purpose=purpose)
+
+
+def strip_pending_material_queries(output: Any) -> Any:
+    queries = material_queries_from_output(output)
+    if not queries:
+        return output
+    try:
+        next_output = replace(output, material_queries=[])
+        object.__setattr__(next_output, "_suppressed_material_query_count", len(queries))
+        return next_output
+    except TypeError:
+        return output
+
+
+def material_read_requests_from_output(output: Any) -> list[Any]:
+    requests = getattr(output, "material_read_requests", [])
+    return requests if isinstance(requests, list) else []
+
+
+def max_material_read_rounds(agent_name: str) -> int:
+    return 3 if agent_name == "ContentWriter" else 1
+
+
+def max_material_recall_rounds(agent_name: str) -> int:
+    return 2 if agent_name == "Verifier" else 1
+
+
+def workspace_artifact_path_for_agent(agent_name: str, output: Any) -> str:
+    if agent_name == "RequirementAnalyst":
+        return "artifacts/requirement_brief.json"
+    if agent_name == "Planner":
+        return "artifacts/plan_draft.json"
+    if agent_name == "ContentWriter":
+        return "artifacts/content_draft.json"
+    if agent_name == "StyleDesigner":
+        return "artifacts/style_brief.json"
+    if agent_name == "HTMLCoder":
+        return "artifacts/html_draft.html"
+    if agent_name == "Verifier":
+        return "artifacts/validation_report.json"
+    if agent_name == "SafetyReviewer":
+        return "artifacts/safety_report.json"
+    if agent_name == "Finalizer":
+        return "artifacts/final_proposal.json"
+    return ""

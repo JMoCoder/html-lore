@@ -23,6 +23,7 @@ class VerifierAgent(GenerationAgent):
             "route_back_to": "" if ok else "html_coder",
             "retry_instruction": "" if ok else "Regenerate missing draft fields.",
             "material_queries": [] if has_verifier_recall or not ok else [{"id": "verify_key_claims", "query": verification_query(state), "purpose": "Check whether the generated key claims are supported by uploaded material evidence."}],
+            "material_read_requests": [],
         }
 
     def apply_output(self, state, output):

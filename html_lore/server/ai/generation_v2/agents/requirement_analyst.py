@@ -40,6 +40,7 @@ class RequirementAnalystAgent(GenerationAgent):
             "reference_style_files": [state.input.reference_file_name] if state.input.reference_file_name else [],
             "success_criteria": ["Preserve source intent.", "Produce readable static HTML.", "Avoid unsupported claims."],
             "material_queries": [] if state.material_recall_results else [{"id": "source_overview", "query": first_non_empty(state.input.instruction, state.input.filename, "uploaded material overview"), "purpose": "Confirm the most relevant uploaded material evidence before finalizing requirements."}],
+            "material_read_requests": [],
         }
 
     def apply_output(self, state, output):

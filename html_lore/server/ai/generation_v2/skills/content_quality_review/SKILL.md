@@ -42,6 +42,11 @@ Use a two-phase evidence policy:
 1. If a source-fidelity or completeness concern depends on evidence that is not currently visible, return focused `material_queries` first as Verifier's own lookup step.
 2. After Verifier-specific `material_recall_results` are present, decide whether there is a real defect, then route revisions if needed.
 
+The second phase may use one additional focused recall if the first recall was too broad or missed the right chunk. Avoid repeated broad `material_queries` after two recall attempts. Use the returned evidence to either pass the artifact, route a concrete confirmed defect to the most relevant upstream agent, or request targeted `material_read_requests` when the recall snippets are too narrow to verify faithful conversion, exact source wording, or completeness.
+
+After material read evidence is present, prefer a concrete validation decision based on that direct source evidence. Request more evidence only when the available tool schema explicitly allows another bounded read round and the next requested span is specific.
+After Verifier has received material read evidence, avoid falling back to broad recall. The source has already been inspected more directly; either pass the artifact, request a specific bounded span, or route a concrete defect with supporting notes.
+
 Do not return a final `ok: false` for unsupported claims, missing source sections, missing tables, missing figures, or uncertain omissions until you have either used Verifier recall evidence or the issue can be judged without additional source evidence.
 For non-evidence issues such as requirement mismatch, wrong representation, ignored style brief, layout breakage, or incomplete HTML, inspect the current artifacts directly and route the confirmed problem without material recall.
 
@@ -107,6 +112,7 @@ Fail and route back when:
 
 When failing, `route_back_to` must not be empty. Empty `route_back_to` is only for passing artifacts.
 The only non-passing response that may leave `route_back_to` empty is an evidence-retrieval response with non-empty `material_queries`, because the graph will retrieve material and call Verifier again. This is still part of Verifier's own review, not a revision request.
+After recall evidence has returned, do not route a failed report by default. If evidence is still incomplete, state the concrete unresolved evidence gap and choose the most relevant upstream owner only when the next action is clear.
 
 ## Routing Guidance
 
@@ -117,7 +123,7 @@ Use the most specific `route_back_to`:
 - `html_coder`: HTML is incomplete, malformed, unreadable, responsive behavior is broken, style was planned but not implemented, or structured comparison/risk/parameter content was flattened despite being present in ContentDraft/StyleBrief.
 
 Use an empty `route_back_to` when the artifact passes.
-If the artifact is otherwise well formed but exact source fidelity or completeness needs a stronger evidence pass, route to `content_writer` so the content draft can incorporate recalled source evidence before recoding.
+If the artifact is otherwise well formed but exact source fidelity or completeness needs a stronger evidence pass, first use available material evidence tools. Route to an upstream agent only after identifying what needs to change.
 
 ## Scoring
 

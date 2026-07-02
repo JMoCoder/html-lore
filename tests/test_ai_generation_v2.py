@@ -1,25 +1,31 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from dataclasses import fields
 from pathlib import Path
 
 from html_lore.server.ai.generation_v2.agents.requirement_analyst import RequirementAnalystAgent
 from html_lore.server.ai.generation_v2.agents.html_coder import HTMLCoderAgent
-from html_lore.server.ai.generation_v2.graph import HtmlGenerationV2Graph
+from html_lore.server.ai.generation_v2.agents.content_writer import ContentWriterAgent
+from html_lore.server.ai.generation_v2.agents.verifier import VerifierAgent
+from html_lore.server.ai.generation_v2.graph import HtmlGenerationV2Graph, merge_parsed_documents
 from html_lore.server.ai.generation_v2.fake_model import FakeGenerationModelClient
 from html_lore.server.ai.generation_v2.material_context import build_material_index, build_temporary_material_context, recall_material
 from html_lore.server.ai.generation_v2.material_runner import generate_note_from_material_v2
-from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
+from html_lore.server.ai.generation_v2.material_bundle import build_material_bundle, cleanup_expired_failed_job_workspaces, write_job_material_bundle, read_material_bundle_reference
+from html_lore.server.ai.generation_v2.material_read import read_material
+from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, agent_payload, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.orchestrator import GenerationOrchestrator
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, NoteMetadataProposal, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, DocumentImage, DocumentLink, DocumentTable, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, MaterialReadRequest, NoteMetadataProposal, OutlineItem, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport
 from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
 from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
 from html_lore.server.ai.generation_v2.store import GenerationStore
-from html_lore.server.ai.api import sync_v2_job_from_run
+from html_lore.server.ai.api import AIConversationService, sync_v2_job_from_run
 from html_lore.server.ai.generation_v2.tools import document_parser
 from html_lore.server.ai.generation_v2.tools.document_parser import parse_document, parse_document_basic
 from html_lore.server.ai.generation_v2.tools.html_safety import scan_html_safety
@@ -29,6 +35,7 @@ from html_lore.server.ai.generation_v2.write_gateway import WriteGateway, WriteG
 from html_lore.server.ai.html_generation import GenerationSpec
 from html_lore.server.ai.jobs import AIJobStore
 from html_lore.server.ai.material_generation import MaterialGenerationError
+from html_lore.server.ai.providers import AIProviderConfig
 from html_lore.server.ai.runs import AIRunStore
 from html_lore.server.config import ServerSettings, load_settings
 
@@ -105,6 +112,12 @@ def test_generation_v2_graph_runs_fake_agent_flow() -> None:
     assert html_artifact.data["html_chars"] == len(result.html_draft.html)
     assert "html" not in html_artifact.data
     assert html_artifact.quality_score > 0
+    requirement_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "RequirementAnalyst")
+    assert requirement_artifact.data["material_status"]["selected_covers_full_text"] is True
+    writer_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "ContentWriter")
+    assert writer_artifact.data["material_status"]["total_chars"] > 0
+    verifier_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "Verifier")
+    assert "selected_covers_full_text" in verifier_artifact.data["material_status"]
     planner_artifact = next(artifact for artifact in result.agent_artifacts if artifact.agent == "Planner")
     assert planner_artifact.data["section_plan"]
     assert planner_artifact.quality_score > 0
@@ -716,6 +729,473 @@ Reference comparison table
     assert any(chunk.filename == "second.pptx" for chunk in results[0].chunks)
 
 
+def test_generation_v2_merge_preserves_structured_material_items_and_file_ownership() -> None:
+    first = ParsedDocument(
+        source_files=[SourceFile(filename="A.docx", content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", size=10)],
+        plain_text="Alpha content",
+        outline=[OutlineItem(level=1, title="Alpha", text="Alpha")],
+        links=[DocumentLink(text="Alpha link", url="https://example.test/a", source="markdown")],
+    )
+    second = ParsedDocument(
+        source_files=[SourceFile(filename="B.pdf", content_type="application/pdf", size=20)],
+        plain_text="Beta content",
+        images=[DocumentImage(alt="Beta image", description="Chart", source="page-1")],
+        tables=[DocumentTable(title="Beta table", headers=["Name", "Value"], rows=[["Beta", "2"]])],
+    )
+
+    merged = merge_parsed_documents([first, second])
+
+    assert [item.file_id for item in merged.materials] == ["file-1", "file-2"]
+    assert [item.filename for item in merged.materials] == ["A.docx", "B.pdf"]
+    assert merged.plain_text[merged.materials[0].content_start_char : merged.materials[0].content_end_char] == "Alpha content"
+    assert merged.plain_text[merged.materials[1].content_start_char : merged.materials[1].content_end_char] == "Beta content"
+    assert merged.materials[0].start_char == 0
+    assert merged.materials[0].char_count == len("Alpha content")
+    assert merged.source_files[0].file_id == "file-1"
+    assert merged.source_files[1].file_index == 2
+    assert merged.outline[0].filename == "A.docx"
+    assert merged.links[0].file_id == "file-1"
+    assert merged.images[0].filename == "B.pdf"
+    assert merged.tables[0].file_index == 2
+
+
+def test_generation_v2_single_material_has_full_text_span_without_duplicate_document() -> None:
+    parsed = ParsedDocument(source_files=[SourceFile(filename="single.md")], plain_text="Only source text")
+
+    merged = merge_parsed_documents([parsed])
+
+    assert merged.plain_text == "Only source text"
+    assert len(merged.materials) == 1
+    assert merged.materials[0].filename == "single.md"
+    assert merged.materials[0].start_char == 0
+    assert merged.materials[0].end_char == len("Only source text")
+    assert merged.materials[0].content_start_char == 0
+    assert merged.materials[0].content_end_char == len("Only source text")
+    assert not hasattr(merged.materials[0], "parsed_document")
+
+
+def test_generation_v2_material_index_prefers_structured_materials_over_body_markers() -> None:
+    first = ParsedDocument(
+        source_files=[SourceFile(filename="A.md")],
+        plain_text="A introduction\nSource file: this is original body text, not a boundary\nA ending",
+    )
+    second = ParsedDocument(source_files=[SourceFile(filename="B.md")], plain_text="B content")
+    merged = merge_parsed_documents([first, second])
+
+    index = build_material_index(merged, instruction="")
+
+    assert [item.filename for item in index.files] == ["A.md", "B.md"]
+    assert index.files[0].char_count == len(first.plain_text)
+    assert any("not a boundary" in chunk.text and chunk.filename == "A.md" for chunk in index.chunks)
+
+
+def test_generation_v2_agent_state_exposes_compact_material_file_identity() -> None:
+    merged = merge_parsed_documents(
+        [
+            ParsedDocument(source_files=[SourceFile(filename="A.md")], plain_text="Alpha " * 300),
+            ParsedDocument(source_files=[SourceFile(filename="B.md")], plain_text="Beta details"),
+        ],
+    )
+    context = build_temporary_material_context(merged, instruction="Beta")
+    state = GenerationState(input=GenerationInput(instruction="Beta"), parsed_document=merged, temporary_material_context=context)
+
+    view = public_generation_state_for_agent(state, node="RequirementAnalyst")
+
+    assert view["parsed_document"]["materials"][0]["file_id"] == "file-1"
+    assert view["parsed_document"]["materials"][1]["filename"] == "B.md"
+    assert view["parsed_document"]["materials"][0]["char_count"] == len("Alpha " * 300)
+    assert "parsed_document" not in view["parsed_document"]["materials"][0]
+    assert "content_start_char" in view["parsed_document"]["materials"][0]
+
+
+def test_generation_v2_material_read_tool_reads_file_spans_and_continuations() -> None:
+    merged = merge_parsed_documents(
+        [
+            ParsedDocument(source_files=[SourceFile(filename="A.md")], plain_text="Alpha " * 300),
+            ParsedDocument(source_files=[SourceFile(filename="B.md")], plain_text="Beta source body"),
+        ],
+    )
+
+    results = read_material(
+        merged,
+        [MaterialReadRequest(id="read-a", action="read_file", file_id="file-1", limit=120)],
+        agent="ContentWriter",
+        max_requests=1,
+        max_chars=120,
+    )
+
+    assert results[0].filename == "A.md"
+    assert results[0].text.startswith("Alpha")
+    assert results[0].truncated is True
+    assert results[0].next_offset == 120
+
+    next_results = read_material(
+        merged,
+        [MaterialReadRequest(id="read-a-2", action="read_span", file_id="file-1", offset=results[0].next_offset, limit=80)],
+        agent="ContentWriter",
+        max_requests=1,
+        max_chars=80,
+    )
+    assert next_results[0].offset == 120
+    assert next_results[0].char_count == 80
+
+
+def test_generation_v2_material_read_deduplicates_same_file_reads() -> None:
+    merged = merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.md")], plain_text="Alpha source body")])
+
+    results = read_material(
+        merged,
+        [
+            MaterialReadRequest(id="a", action="read_file", file_id="file-1", limit=200),
+            MaterialReadRequest(id="b", action="read_file", file_id="file-1", limit=200),
+        ],
+        agent="Verifier",
+        max_requests=3,
+        max_chars=1000,
+    )
+
+    assert len(results) == 1
+    assert results[0].text == "Alpha source body"
+
+
+def test_generation_v2_agent_payload_exposes_material_read_tool_schema() -> None:
+    state = GenerationState(input=GenerationInput(instruction="Create."))
+
+    payload = agent_payload(node="ContentWriter", schema=ContentDraft, state=state, fallback={}, skills=())
+
+    assert payload["_available_material_tools"][0]["name"] == "MaterialReadTool"
+    assert payload["_available_material_tools"][0]["request_field"] == "material_read_requests"
+    assert agent_payload(node="Planner", schema=PlanDraft, state=state, fallback={}, skills=())["_available_material_tools"] == []
+
+
+def test_generation_v2_verifier_payload_keeps_full_material_read_evidence() -> None:
+    long_text = "完整原文" + ("0123456789" * 450)
+    state = GenerationState(
+        input=GenerationInput(instruction="Verify."),
+        material_read_results=[
+            read_material(
+                merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.md")], plain_text=long_text)]),
+                [MaterialReadRequest(id="read", action="read_file", file_id="file-1", limit=6000)],
+                agent="Verifier",
+                max_requests=1,
+                max_chars=6000,
+            )[0]
+        ],
+    )
+
+    payload = agent_payload(node="Verifier", schema=ValidationReport, state=state, fallback={}, skills=())
+
+    assert payload["_state"]["material_read_results"][0]["text"] == long_text
+
+
+def test_generation_v2_agent_material_read_runs_before_final_output() -> None:
+    merged = merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.md")], plain_text="Complete source evidence for writer.")])
+    state = GenerationState(
+        input=GenerationInput(instruction="Write from source."),
+        parsed_document=merged,
+        requirement_brief=RequirementBrief(user_goal="Write from source."),
+    )
+
+    class ReadingClient(FakeGenerationModelClient):
+        def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
+            if node == "ContentWriter" and not payload["_state"].get("material_read_results"):
+                return json.dumps(
+                    {
+                        "title": "Need read",
+                        "summary": "",
+                        "sections": [],
+                        "key_points": [],
+                        "references_used": [],
+                        "material_queries": [],
+                        "material_read_requests": [{"id": "source", "action": "read_file", "file_id": "file-1", "limit": 200, "purpose": "Read source."}],
+                    },
+                    ensure_ascii=False,
+                )
+            return json.dumps(
+                {
+                    "title": "Read Done",
+                    "summary": payload["_state"]["material_read_results"][0]["text"],
+                    "sections": [{"id": "s", "title": "Source", "body": payload["_state"]["material_read_results"][0]["text"], "bullets": []}],
+                    "key_points": ["read"],
+                    "references_used": ["source.md"],
+                    "material_queries": [],
+                    "material_read_requests": [],
+                    "evidence_used": ["source"],
+                },
+                ensure_ascii=False,
+            )
+
+    result = ContentWriterAgent(model_client=ReadingClient()).run(state).state
+
+    assert result.content_draft is not None
+    assert result.content_draft.title == "Read Done"
+    assert result.material_read_results[0].text == "Complete source evidence for writer."
+    assert result.agent_artifacts[0].usage["material_read_count"] == 1
+
+
+def test_generation_v2_content_writer_can_read_material_in_multiple_rounds() -> None:
+    merged = merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.md")], plain_text=("Segment " * 400))])
+    state = GenerationState(
+        input=GenerationInput(instruction="Write from source."),
+        parsed_document=merged,
+        requirement_brief=RequirementBrief(user_goal="Write from source."),
+    )
+
+    class MultiReadClient(FakeGenerationModelClient):
+        def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
+            reads = payload["_state"].get("material_read_results") or []
+            if node == "ContentWriter" and len(reads) < 2:
+                next_offset = reads[-1]["next_offset"] if reads else 0
+                return json.dumps(
+                    {
+                        "title": "Need more read",
+                        "summary": "",
+                        "sections": [],
+                        "key_points": [],
+                        "references_used": [],
+                        "material_queries": [],
+                        "material_read_requests": [{"id": f"source-{len(reads)}", "action": "read_span", "file_id": "file-1", "offset": next_offset, "limit": 300, "purpose": "Continue reading."}],
+                    },
+                    ensure_ascii=False,
+                )
+            return json.dumps(
+                {
+                    "title": "Read Done",
+                    "summary": "done",
+                    "sections": [{"id": "s", "title": "Source", "body": "done", "bullets": []}],
+                    "key_points": ["read"],
+                    "references_used": ["source.md"],
+                    "material_queries": [],
+                    "material_read_requests": [],
+                    "evidence_used": ["source"],
+                },
+                ensure_ascii=False,
+            )
+
+    result = ContentWriterAgent(model_client=MultiReadClient()).run(state).state
+
+    assert result.content_draft is not None
+    assert result.content_draft.title == "Read Done"
+    assert len(result.material_read_results) == 2
+    assert result.material_read_results[1].offset == result.material_read_results[0].next_offset
+
+
+def test_generation_v2_material_read_results_can_persist_to_job_workspace(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    merged = merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.md")], plain_text="Workspace source evidence.")])
+    state = GenerationState(
+        job_id="ai_job_workspace",
+        input=GenerationInput(instruction="Write from source."),
+        parsed_document=merged,
+        requirement_brief=RequirementBrief(user_goal="Write from source."),
+    )
+
+    class ReadingClient(FakeGenerationModelClient):
+        def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
+            if node == "ContentWriter" and not payload["_state"].get("material_read_results"):
+                return json.dumps(
+                    {
+                        "title": "Need read",
+                        "summary": "",
+                        "sections": [],
+                        "key_points": [],
+                        "references_used": [],
+                        "material_queries": [],
+                        "material_read_requests": [{"id": "source", "action": "read_file", "file_id": "file-1", "limit": 200, "purpose": "Read source."}],
+                    },
+                    ensure_ascii=False,
+                )
+            return json.dumps(
+                {
+                    "title": "Read Done",
+                    "summary": "done",
+                    "sections": [{"id": "s", "title": "Source", "body": "done", "bullets": []}],
+                    "key_points": ["read"],
+                    "references_used": ["source.md"],
+                    "material_queries": [],
+                    "material_read_requests": [],
+                    "evidence_used": ["source"],
+                },
+                ensure_ascii=False,
+            )
+
+    def writer(next_state, relative_path, value, mode):
+        from html_lore.server.ai.generation_v2.material_bundle import write_job_workspace_jsonl
+
+        write_job_workspace_jsonl(settings, next_state.job_id, relative_path, value if isinstance(value, list) else [value])
+
+    ContentWriterAgent(model_client=ReadingClient(), workspace_writer=writer).run(state)
+
+    reads_path = settings.meta_dir / "ai" / "generation-jobs" / "ai_job_workspace" / "workspace" / "evidence" / "material_reads.jsonl"
+    assert reads_path.exists()
+    assert "Workspace source evidence." in reads_path.read_text(encoding="utf-8")
+
+
+def test_generation_v2_verifier_recall_final_phase_does_not_loop_on_more_queries() -> None:
+    parsed = merge_parsed_documents(
+        [
+            ParsedDocument(
+                source_files=[SourceFile(filename="source.md")],
+                plain_text="交易对价 53,600,930.82 元。项目 IRR 8%。报告内容用于验证。",
+            )
+        ]
+    )
+    state = GenerationState(
+        input=GenerationInput(instruction="忠实转换为 HTML 报告"),
+        parsed_document=parsed,
+        material_index=build_material_index(parsed, instruction="交易对价 IRR"),
+        requirement_brief=RequirementBrief(user_goal="忠实转换为 HTML 报告"),
+        plan_draft=PlanDraft(page_goal="忠实转换"),
+        content_draft=ContentDraft(title="报告", summary="交易对价 53,600,930.82 元。", sections=[ContentSection(id="s", title="估值", body="项目 IRR 8%。")]),
+        style_brief=StyleBrief(style_goal="亮色报告"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>交易对价 53,600,930.82 元。项目 IRR 8%。</body></html>"),
+    )
+
+    class RepeatingVerifierQueryClient(FakeGenerationModelClient):
+        def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
+            if node == "Verifier":
+                if payload["_state"].get("material_read_results"):
+                    return json.dumps(
+                        {
+                            "ok": False,
+                            "score": 0.62,
+                            "checked_items": [{"id": "source", "title": "源文档核验", "passed": False}],
+                            "issues": [{"code": "confirmed_gap", "message": "已读取原文，但仍需修订内容。", "severity": "major"}],
+                            "missing_parts": [],
+                            "unsupported_claims": ["需要修订内容"],
+                            "style_mismatch": [],
+                            "structure_mismatch": [],
+                            "route_back_to": "content_writer",
+                            "retry_instruction": "根据读取到的原文修订内容。",
+                            "material_queries": [],
+                            "material_read_requests": [],
+                        },
+                        ensure_ascii=False,
+                    )
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "score": 0.0,
+                        "checked_items": [{"id": "source", "title": "源文档核验", "passed": False}],
+                        "issues": [{"code": "needs_evidence", "message": "仍需核验源文档。", "severity": "blocking"}],
+                        "missing_parts": [],
+                        "unsupported_claims": [],
+                        "style_mismatch": [],
+                        "structure_mismatch": [],
+                        "route_back_to": "",
+                        "retry_instruction": "",
+                        "material_queries": [{"id": "q", "query": "交易对价 53,600,930.82 IRR 8%", "purpose": "核验关键数字"}],
+                        "material_read_requests": [],
+                    },
+                    ensure_ascii=False,
+                )
+            return super().complete_json(node=node, schema_name=schema_name, payload=payload, attempt=attempt)
+
+    result = VerifierAgent(model_client=RepeatingVerifierQueryClient()).run(state).state
+
+    assert len(result.material_recall_results) == 2
+    assert len(result.material_read_results) == 1
+    assert result.validation_report is not None
+    assert result.validation_report.material_queries == []
+    assert result.validation_report.material_read_requests == []
+    assert result.validation_report.route_back_to == "content_writer"
+
+
+def test_generation_v2_verifier_can_escalate_from_recall_to_material_read() -> None:
+    parsed = merge_parsed_documents(
+        [
+            ParsedDocument(
+                source_files=[SourceFile(filename="source.md")],
+                plain_text="完整原文：交易对价 53,600,930.82 元。项目 IRR 8%。结论：内容准确。",
+            )
+        ]
+    )
+    state = GenerationState(
+        input=GenerationInput(instruction="忠实转换为 HTML 报告"),
+        parsed_document=parsed,
+        material_index=build_material_index(parsed, instruction="交易对价 IRR"),
+        requirement_brief=RequirementBrief(user_goal="忠实转换为 HTML 报告"),
+        plan_draft=PlanDraft(page_goal="忠实转换"),
+        content_draft=ContentDraft(title="报告", summary="交易对价 53,600,930.82 元。", sections=[ContentSection(id="s", title="估值", body="项目 IRR 8%。")]),
+        style_brief=StyleBrief(style_goal="亮色报告"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>交易对价 53,600,930.82 元。项目 IRR 8%。</body></html>"),
+    )
+
+    class RecallThenReadVerifierClient(FakeGenerationModelClient):
+        def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
+            if node != "Verifier":
+                return super().complete_json(node=node, schema_name=schema_name, payload=payload, attempt=attempt)
+            state_view = payload["_state"]
+            if not state_view.get("material_recall_results"):
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "score": 0.0,
+                        "checked_items": [{"id": "source", "title": "源文档核验", "passed": False}],
+                        "issues": [],
+                        "missing_parts": [],
+                        "unsupported_claims": [],
+                        "style_mismatch": [],
+                        "structure_mismatch": [],
+                        "route_back_to": "",
+                        "retry_instruction": "",
+                        "material_queries": [{"id": "q", "query": "交易对价 53,600,930.82 IRR 8%", "purpose": "核验关键数字"}],
+                        "material_read_requests": [],
+                    },
+                    ensure_ascii=False,
+                )
+            if not state_view.get("material_read_results"):
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "score": 0.0,
+                        "checked_items": [{"id": "source", "title": "需要读取原文", "passed": False}],
+                        "issues": [],
+                        "missing_parts": [],
+                        "unsupported_claims": [],
+                        "style_mismatch": [],
+                        "structure_mismatch": [],
+                        "route_back_to": "",
+                        "retry_instruction": "",
+                        "material_queries": [],
+                        "material_read_requests": [{"id": "read-source", "action": "read_file", "file_id": "file-1", "limit": 500, "purpose": "读取完整原文核验"}],
+                    },
+                    ensure_ascii=False,
+                )
+            return json.dumps(
+                {
+                    "ok": True,
+                    "score": 0.92,
+                    "checked_items": [{"id": "source", "title": "源文档核验", "passed": True}],
+                    "issues": [],
+                    "missing_parts": [],
+                    "unsupported_claims": [],
+                    "style_mismatch": [],
+                    "structure_mismatch": [],
+                    "route_back_to": "",
+                    "retry_instruction": "",
+                    "material_queries": [],
+                    "material_read_requests": [],
+                },
+                ensure_ascii=False,
+            )
+
+    result = VerifierAgent(model_client=RecallThenReadVerifierClient()).run(state).state
+
+    assert len(result.material_recall_results) == 1
+    assert len(result.material_read_results) == 1
+    assert result.validation_report is not None
+    assert result.validation_report.ok is True
+    assert result.validation_report.material_queries == []
+    assert result.validation_report.material_read_requests == []
+
+
 def test_generation_v2_agent_state_uses_temporary_material_context_over_raw_prefix() -> None:
     parsed = ParsedDocument(
         source_files=[SourceFile(filename="first.md"), SourceFile(filename="second.md")],
@@ -730,6 +1210,22 @@ def test_generation_v2_agent_state_uses_temporary_material_context_over_raw_pref
     assert view["temporary_material_context"]["files"][1]["filename"] == "second.md"
     assert any("important later table" in chunk["text"] for chunk in view["temporary_material_context"]["selected_chunks"])
     assert len(view["parsed_document"]["plain_text"]) < 1300
+
+
+def test_generation_v2_agent_state_exposes_material_status_for_full_context() -> None:
+    full_text = " ".join(["完整材料内容"] * 450)
+    parsed = merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.docx")], plain_text=full_text)])
+    context = build_temporary_material_context(parsed, instruction="忠实转换，禁止省略")
+    state = GenerationState(input=GenerationInput(instruction="忠实转换，禁止省略"), parsed_document=parsed, temporary_material_context=context)
+
+    view = public_generation_state_for_agent(state, node="RequirementAnalyst")
+
+    assert view["material_status"]["total_chars"] == len(full_text)
+    assert view["material_status"]["selected_chars"] >= len(full_text) - 64
+    assert view["material_status"]["selected_covers_full_text"] is True
+    assert view["material_status"]["parsed_document_is_preview"] is True
+    assert view["material_status"]["parsed_text_preview_truncated"] is True
+    assert "full parsed text" in view["material_status"]["coverage_note"]
 
 
 def test_generation_v2_post_agent_state_compacts_temporary_material_context() -> None:
@@ -879,6 +1375,28 @@ def test_generation_config_accepts_v2(monkeypatch) -> None:
     assert settings.ai_generation_json_timeout_seconds == 260
     assert settings.ai_generation_html_timeout_seconds == 720
     assert settings.document_parser == "basic"
+
+
+def test_generation_v2_service_uses_larger_prompt_budget_for_material_evidence(tmp_path: Path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024,
+        ai_max_prompt_chars=12000,
+        ai_generation_engine="v2",
+    )
+
+    class FakeStore:
+        def get(self) -> AIProviderConfig:
+            return AIProviderConfig(provider="openai-compatible", base_url="https://example.invalid/v1", api_key="test-key", enabled=True, model="fake-model")
+
+    service = AIConversationService(settings, store=None, item_service=None, provider_store=FakeStore(), run_store=None)
+    client = service._generation_v2_model_client()
+
+    assert isinstance(client, ProviderGenerationModelClient)
+    assert client.max_prompt_chars == 48000
 
 
 def test_basic_document_parser_handles_markdown() -> None:
@@ -1140,6 +1658,37 @@ def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
     assert "prompt" not in public_job["agent_artifacts"][1]["data"]
 
 
+def test_generation_job_workspace_hides_private_paths_by_default(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    store = AIJobStore(settings)
+    job = store.create(kind="material_html_generation", label="Material")
+    store.update(
+        str(job["job_id"]),
+        {
+            "workspace": {
+                "status": "ready",
+                "bundle_id": "bundle-1",
+                "workspace_path": "ai/generation-jobs/job/workspace",
+                "merged_path": "ai/generation-jobs/job/workspace/materials/merged.md",
+                "manifest_path": "ai/generation-jobs/job/workspace/materials/manifest.json",
+            }
+        },
+    )
+
+    public_job = store.get(str(job["job_id"]))
+    private_job = store.get(str(job["job_id"]), include_private=True)
+
+    assert public_job["workspace"] == {"status": "ready", "bundle_id": "bundle-1"}
+    assert private_job["workspace"]["workspace_path"].endswith("/workspace")
+    assert private_job["workspace"]["merged_path"].endswith("merged.md")
+
+
 def test_generation_store_saves_v2_run_fields(tmp_path) -> None:
     settings = ServerSettings(
         content_dir=tmp_path / "content",
@@ -1281,6 +1830,54 @@ def test_v2_material_job_sync_keeps_agent_artifacts_in_job_detail(tmp_path) -> N
     assert public_job["agent_artifacts"][0]["usage"]["output_chars"] == 100
 
 
+def test_v2_material_job_sync_marks_failed_run_terminal(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024,
+    )
+    store = GenerationStore(settings)
+    job = store.create_job(kind="material_html_generation", label="source.pdf")
+    run = {
+        "id": "run-failed",
+        "status": "failed",
+        "completed_at": "2026-07-02T01:02:03+00:00",
+        "current_stage": "verifying",
+        "stage_trace": [
+            {"stage": "coding_html", "agent": "HTMLCoder", "status": "completed"},
+            {"stage": "verifying", "agent": "Verifier", "status": "completed"},
+        ],
+        "execution_checklist": [{"id": "verify", "title": "Verify", "owner": "Verifier", "status": "failed"}],
+        "skill_trace": [{"id": "content_quality_review", "title": "Content quality review", "agent": "Verifier"}],
+        "agent_artifacts": [
+            {
+                "agent": "Verifier",
+                "stage": "verifying",
+                "title": "Verification",
+                "summary": "score 0.72",
+                "data": {"ok": False, "retry_instruction": "Check source evidence."},
+            }
+        ],
+        "error": {"code": "generation_v2_failed", "message": "Generation v2 did not produce a note proposal."},
+        "retryable": True,
+        "cancellable": False,
+    }
+
+    sync_v2_job_from_run(settings, str(job["job_id"]), run, status="failed")
+
+    public_job = store.jobs.get(str(job["job_id"]))
+
+    assert public_job["status"] == "failed"
+    assert public_job["completed_at"] == "2026-07-02T01:02:03+00:00"
+    assert public_job["cancellable"] is False
+    assert public_job["current_stage"] == "verifying"
+    assert public_job["error"]["message"] == "Generation v2 did not produce a note proposal."
+    assert public_job["execution_checklist"][0]["status"] == "failed"
+    assert public_job["agent_artifacts"][0]["agent"] == "Verifier"
+
+
 def test_write_gateway_writes_generated_note_and_rebuilds(tmp_path) -> None:
     calls: list[dict[str, object]] = []
     settings = ServerSettings(
@@ -1311,6 +1908,94 @@ def test_write_gateway_writes_generated_note_and_rebuilds(tmp_path) -> None:
     assert Path(result.metadata_path).exists()
     assert "title: My Generated Note" in Path(result.metadata_path).read_text(encoding="utf-8")
     assert calls and calls[0]["site_title"] == "Test"
+
+
+def test_write_gateway_links_note_to_private_job_workspace(tmp_path) -> None:
+    calls: list[dict[str, object]] = []
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    settings.content_dir.mkdir(parents=True)
+    settings.public_dir.mkdir(parents=True)
+
+    parsed = merge_parsed_documents(
+        [
+            ParsedDocument(source_files=[SourceFile(filename="A.md")], plain_text="Alpha source"),
+            ParsedDocument(source_files=[SourceFile(filename="B.md")], plain_text="Beta source"),
+        ],
+    )
+    bundle = build_material_bundle(parsed, run_id="run-bundle")
+    reference = write_job_material_bundle(settings, bundle, job_id="ai_job_write")
+    proposal = CreateNoteProposal(
+        title="Bundle Note",
+        html="<!doctype html><html><head><title>Bundle Note</title></head><body><h1>Done</h1></body></html>",
+        metadata=NoteMetadataProposal(title="Bundle Note"),
+        generation_trace_id="run-bundle",
+    )
+
+    result = WriteGateway(settings, build_fn=lambda **kwargs: calls.append(kwargs)).write(proposal, workspace_reference=reference)
+
+    metadata_text = Path(result.metadata_path).read_text(encoding="utf-8")
+    assert "workspace:" in metadata_text
+    assert "job_id: ai_job_write" in metadata_text
+    workspace_dir = settings.meta_dir / "ai" / "generation-jobs" / "ai_job_write" / "workspace"
+    merged_path = workspace_dir / "materials" / "merged.md"
+    manifest_path = workspace_dir / "materials" / "manifest.json"
+    assert merged_path.read_text(encoding="utf-8").startswith("Source file: A.md")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["job_id"] == "ai_job_write"
+    assert [item["filename"] for item in manifest["materials"]] == ["A.md", "B.md"]
+    assert manifest["materials"][0]["content_sha256"]
+    assert not (settings.public_dir / "ai" / "generation-jobs").exists()
+    assert calls
+
+
+def test_generation_v2_job_material_bundle_round_trips_from_reference(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    parsed = merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.md")], plain_text="Job source body")])
+    bundle = build_material_bundle(parsed, run_id="run-job")
+    assert bundle is not None
+
+    reference = write_job_material_bundle(settings, bundle, job_id="ai_job_test")
+    restored = read_material_bundle_reference(settings, reference)
+
+    assert reference.workspace_path == "ai/generation-jobs/ai_job_test/workspace"
+    assert reference.merged_path == "ai/generation-jobs/ai_job_test/workspace/materials/merged.md"
+    assert restored is not None
+    assert restored.merged_text == bundle.merged_text
+    assert restored.manifest["job_id"] == "ai_job_test"
+
+
+def test_generation_v2_expired_job_workspace_cleanup_keeps_recent_failures(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    recent = settings.meta_dir / "ai" / "generation-jobs" / "recent" / "workspace"
+    old = settings.meta_dir / "ai" / "generation-jobs" / "old" / "workspace"
+    recent.mkdir(parents=True)
+    old.mkdir(parents=True)
+    old_time = time.time() - 8 * 24 * 60 * 60
+    os.utime(old, (old_time, old_time))
+
+    removed = cleanup_expired_failed_job_workspaces(settings, keep_days=7)
+
+    assert removed == 1
+    assert recent.exists()
+    assert not old.exists()
 
 
 def test_write_gateway_rolls_back_html_when_build_fails(tmp_path) -> None:
@@ -1453,10 +2138,60 @@ def test_material_generation_v2_runner_writes_note_and_run(tmp_path) -> None:
     assert "temporary_material_context" not in raw_run
     assert "material_recall_results" not in raw_run
     assert "private runner evidence" not in raw_run
+    assert settings.meta_dir is not None
+    metadata_path = settings.meta_dir / "items" / Path(result["item"]["id"]).with_suffix(".yml")
+    metadata_text = metadata_path.read_text(encoding="utf-8")
+    assert "workspace:" in metadata_text
+    workspace_root = settings.meta_dir / "ai" / "generation-jobs"
+    manifests = list(workspace_root.rglob("workspace/materials/manifest.json"))
+    assert len(manifests) == 1
+    manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
+    assert str(manifest["job_id"]).startswith("run_")
+    assert "private runner evidence" in (manifests[0].parent / "merged.md").read_text(encoding="utf-8")
 
     stored = AIRunStore(settings).add(result["run"])
     assert stored["skill_trace"][0]["id"] == "html_page_design"
     assert stored["skill_trace"][0]["agent"] == "StyleDesigner"
+
+
+def test_material_generation_v2_runner_writes_job_bundle_before_note_bundle(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+        ai_generation_engine="v2",
+        document_parser="basic",
+    )
+    settings.content_dir.mkdir(parents=True)
+    settings.public_dir.mkdir(parents=True)
+    references = []
+
+    result = generate_note_from_material_v2(
+        settings=settings,
+        filename="source.md",
+        content=b"# Source\n\nStable job bundle source.",
+        instruction="Create HTML.",
+        spec=GenerationSpec(),
+        job_id="ai_job_bundle",
+        on_material_bundle_ready=references.append,
+    )
+
+    assert len(references) == 1
+    assert references[0].manifest_path == "ai/generation-jobs/ai_job_bundle/workspace/materials/manifest.json"
+    job_manifest = json.loads((settings.meta_dir / references[0].manifest_path).read_text(encoding="utf-8"))
+    assert job_manifest["job_id"] == "ai_job_bundle"
+    workspace_root = settings.meta_dir / "ai" / "generation-jobs" / "ai_job_bundle" / "workspace"
+    trace_artifacts = workspace_root / "trace" / "agent_artifacts.jsonl"
+    content_artifact = workspace_root / "artifacts" / "content_draft.json"
+    html_artifact = workspace_root / "artifacts" / "html_draft.html"
+    assert trace_artifacts.exists()
+    assert "ContentWriter" in trace_artifacts.read_text(encoding="utf-8")
+    assert content_artifact.exists()
+    assert json.loads(content_artifact.read_text(encoding="utf-8"))["title"]
+    assert html_artifact.exists()
+    assert "<!doctype html" in html_artifact.read_text(encoding="utf-8").lower()
 
 
 def test_material_generation_v2_provider_failure_returns_sanitized_failed_run(tmp_path) -> None:
