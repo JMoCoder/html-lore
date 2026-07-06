@@ -21,6 +21,8 @@ Use this skill in StyleDesigner when `target_use` is `report` or when Planner ha
 
 This skill is a surface-design enhancer. It should not decide the report's business logic, required chapters, conclusions, or evidence. RequirementAnalyst, Planner, and ContentWriter decide what the report should say. StyleDesigner decides how that content should read as a credible HTML report.
 
+This skill should not compress, expand, or reorder report content by itself. It supplies layout and readability options; the agent remains responsible for deciding what structure best satisfies the user's request and source-handling mode.
+
 ## Boundary
 
 Do not force a universal report template.
@@ -44,6 +46,7 @@ Instead, preserve the upstream content structure and improve its report surface.
 - Do not invent metrics, dates, budgets, owners, market claims, citations, or confidence levels for visual balance.
 - When evidence is thin, use honest lightweight framing instead of fake completeness.
 - Match report depth to source complexity and user intent. A short memo can stay short; a multi-source comparison, adaptation analysis, pricing review, technical parameter review, or risk assessment should not be collapsed into a thin summary.
+- When the task is faithful or extractive source conversion, preserve source section identity in the visible reading path. Improve the report surface around the source structure instead of replacing it with a generic report template.
 - Preserve the analytical chain when the user asks for comparison, suitability, fit, risk, price, parameters, trade-offs, or recommendations: source fact -> comparison dimension -> interpretation -> risk or next check.
 - Separate source facts from model judgment. If the report includes an adaptation view or recommendation, make clear which parts are directly sourced and which parts are cautious analysis.
 - When multiple source files or options are involved, make the relationship between sources visible instead of blending them into generic prose.
@@ -79,6 +82,10 @@ For analytical reports, choose the representation by decision need:
 - Tables, matrices, comparison panels, and multi-card finding groups usually belong on the primary report canvas. Avoid mixing a narrow prose measure with full-width report panels at the same hierarchy unless it is an intentional editorial rhythm.
 - Give summary or conclusion areas stronger hierarchy, but avoid oversized marketing hero treatment unless the report is meant for external presentation.
 - Tables and matrices should be legible on desktop and usable on mobile through horizontal scroll or stacked rows.
+- For table-heavy financial or parameter reports, choose table layouts by readability:
+  - short parameter tables may be grouped only if they remain readable without avoidable internal scrolling,
+  - standard report tables should usually share the primary report canvas,
+  - genuinely wide data tables need an explicit scroll container and stronger header/numeric treatment.
 - Use visual tokens consistently: surface, border, muted text, primary accent, risk/warning accent, and optional success/next-step accent.
 - Keep color functional. Use accent color for hierarchy and status, not decoration.
 - Make risk or warning treatments visible but not alarmist.
@@ -94,6 +101,7 @@ When this skill is loaded, StyleDesigner should include:
 - rules for when a section may use a narrow reading measure, an aside, or a full-width panel, and how those variants should align with the main canvas,
 - which upstream sections need summary, finding, matrix, risk, recommendation, roadmap, or appendix treatment,
 - table/matrix guidance when the plan contains comparisons, responsibilities, options, parameters, or evidence categories,
+- table-density guidance that distinguishes short parameter tables, standard report tables, and wide data tables,
 - analysis-depth guidance when source material is complex: whether the report should read as a short memo, standard report, deep comparison, technical review, or decision brief, and how much detail should be preserved,
 - explicit source-vs-judgment guidance when the page contains suitability, risk, or recommendation language,
 - density rules for findings, callouts, and long analysis sections,

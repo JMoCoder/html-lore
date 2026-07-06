@@ -81,6 +81,7 @@ MARKITDOWN_SUFFIXES = {
 }
 PARSER_MARKITDOWN = "markitdown"
 PARSER_BASIC = "basic"
+PARSER_RETRY_ATTEMPTS = 2
 
 
 def parse_document(
@@ -99,7 +100,10 @@ def parse_document(
         return parse_document_basic(filename=filename, content=content, content_type=content_type, reference_role=reference_role)
 
     if normalize_parser_mode(parser_mode) == PARSER_BASIC:
-        fallback = parse_document_basic(filename=filename, content=content, content_type=content_type, reference_role=reference_role)
+        fallback = parse_with_retry(
+            lambda: parse_document_basic(filename=filename, content=content, content_type=content_type, reference_role=reference_role),
+            parser_name="basic",
+        )
         warning = ParseWarning(
             code="enhanced_parser_disabled",
             message="Enhanced document parsing is disabled; used basic parser fallback.",
@@ -107,11 +111,18 @@ def parse_document(
         )
         return replace(fallback, warnings=[*fallback.warnings, warning])
 
+    parsed = parse_with_specialized_parser(filename=filename, content=content, content_type=content_type, reference_role=reference_role)
+    if parsed is not None and parsed.plain_text:
+        return with_source_file(parsed, filename=filename, content_type=content_type, size=len(content), reference_role=reference_role)
+
     parsed = parse_with_markitdown(filename, content)
     if parsed is not None and parsed.plain_text:
         return with_source_file(parsed, filename=filename, content_type=content_type, size=len(content), reference_role=reference_role)
 
-    fallback = parse_document_basic(filename=filename, content=content, content_type=content_type, reference_role=reference_role)
+    fallback = parse_with_retry(
+        lambda: parse_document_basic(filename=filename, content=content, content_type=content_type, reference_role=reference_role),
+        parser_name="basic",
+    )
     warning = ParseWarning(
         code="markitdown_unavailable_or_failed",
         message="MarkItDown was unavailable or could not extract text; used basic parser fallback.",
@@ -120,6 +131,16 @@ def parse_document(
     if parsed is not None:
         return replace(fallback, warnings=[*parsed.warnings, *fallback.warnings, warning])
     return replace(fallback, warnings=[*fallback.warnings, warning])
+
+
+def parse_with_specialized_parser(*, filename: str, content: bytes, content_type: str, reference_role: str) -> ParsedDocument | None:
+    """Reserved extension point for format-specific parsers before MarkItDown.
+
+    Future OCR, DOCX, PDF, spreadsheet, or presentation parsers should plug in
+    here and return ParsedDocument on success. Returning None lets the generic
+    MarkItDown layer run next.
+    """
+    return None
 
 
 def parse_document_basic(
@@ -244,23 +265,105 @@ def normalize_parser_mode(value: str) -> str:
     return PARSER_MARKITDOWN
 
 
+def blocking_parse_failure_reason(parsed: ParsedDocument, *, filename: str = "", content_type: str = "") -> str:
+    if not requires_enhanced_parser(filename=filename, content_type=content_type):
+        return ""
+    codes = {warning.code for warning in parsed.warnings}
+    if "unsupported_basic_parser" not in codes:
+        return ""
+    if not ({"markitdown_unavailable_or_failed", "enhanced_parser_disabled"} & codes):
+        return ""
+    text = str(parsed.plain_text or "")
+    if looks_like_container_or_binary_noise(text):
+        return (
+            f"Failed to parse {filename or 'uploaded material'} into readable text. "
+            "The enhanced parser was unavailable or failed, and local fallback returned container/binary content."
+        )
+    if len(normalize_text(text)) < 80:
+        return (
+            f"Failed to parse {filename or 'uploaded material'} into enough readable text. "
+            "The enhanced parser was unavailable or failed, and local fallback produced too little content."
+        )
+    return ""
+
+
+def requires_enhanced_parser(*, filename: str = "", content_type: str = "") -> bool:
+    suffix = Path(filename).suffix.lower()
+    if suffix in BASIC_SUFFIXES or any(token in content_type for token in ("html", "markdown", "plain")):
+        return False
+    return suffix in MARKITDOWN_SUFFIXES or any(
+        token in content_type
+        for token in (
+            "pdf",
+            "word",
+            "presentation",
+            "spreadsheet",
+            "excel",
+            "image/",
+        )
+    )
+
+
+def looks_like_container_or_binary_noise(text: str) -> bool:
+    sample = str(text or "")[:12000]
+    if not sample:
+        return True
+    lowered = sample.lower()
+    container_markers = (
+        "pk\x03\x04",
+        "[content_types].xml",
+        "word/document.xml",
+        "ppt/slides/",
+        "xl/workbook.xml",
+        "%pdf-",
+        "endobj",
+        "xref",
+    )
+    if any(marker in lowered for marker in container_markers):
+        return True
+    if len(sample) < 120:
+        return False
+    control_chars = sum(1 for char in sample if ord(char) < 32 and char not in "\n\r\t")
+    replacement_chars = sample.count("\ufffd")
+    odd_chars = sum(1 for char in sample if 127 <= ord(char) <= 159)
+    return (control_chars + replacement_chars + odd_chars) / max(1, len(sample)) > 0.02
+
+
 def parse_with_markitdown(filename: str, content: bytes) -> ParsedDocument | None:
     if MarkItDown is None:
         return None
     try:  # pragma: no cover - optional dependency
-        suffix = Path(filename).suffix
-        parser = MarkItDown()
-        with tempfile.NamedTemporaryFile(suffix=suffix) as handle:
-            handle.write(content)
-            handle.flush()
-            result = parser.convert(handle.name)
-        text = normalize_text(getattr(result, "text_content", "") or "")
-        return ParsedDocument(
-            plain_text=text,
-            warnings=[ParseWarning(code="markitdown_used", message="Parsed via MarkItDown.", severity="info")],
-        )
+        return parse_with_retry(lambda: parse_with_markitdown_once(filename, content), parser_name="markitdown")
     except Exception as exc:  # pragma: no cover - optional dependency
         return ParsedDocument(
             plain_text="",
             warnings=[ParseWarning(code="markitdown_failed", message=str(exc), severity="warning")],
         )
+
+
+def parse_with_markitdown_once(filename: str, content: bytes) -> ParsedDocument:
+    suffix = Path(filename).suffix
+    parser = MarkItDown()
+    with tempfile.NamedTemporaryFile(suffix=suffix) as handle:
+        handle.write(content)
+        handle.flush()
+        result = parser.convert(handle.name)
+    text = normalize_text(getattr(result, "text_content", "") or "")
+    return ParsedDocument(
+        plain_text=text,
+        warnings=[ParseWarning(code="markitdown_used", message="Parsed via MarkItDown.", severity="info")],
+    )
+
+
+def parse_with_retry(parse_fn, *, parser_name: str) -> ParsedDocument:
+    last_exc: Exception | None = None
+    for attempt in range(1, PARSER_RETRY_ATTEMPTS + 1):
+        try:
+            parsed = parse_fn()
+            if attempt > 1:
+                retry_warning = ParseWarning(code=f"{parser_name}_retry_succeeded", message=f"{parser_name} parser succeeded on retry {attempt}.", severity="info")
+                return replace(parsed, warnings=[*parsed.warnings, retry_warning])
+            return parsed
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc or RuntimeError(f"{parser_name} parser failed.")

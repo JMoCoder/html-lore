@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-07-06
+
+### 新增
+
+- AI 生成 v2 Planner payload 新增注册能力清单，明确区分可由 `tool_needs` 选择的 skill 与仅供边界感知的 runtime tools。
+- AI 生成 v2 需求分析新增 `source_handling_mode`，用于区分自由创作、基于材料重写、忠实改编和近原文转换，并让规划、内容撰写、HTML 编码和验证环节按模式处理材料。
+- AI 生成 v2 文档解析新增三层解析链扩展点：未来专用解析器、MarkItDown、本地 basic parser；每个启用的解析层会自动重试一次。
+- AI 生成 v2 的材料处理模式现在会路由到独立 skill，覆盖规划、内容撰写、HTML 编码和验证环节，使近原文转换更接近结构化转录，而不是普通重写。
+
+### 变更
+
+- AI 生成 v2 的浏览器视觉检查默认改为 `basic`；缺少 Playwright 或 Chrome/Chromium 时仍会跳过并记录，不阻断生成。
+- AI 生成 v2 的 Ingest 阶段会在明显不可读的增强格式上传进入 LLM 前直接阻断，返回 `parse_failed`，避免基于 DOCX/PDF 容器噪声空跑智能体链路。
+- OpenAI-compatible 供应商调用会将 HTTP 半截读取包装为可重试的 provider 错误，长生成节点遇到 partial response 时可走重试逻辑，而不是直接让整条任务失败。
+- AI 生成 v2 的近原文转换提示词不再施加人为章节数量、压缩表达或字节大小限制；StyleDesigner 与 Verifier 现在会检查原文章节身份、表格宽度一致性和数字可读性。
+- 包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为 `1.1.8`。
+
 ## [1.1.7] - 2026-07-02
 
 ### 新增

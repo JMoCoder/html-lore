@@ -247,6 +247,7 @@ class GenerationAgent:
                 "target_use": str(getattr(output, "target_use", "") or ""),
                 "audience": short_text(getattr(output, "audience", ""), 160),
                 "output_type": str(getattr(output, "output_type", "") or ""),
+                "source_handling_mode": str(getattr(output, "source_handling_mode", "") or ""),
                 "must_include": safe_string_list(getattr(output, "must_include", []), limit=8),
                 "constraints": safe_string_list(getattr(output, "constraints", []), limit=8),
                 "style_preferences": safe_string_list(getattr(output, "style_preferences", []), limit=6),
@@ -261,6 +262,7 @@ class GenerationAgent:
             warnings = safe_string_list(getattr(output, "risk_points", []), limit=4)
             data = {
                 "page_goal": short_text(getattr(output, "page_goal", ""), 260),
+                "source_handling_mode": source_handling_mode_from_state(state),
                 "information_architecture": short_text(getattr(output, "information_architecture", ""), 360),
                 "content_strategy": short_text(getattr(output, "content_strategy", ""), 360),
                 "visual_strategy": short_text(getattr(output, "visual_strategy", ""), 360),
@@ -276,6 +278,7 @@ class GenerationAgent:
             data = {
                 "title": short_text(getattr(output, "title", ""), 180),
                 "subtitle": short_text(getattr(output, "subtitle", ""), 180),
+                "source_handling_mode": source_handling_mode_from_state(state),
                 "summary": short_text(getattr(output, "summary", ""), 420),
                 "sections": public_content_sections(getattr(output, "sections", [])),
                 "key_points": safe_string_list(getattr(output, "key_points", []), limit=8),
@@ -336,6 +339,7 @@ class GenerationAgent:
             ][:4]
             data = {
                 "ok": bool(getattr(output, "ok", False)),
+                "verifier_action": str(getattr(output, "verifier_action", "") or ""),
                 "score": getattr(output, "score", 0),
                 "checked_items": public_checked_items(getattr(output, "checked_items", [])),
                 "issues": public_issues(getattr(output, "issues", [])),
@@ -582,6 +586,7 @@ def quality_score_for_agent(agent_name: str, output: Any, *, default: float = 0.
             [
                 "user_goal",
                 "source_summary",
+                "source_handling_mode",
                 "target_use",
                 "output_type",
                 "must_include",
@@ -663,6 +668,11 @@ def clamp_score(value: float) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, round(score, 2)))
+
+
+def source_handling_mode_from_state(state: GenerationState) -> str:
+    brief = state.requirement_brief
+    return str(getattr(brief, "source_handling_mode", "") or "") if brief else ""
 
 
 def sensitive_phrases_for_state(state: GenerationState) -> list[str]:

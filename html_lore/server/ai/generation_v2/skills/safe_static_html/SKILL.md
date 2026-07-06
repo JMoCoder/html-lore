@@ -90,5 +90,6 @@ If `validation_report` or `safety_report` is present and not ok:
 ## Output Budget
 
 - Keep the document complete and production-readable.
-- A normal note or report should be concise. A complex architecture/report page may be longer, but avoid repeated prose and decorative CSS bulk.
+- Match document length to the approved content and source-handling mode. Ordinary notes can be concise; faithful/extractive conversions and complex reports may be longer when completeness requires it.
+- Avoid repeated prose and decorative CSS bulk, but do not remove source-required content or weaken layout readability for brevity.
 - The final HTML should be understandable when inspected by a human maintainer.

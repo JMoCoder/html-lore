@@ -31,6 +31,7 @@ class SkillRegistryItem:
     description: str
     applies_to_agents: tuple[str, ...]
     default_enabled: bool
+    planner_selectable: bool
     trigger_keywords: tuple[str, ...]
     version: str
     license: str
@@ -77,6 +78,7 @@ def iter_skill_registry_items() -> tuple[SkillRegistryItem, ...]:
                 description=str(metadata.get("description") or ""),
                 applies_to_agents=tuple(str(value or "") for value in applies if str(value or "")),
                 default_enabled=bool(item.get("default_enabled", False)),
+                planner_selectable=bool(item.get("planner_selectable", not bool(item.get("default_enabled", False)))),
                 trigger_keywords=tuple(str(value or "") for value in triggers if str(value or "")),
                 version=str(metadata.get("version") or ""),
                 license=str(metadata.get("license") or ""),

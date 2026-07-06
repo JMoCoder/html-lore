@@ -21,6 +21,8 @@ Use this skill in HTMLCoder when the PlanDraft or StyleBrief calls for component
 
 This skill is project-internal original guidance. It does not copy external project prompts, templates, or code.
 
+This skill is an implementation aid, not a page-planning authority. It should help HTMLCoder execute the approved PlanDraft and StyleBrief; it must not replace the agent's judgment with a fixed component recipe.
+
 ## Component Principles
 
 - Define CSS custom properties once, then reuse them.
@@ -56,6 +58,7 @@ This skill is project-internal original guidance. It does not copy external proj
 
 - Use `responsive-table` for matrices, responsibilities, parameter boundaries, node/edge conditions, and concept comparisons.
 - Use `price-parameter-table` or `responsive-table` when the source contains prices, product models, equipment quantities, capacities, ranges, operating assumptions, or other structured numbers. Do not hide these relationships inside prose.
+- For report conversions with many source tables, prefer consistent table canvas behavior. Do not place tables in a narrow grid if their own minimum readable width will force avoidable horizontal scrolling.
 - Use `fit-matrix` when the page evaluates whether one option, product, architecture, or plan fits another requirement. Keep matched evidence, gaps, and unknowns separate.
 - Use `risk-register` when risks have causes, impacts, mitigations, or follow-up checks. A plain bullet list is acceptable for a lightweight memo, but complex decision reports usually need a more structured risk component.
 - Use `source-scope-table` when more than one source file contributes different kinds of evidence or when some data is missing.
@@ -77,6 +80,7 @@ This skill is project-internal original guidance. It does not copy external proj
 - Keep border radius and shadow consistent.
 - Use `overflow-wrap: anywhere` for long labels only where needed.
 - Tables need `overflow-x: auto` wrappers or mobile card alternatives.
+- Table overflow should be intentional. A wide annual/detail table may scroll; a short parameter table should not scroll merely because it was squeezed into an ornamental grid.
 - Prefer `align-items: stretch` only when card content lengths are similar; otherwise use natural height or compact max-width.
 - Use opaque or nearly opaque surfaces for cards placed over diagrams, connector lines, or textured backgrounds.
 - Place badges and section labels in normal document flow where possible. If absolutely positioned, reserve padding so they cannot overlap headings.

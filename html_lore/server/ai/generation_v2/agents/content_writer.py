@@ -11,6 +11,11 @@ class ContentWriterAgent(GenerationAgent):
 
     def fake_payload(self, state):
         goal = state.requirement_brief.user_goal if state.requirement_brief else state.input.instruction
+        mode = str(getattr(state.requirement_brief, "source_handling_mode", "") or "source_grounded_rewrite") if state.requirement_brief else "source_grounded_rewrite"
+        if mode in {"faithful_adaptation", "extractive_conversion"} and state.parsed_document and not any(result.agent in {"RequirementAnalyst", "ContentWriter"} for result in state.material_read_results):
+            material = state.parsed_document.materials[0] if state.parsed_document.materials else None
+            if material:
+                return faithful_read_request_payload(goal, material, mode)
         source = material_context_text(state) or (state.parsed_document.plain_text if state.parsed_document else "")
         recall_source = material_recall_text(state)
         if recall_source:
@@ -62,3 +67,26 @@ def material_recall_text(state) -> str:
         for chunk in result.chunks:
             parts.append(f"{chunk.filename}: {chunk.text}")
     return "\n\n".join(parts)
+
+
+def faithful_read_request_payload(goal: str, material, mode: str) -> dict:
+    return {
+        "title": first_non_empty(goal, "Generated HTML Note"),
+        "subtitle": "Source-faithful draft",
+        "summary": "Reading source material before drafting because source fidelity is required.",
+        "sections": [],
+        "key_points": [],
+        "references_used": [],
+        "material_queries": [],
+        "material_read_requests": [
+            {
+                "id": "source_fidelity_read",
+                "action": "read_file",
+                "file_id": material.file_id,
+                "filename": material.filename,
+                "limit": 96000 if mode == "extractive_conversion" else 48000,
+                "purpose": "Read original material before drafting a source-faithful conversion.",
+            }
+        ],
+        "evidence_used": [],
+    }

@@ -389,7 +389,9 @@ Deployment notes:
   with the configured browser channel, for example
   `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chrome`, renders generated HTML,
   and passes overflow / blank-viewport / layout warnings to the verifier. The
-  default is `off`, so deployments without Playwright or Chrome keep working.
+  default is `basic`; deployments without Playwright or Chrome keep working
+  because unavailable browser checks are skipped and reported in the workflow
+  details.
 - Production browser visual checking requires both the Python Playwright package
   and an installed browser. The default `Dockerfile.api` is intentionally
   lightweight and does not include Chromium. Use one of these paths:

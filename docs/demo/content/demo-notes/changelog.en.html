@@ -15,7 +15,7 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.1.7</span></aside>
+<aside class="stat"><span class="badge">1.1.8</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
@@ -24,6 +24,18 @@
 <p>The format is based on Keep a Changelog, and this project uses semantic</p>
 <p>versioning after the initial public release.</p>
 <h2>[Unreleased]</h2>
+<h2>[1.1.8] - 2026-07-06</h2>
+<h3>Added</h3>
+<ul>
+<li>AI generation v2 now uses a registered capability catalog and explicit source handling modes for free synthesis, source-grounded rewrite, faithful adaptation, and extractive conversion.</li>
+<li>Document parsing now has a three-layer parser chain extension point: specialized parsers, MarkItDown, then local basic parsing.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>Extractive conversion prompts no longer impose artificial section-count, compactness, or byte-size guidance.</li>
+<li>Style and verification checks now pay closer attention to source section identity, table width consistency, and numeric readability.</li>
+<li>Package, app, PWA, demo, and provider user-agent versions were updated to <code>1.1.8</code>.</li>
+</ul>
 <h2>[1.1.4] - 2026-06-30</h2>
 <h3>Added</h3>
 <ul>

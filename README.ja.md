@@ -328,6 +328,21 @@ HTMlore を公開インターネットに出す場合:
 
 再利用可能な安全基線と Caddy Basic Auth 例は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
 
+AI generation v2 は基礎的なブラウザー visual check を既定で有効にします:
+
+- `HTML_LORE_AI_VISUAL_CHECK=basic` が既定値です。`strict` または `off` に変更できます。
+- headless Playwright と設定済み browser channel、たとえば
+  `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chrome` を使って生成 HTML をレンダリングし、横 overflow、空の first viewport、clip、layout observation を Verifier に渡します。
+- Python Playwright または Chrome/Chromium がない環境では check は skip され、workflow details に記録されます。生成自体は停止しません。
+- 既定の `Dockerfile.api` は軽量に保つため Chromium を含みません。production で安定して visual check を使う場合は
+  `docker compose --profile visual-check up -d --build html-lore-visual`、または
+  `Dockerfile.api.visual` を使ってください。この image は Playwright Chromium をインストールし、
+  `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chromium` を既定にします。
+- Docker 以外の環境では `html-lore[agent]` をインストール後、
+  `python -m playwright install chromium` または
+  `python -m playwright install --with-deps chromium` を実行します。
+- Browser rendering は image size と runtime memory を増やします。Chromium process、uploaded material、MarkItDown parsing、長い HTML generation response のために追加メモリを確保してください。
+
 ## Roadmap
 
 近い将来のバックエンド/ノートブック機能:

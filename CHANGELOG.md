@@ -9,6 +9,23 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-07-06
+
+### Added
+
+- AI generation v2 Planner payload now includes a registered capability catalog that separates selectable skills from runtime tools used only for boundary awareness.
+- AI generation v2 requirement analysis now outputs `source_handling_mode` to distinguish free synthesis, source-grounded rewrite, faithful adaptation, and extractive conversion, with downstream planning, writing, coding, and verification aligned to that mode.
+- AI generation v2 document parsing now has a three-layer parser chain extension point: future specialized parsers, MarkItDown, then local basic parsing, with one retry per active parser layer.
+- AI generation v2 source handling modes now route to dedicated skills for planning, writing, coding, and verification, making extractive conversion behave as structured source transcription instead of general rewriting.
+
+### Changed
+
+- AI generation v2 browser visual checking now defaults to `basic`; missing Playwright or Chrome/Chromium still skips the check and records the skip instead of blocking generation.
+- AI generation v2 ingest now blocks clearly unreadable enhanced-format uploads before calling LLM agents, returning `parse_failed` instead of generating from DOCX/PDF container noise.
+- OpenAI-compatible provider calls now wrap incomplete HTTP reads as retryable provider errors, allowing long generation nodes to retry instead of failing the whole job on a partial response.
+- AI generation v2 source fidelity prompts no longer impose artificial section-count, compactness, or byte-size guidance on extractive conversion jobs; StyleDesigner and Verifier now check source section identity, table width consistency, and numeric readability.
+- Updated package, app, PWA, demo, and provider user-agent versions to `1.1.8`.
+
 ## [1.1.7] - 2026-07-02
 
 ### Added

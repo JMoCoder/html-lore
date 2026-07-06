@@ -1,4 +1,5 @@
 import json
+import http.client
 import socket
 import time
 import urllib.error
@@ -863,6 +864,40 @@ def test_openai_compatible_adapter_wraps_socket_timeout(monkeypatch) -> None:
         assert str(exc) == "AI provider is unreachable."
     else:
         raise AssertionError("Expected provider timeout to be wrapped.")
+
+
+def test_openai_compatible_adapter_wraps_incomplete_read(monkeypatch) -> None:
+    class BrokenResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self) -> bytes:
+            raise http.client.IncompleteRead(b"data: partial")
+
+    def fake_urlopen(request, timeout):
+        return BrokenResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    adapter = OpenAICompatibleHttpAdapter(
+        AIProviderConfig(
+            provider="openai-compatible",
+            base_url="https://api.example.test",
+            model="gpt-5.5",
+            enabled=True,
+            api_key="test-secret-key",
+        ),
+    )
+
+    try:
+        adapter.chat(messages=[{"role": "user", "content": "ping"}])
+    except Exception as exc:
+        assert type(exc).__name__ == "ProviderCallError"
+        assert str(exc) == "AI provider is unreachable."
+    else:
+        raise AssertionError("Expected incomplete provider response to be wrapped.")
 
 
 def test_openai_compatible_adapter_parses_sse_chat_completion() -> None:

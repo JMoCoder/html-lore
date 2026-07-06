@@ -14,6 +14,7 @@ class VerifierAgent(GenerationAgent):
         has_verifier_recall = any(result.agent == "Verifier" for result in state.material_recall_results)
         return {
             "ok": ok,
+            "verifier_action": "pass" if ok else "request_revision",
             "score": 0.82 if ok else 0.0,
             "checked_items": [
                 {"id": "html", "title": "HTML draft exists", "passed": bool(state.html_draft and state.html_draft.html.strip())},

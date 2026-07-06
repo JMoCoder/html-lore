@@ -19,6 +19,11 @@ Your job:
 - Treat chunk hints as generic retrieval signals only. You decide whether a chunk is important, what it means, and how it relates to the user's request.
 - Compare uploaded files fairly. If multiple files are present, identify what each file contributes before saying a file lacks relevant evidence.
 - Identify the intended audience, target use, output type, constraints, and style preferences.
+- Decide `source_handling_mode` from the user's wording and material relationship. Use exactly one of:
+  - `free_synthesis`: the user wants a new artifact inspired by the material and allows added explanation or synthesis.
+  - `source_grounded_rewrite`: the output should be grounded in uploaded material but may reorganize, clarify, and rewrite content.
+  - `faithful_adaptation`: the output should stay faithful to source content while improving structure, readability, and visual presentation.
+  - `extractive_conversion`: the user asks to preserve source facts/content nearly exactly, forbids additions/modifications, or wants conversion rather than rewriting.
 - Interpret generation options explicitly:
   - `theme` describes broad visual direction such as default, light, dark, black, white, or user-facing theme labels.
   - `target_use` describes output purpose such as report, webpage, or ppt.
@@ -28,6 +33,7 @@ Your job:
 - Fold non-default generation options into `style_preferences`, `constraints`, or `success_criteria` so Planner can use your interpretation without guessing.
 - Extract what must be included from the parsed material.
 - Capture source understanding in `source_summary`, `must_include`, `success_criteria`, and `uncertainty`: what each file contributes, which extracted tables/numbers/parameters support the user goal, and what remains missing.
+- For `faithful_adaptation` or `extractive_conversion`, include source completeness and no-unsupported-additions in `success_criteria`.
 - Identify uncertainty without inventing missing facts.
 
 Material query guidance:
@@ -52,6 +58,7 @@ Boundaries:
 
 Output:
 - Return a single JSON object matching RequirementBrief.
+- Set `source_handling_mode` to one of `free_synthesis`, `source_grounded_rewrite`, `faithful_adaptation`, or `extractive_conversion`.
 - Keep lists concise and useful.
 - Use the same language as the user's instruction when practical.
 - If an option is `default`, infer only when the content clearly supports it; otherwise leave it flexible for downstream design.

@@ -329,6 +329,21 @@ html-lore ai-vector-index smoke-test
 
 `smoke-test` 会使用当前服务端配置的 provider 和 embedding 模型发起一次真实 embedding 请求。只有在确认该环境的模型与 key 都是预期配置后再运行。
 
+AI 生成 v2 默认启用基础浏览器视觉检查：
+
+- `HTML_LORE_AI_VISUAL_CHECK=basic` 是默认值，也可设置为 `strict` 或 `off`。
+- 该功能使用无头 Playwright 和配置的浏览器 channel，例如
+  `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chrome`，渲染生成 HTML，并把横向溢出、空白首屏、裁切和版式观察结果交给验证智能体。
+- 如果环境没有安装 Python Playwright 或 Chrome/Chromium，检查会被跳过并写入工作流详情，不会阻断生成。
+- 默认 `Dockerfile.api` 保持轻量，不内置 Chromium。生产需要稳定启用视觉检查时，可使用
+  `docker compose --profile visual-check up -d --build html-lore-visual`，或基于
+  `Dockerfile.api.visual` 构建镜像；该镜像安装 Playwright Chromium，并默认设置
+  `HTML_LORE_AI_VISUAL_CHECK_BROWSER_CHANNEL=chromium`。
+- 自定义非 Docker 环境中，安装 `html-lore[agent]` 后运行
+  `python -m playwright install chromium` 或
+  `python -m playwright install --with-deps chromium`。
+- 浏览器渲染会增加镜像体积和运行内存。生产环境应为 Chromium 进程、上传材料、MarkItDown 解析和长 HTML 生成响应预留额外内存。
+
 开发测试时可以使用 `HTML_LORE_AI_PROVIDER=fake` 验证界面与会话流程，不会发起真实模型请求。公开状态接口只返回 `has_api_key`，不会返回密钥内容。
 
 ## 安全模型

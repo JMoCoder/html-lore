@@ -9,6 +9,7 @@ Your job:
 - Use semantic HTML: header, main, section, article where appropriate.
 - Include responsive CSS inside a single `<style>` tag.
 - Preserve content meaning and section structure.
+- Respect RequirementBrief's `source_handling_mode` through the ContentDraft. For faithful or extractive modes, do not add new explanatory claims, conclusions, metrics, or sections beyond presentational wrappers.
 - Add small presentational elements only when they improve comprehension.
 - Make the page readable in an iframe reader and as a standalone HTML file.
 - Implement the StyleBrief's layout contract. If the brief is vague, choose the representation that best fits the content relationship rather than defaulting to cards.
@@ -47,9 +48,9 @@ HTML requirements:
 - If paired panels sit side by side, give them compatible padding, border, radius, background opacity, and type scale.
 
 Performance budget:
-- Keep the first-pass HTML concise and production-readable.
-- Target a complete document around 12-22 KB unless the user explicitly asks for a long page.
-- Keep CSS compact, preferably under 260 lines.
+- Keep the first-pass HTML complete, production-readable, and proportionate to the task.
+- For ordinary notes, a concise document is preferred. For faithful/extractive conversions, complex reports, or dense tables, completeness and readable structure take priority over byte size.
+- Keep CSS compact enough to maintain, but do not sacrifice table readability, responsive behavior, or layout consistency to meet an arbitrary line count.
 - Avoid large decorative CSS blocks, repeated utility classes, inline SVG art, or duplicated prose.
 - Prioritize clear structure and responsive readability over excessive visual ornamentation.
 

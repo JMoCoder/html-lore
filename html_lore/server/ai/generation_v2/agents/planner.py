@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+from ..capability_registry import canonical_planner_skill_id
 from ..schemas import ChecklistItem, ChecklistStatus, GenerationStage, PlanDraft, SectionPlan
 from .base import GenerationAgent
 
@@ -35,4 +36,16 @@ class PlannerAgent(GenerationAgent):
 
     def apply_output(self, state, output: PlanDraft):
         checklist = [ChecklistItem(**{**item.__dict__, "status": ChecklistStatus(item.status)}) if isinstance(item.status, str) else item for item in output.execution_checklist]
-        return replace(state, plan_draft=output, execution_checklist=checklist)
+        return replace(state, plan_draft=normalize_plan_tool_needs(output), execution_checklist=checklist)
+
+
+def normalize_plan_tool_needs(output: PlanDraft) -> PlanDraft:
+    normalized = []
+    seen = set()
+    for need in output.tool_needs:
+        skill_id = canonical_planner_skill_id(need.tool_name, reason=need.reason)
+        if not skill_id or skill_id in seen:
+            continue
+        normalized.append(replace(need, tool_name=skill_id, optional=True))
+        seen.add(skill_id)
+    return replace(output, tool_needs=normalized)

@@ -17,8 +17,9 @@ from .material_context import build_material_index, build_temporary_material_con
 from .model_client import GenerationJsonModelClient
 from .orchestrator import GenerationOrchestrator
 from .schemas import AgentArtifact, GenerationInput, GenerationStage, GenerationState, ParsedDocument, ParsedMaterialItem, ParseWarning, SourceFile
-from .state import complete_stage, start_stage
+from .state import complete_stage, fail_stage, start_stage
 from .tools.document_parser import parse_document
+from .tools.document_parser import blocking_parse_failure_reason
 from .tools.style_hint_extractor import extract_style_hints
 from .tools.visual_check import run_visual_check
 
@@ -71,9 +72,18 @@ class HtmlGenerationV2Graph:
                 return replace(next_state, current_step=GenerationStage.COMPLETED.value)
             if decision.next_node == "max_revision_rounds":
                 return replace(next_state, failed_steps=[*next_state.failed_steps, decision.next_node])
+            if decision.next_node == "verifier_protocol_retry":
+                retries = dict(next_state.same_node_retries)
+                retries["VerifierProtocol"] = retries.get("VerifierProtocol", 0) + 1
+                next_state = replace(next_state, validation_report=None, same_node_retries=retries)
+                continue
+            if decision.next_node in {"verifier_invalid_output", "verifier_blocked"}:
+                return replace(next_state, failed_steps=[*next_state.failed_steps, decision.next_node])
             if decision.next_node == "ingest":
                 next_state = self.run_ingest(next_state)
                 self.emit_state(next_state)
+                if next_state.failed_steps:
+                    return next_state
                 continue
             agent = self.agents.get(decision.next_node)
             if agent is None:
@@ -98,19 +108,41 @@ class HtmlGenerationV2Graph:
     def run_ingest(self, state: GenerationState) -> GenerationState:
         next_state = start_stage(state, GenerationStage.PARSING, agent="Ingest", message="Parsing uploaded material.")
         parsed_items = []
+        parse_failures = []
         for material in material_inputs(state):
-            parsed_items.append(
-                parse_document(
-                    filename=str(material.get("filename") or "source.txt"),
-                    content=material.get("content") if isinstance(material.get("content"), bytes) else b"",
-                    content_type=str(material.get("content_type") or ""),
-                    parser_mode=self.parser_mode,
-                ),
+            filename = str(material.get("filename") or "source.txt")
+            content_type = str(material.get("content_type") or "")
+            parsed = parse_document(
+                filename=filename,
+                content=material.get("content") if isinstance(material.get("content"), bytes) else b"",
+                content_type=content_type,
+                parser_mode=self.parser_mode,
             )
+            parsed_items.append(parsed)
+            reason = blocking_parse_failure_reason(parsed, filename=filename, content_type=content_type)
+            if reason:
+                parse_failures.append({"filename": filename, "reason": reason})
         parsed = merge_parsed_documents(parsed_items)
         parsed = replace(parsed, style_hints=extract_style_hints(parsed, role="material"))
         material_index = build_material_index(parsed, instruction=state.input.instruction)
         temporary_material_context = build_temporary_material_context(parsed, instruction=state.input.instruction)
+        if parse_failures:
+            failed_state = replace(
+                next_state,
+                parsed_document=parsed,
+                material_index=material_index,
+                temporary_material_context=temporary_material_context,
+            )
+            metadata = {
+                "file_count": len(temporary_material_context.files),
+                "total_chars": temporary_material_context.total_chars,
+                "selected_chunks": len(temporary_material_context.selected_chunks),
+                "selected_chars": temporary_material_context.selected_chars,
+                "parse_failures": parse_failures,
+            }
+            message = "; ".join(item["reason"] for item in parse_failures[:3])
+            failed_state = fail_stage(failed_state, GenerationStage.PARSING, message=message, retryable=True, metadata=metadata)
+            return replace(failed_state, current_step=GenerationStage.PARSE_FAILED.value, failed_steps=[GenerationStage.PARSE_FAILED.value])
         parsed_style_reference = None
         if state.input.reference_style == "file" and state.input.reference_file_name and state.input.reference_content:
             parsed_style_reference = parse_document(

@@ -18,6 +18,15 @@ STYLE_PREFERENCE_SKILLS = {
     "magazine": "magazine_style_design",
 }
 
+SOURCE_HANDLING_SKILLS = {
+    "free_synthesis": "source_free_synthesis",
+    "source_grounded_rewrite": "source_grounded_rewrite",
+    "faithful_adaptation": "source_faithful_adaptation",
+    "extractive_conversion": "source_extractive_conversion",
+}
+
+SOURCE_HANDLING_AGENTS = {"Planner", "ContentWriter", "HTMLCoder", "Verifier"}
+
 
 def resolve_skills_for_agent(agent_name: str, state: GenerationState) -> tuple[LoadedSkill, ...]:
     selected = list(load_default_skills_for_agent(agent_name))
@@ -36,6 +45,7 @@ def resolve_skills_for_agent(agent_name: str, state: GenerationState) -> tuple[L
 def planned_skill_ids_for_agent(agent_name: str, state: GenerationState) -> tuple[str, ...]:
     result: list[str] = []
     result.extend(explicit_option_skill_ids_for_agent(agent_name, state))
+    result.extend(source_handling_skill_ids_for_agent(agent_name, state))
     if state.plan_draft is None:
         return tuple(dict.fromkeys(result))
     needs = tuple(state.plan_draft.tool_needs or ())
@@ -49,6 +59,14 @@ def planned_skill_ids_for_agent(agent_name: str, state: GenerationState) -> tupl
         if any(tool_need_matches_skill(need, item.id, item.trigger_keywords) for need in needs):
             result.append(item.id)
     return tuple(dict.fromkeys(result))
+
+
+def source_handling_skill_ids_for_agent(agent_name: str, state: GenerationState) -> tuple[str, ...]:
+    if agent_name not in SOURCE_HANDLING_AGENTS or state.requirement_brief is None:
+        return ()
+    mode = str(getattr(state.requirement_brief, "source_handling_mode", "") or "").strip().lower()
+    skill_id = SOURCE_HANDLING_SKILLS.get(mode)
+    return (skill_id,) if skill_id else ()
 
 
 def explicit_option_skill_ids_for_agent(agent_name: str, state: GenerationState) -> tuple[str, ...]:

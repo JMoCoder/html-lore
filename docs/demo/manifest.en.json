@@ -9,7 +9,7 @@
     {
       "id": "demo-notes/readme.en.html",
       "title": "HTMlore Complete README",
-      "summary": "The complete English README rendered as HTML, covering project vision, notebook workflows, 1.1.7 AI generation stability updates, Docker deployment, backend API, security model, and roadmap.",
+      "summary": "The complete English README rendered as HTML, covering project vision, notebook workflows, 1.1.8 AI generation stability updates, Docker deployment, backend API, security model, and roadmap.",
       "path": "content/demo-notes/readme.en.html",
       "source_type": "html",
       "source_url": null,
@@ -35,7 +35,7 @@
     {
       "id": "demo-notes/changelog.en.html",
       "title": "HTMlore Changelog",
-      "summary": "The complete English CHANGELOG rendered as HTML with the 1.1.7 AI generation stability updates plus earlier milestones.",
+      "summary": "The complete English CHANGELOG rendered as HTML with the 1.1.8 AI generation stability updates plus earlier milestones.",
       "path": "content/demo-notes/changelog.en.html",
       "source_type": "html",
       "source_url": null,

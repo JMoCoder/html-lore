@@ -64,6 +64,42 @@
       "trigger_keywords": ["component", "cards", "grid", "timeline", "process flow", "comparison", "callout", "responsive table", "pattern"],
       "source": "local",
       "path": "component_pattern_html/SKILL.md"
+    },
+    {
+      "id": "source_free_synthesis",
+      "applies_to_agents": ["Planner", "ContentWriter", "HTMLCoder", "Verifier"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["free_synthesis", "free synthesis", "creative", "inspired"],
+      "source": "local",
+      "path": "source_free_synthesis/SKILL.md"
+    },
+    {
+      "id": "source_grounded_rewrite",
+      "applies_to_agents": ["Planner", "ContentWriter", "HTMLCoder", "Verifier"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["source_grounded_rewrite", "grounded rewrite", "rewrite"],
+      "source": "local",
+      "path": "source_grounded_rewrite/SKILL.md"
+    },
+    {
+      "id": "source_faithful_adaptation",
+      "applies_to_agents": ["Planner", "ContentWriter", "HTMLCoder", "Verifier"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["faithful_adaptation", "faithful", "preserve"],
+      "source": "local",
+      "path": "source_faithful_adaptation/SKILL.md"
+    },
+    {
+      "id": "source_extractive_conversion",
+      "applies_to_agents": ["Planner", "ContentWriter", "HTMLCoder", "Verifier"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["extractive_conversion", "extractive", "conversion", "verbatim"],
+      "source": "local",
+      "path": "source_extractive_conversion/SKILL.md"
     }
   ]
 }

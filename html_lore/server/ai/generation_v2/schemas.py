@@ -56,6 +56,20 @@ class RiskLevel(TextEnum):
     BLOCKED = "blocked"
 
 
+class SourceHandlingMode(TextEnum):
+    FREE_SYNTHESIS = "free_synthesis"
+    SOURCE_GROUNDED_REWRITE = "source_grounded_rewrite"
+    FAITHFUL_ADAPTATION = "faithful_adaptation"
+    EXTRACTIVE_CONVERSION = "extractive_conversion"
+
+
+class VerifierAction(TextEnum):
+    PASS = "pass"
+    REQUEST_EVIDENCE = "request_evidence"
+    REQUEST_REVISION = "request_revision"
+    BLOCKED = "blocked"
+
+
 class ChecklistStatus(TextEnum):
     PENDING = "pending"
     RUNNING = "running"
@@ -274,6 +288,7 @@ class RequirementBrief:
     target_use: str = "default"
     audience: str = ""
     output_type: str = "html_note"
+    source_handling_mode: SourceHandlingMode = SourceHandlingMode.SOURCE_GROUNDED_REWRITE
     source_summary: str = ""
     must_include: list[str] = field(default_factory=list)
     should_avoid: list[str] = field(default_factory=list)
@@ -297,6 +312,8 @@ class SectionPlan:
 
 @dataclass(frozen=True)
 class ToolNeed:
+    # Legacy field name: in generation v2 this represents a registered
+    # downstream skill/capability need, not a runtime tool invocation.
     tool_name: str = ""
     reason: str = ""
     priority: str = "medium"
@@ -320,6 +337,8 @@ class PlanDraft:
     section_plan: list[SectionPlan] = field(default_factory=list)
     content_strategy: str = ""
     visual_strategy: str = ""
+    # Kept as tool_needs for backward compatibility with existing jobs/artifacts.
+    # Semantically these are Planner-selected skill/capability needs.
     tool_needs: list[ToolNeed] = field(default_factory=list)
     execution_checklist: list[ChecklistItem] = field(default_factory=list)
     risk_points: list[str] = field(default_factory=list)
@@ -462,6 +481,7 @@ class VisualCheckReport:
 @dataclass(frozen=True)
 class ValidationReport:
     ok: bool = False
+    verifier_action: VerifierAction = VerifierAction.REQUEST_REVISION
     score: float = 0.0
     checked_items: list[CheckedItem] = field(default_factory=list)
     issues: list[ValidationIssue] = field(default_factory=list)

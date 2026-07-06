@@ -9,6 +9,7 @@ from pathlib import Path
 from html_lore.server.ai.generation_v2.agents.requirement_analyst import RequirementAnalystAgent
 from html_lore.server.ai.generation_v2.agents.html_coder import HTMLCoderAgent
 from html_lore.server.ai.generation_v2.agents.content_writer import ContentWriterAgent
+from html_lore.server.ai.generation_v2.agents.planner import PlannerAgent
 from html_lore.server.ai.generation_v2.agents.verifier import VerifierAgent
 from html_lore.server.ai.generation_v2.graph import HtmlGenerationV2Graph, merge_parsed_documents
 from html_lore.server.ai.generation_v2.fake_model import FakeGenerationModelClient
@@ -20,7 +21,7 @@ from html_lore.server.ai.generation_v2.model_client import ProviderGenerationMod
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.orchestrator import GenerationOrchestrator
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, DocumentImage, DocumentLink, DocumentTable, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, MaterialReadRequest, NoteMetadataProposal, OutlineItem, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, DocumentImage, DocumentLink, DocumentTable, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, MaterialReadRequest, NoteMetadataProposal, OutlineItem, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SourceHandlingMode, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport, VerifierAction
 from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
 from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
@@ -131,9 +132,13 @@ def test_generation_v2_graph_runs_fake_agent_flow() -> None:
     assert checklist_status["HTMLCoder"] == ChecklistStatus.COMPLETED
     assert checklist_status["Verifier"] == ChecklistStatus.COMPLETED
     assert [(item.agent, item.id) for item in result.skill_trace] == [
+        ("Planner", "source_grounded_rewrite"),
+        ("ContentWriter", "source_grounded_rewrite"),
         ("StyleDesigner", "html_page_design"),
         ("HTMLCoder", "safe_static_html"),
+        ("HTMLCoder", "source_grounded_rewrite"),
         ("Verifier", "content_quality_review"),
+        ("Verifier", "source_grounded_rewrite"),
     ]
     assert result.visual_check_report is not None
     assert result.visual_check_report.skipped is True
@@ -207,6 +212,38 @@ def test_generation_v2_skill_loader_uses_frontmatter_metadata_and_strips_it() ->
     assert registry_items["html_page_design"].version == "0.2.0"
     assert registry_items["safe_static_html"].title == "Safe static HTML"
     assert registry_items["content_quality_review"].description.startswith("Use when verifying")
+
+
+def test_generation_v2_planner_payload_exposes_registered_skills_and_tools() -> None:
+    state = GenerationState(input=GenerationInput(instruction="Explain runtime architecture."))
+
+    payload = agent_payload(node="Planner", schema=PlanDraft, state=state, fallback={}, skills=())
+    catalog = payload["_available_capabilities"]
+    skill_ids = {item["id"] for item in catalog["skills"]}
+    tool_ids = {item["id"] for item in catalog["tools"]}
+
+    assert "architecture_explainer_design" in skill_ids
+    assert "component_pattern_html" in skill_ids
+    assert "source_extractive_conversion" not in skill_ids
+    assert "material_read" in tool_ids
+    assert "browser_visual_check" in tool_ids
+    assert all(item["kind"] == "skill" and item["planner_selectable"] for item in catalog["skills"])
+    assert all(item["kind"] == "tool" and not item["planner_selectable"] for item in catalog["tools"])
+    assert "Do not invent" in " ".join(catalog["rules"])
+
+
+def test_generation_v2_planner_filters_unregistered_tool_needs() -> None:
+    output = PlanDraft(
+        tool_needs=[
+            ToolNeed(tool_name="architecture explainer design", reason="Needs nodes, edges, and loop diagrams.", priority="high"),
+            ToolNeed(tool_name="unknown magic renderer", reason="Invented vendor tool.", priority="high"),
+            ToolNeed(tool_name="browser_visual_check", reason="Registered tool only.", priority="medium"),
+        ],
+    )
+
+    state = PlannerAgent().apply_output(GenerationState(), output)
+
+    assert [need.tool_name for need in state.plan_draft.tool_needs] == ["architecture_explainer_design"]
 
 
 def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> None:
@@ -311,6 +348,40 @@ def test_generation_v2_requirement_analyst_fallback_preserves_generation_options
     assert "reference file: style.pdf" in payload["style_preferences"]
 
 
+def test_generation_v2_requirement_analyst_sets_source_handling_mode() -> None:
+    state = HtmlGenerationV2Graph().initial_state(
+        GenerationInput(instruction="生成一份 html，忠于原文件内容，禁止增加或修改内容，只做视觉优化。")
+    )
+
+    payload = RequirementAnalystAgent().fake_payload(state)
+
+    assert payload["source_handling_mode"] == SourceHandlingMode.EXTRACTIVE_CONVERSION.value
+
+
+def test_generation_v2_schema_accepts_source_handling_mode_enum() -> None:
+    brief = dataclass_from_dict({"user_goal": "Convert", "source_handling_mode": "faithful-adaptation"}, RequirementBrief)
+
+    assert brief.source_handling_mode == SourceHandlingMode.FAITHFUL_ADAPTATION
+
+
+def test_generation_v2_agent_payload_exposes_source_handling_modes() -> None:
+    planner_payload = agent_payload(node="Planner", schema=PlanDraft, state=GenerationState(), fallback={}, skills=())
+    writer_payload = agent_payload(node="ContentWriter", schema=ContentDraft, state=GenerationState(), fallback={}, skills=())
+    safety_payload = agent_payload(node="SafetyReviewer", schema=PlanDraft, state=GenerationState(), fallback={}, skills=())
+
+    planner_modes = {item["id"] for item in planner_payload["_source_handling_modes"]}
+    writer_modes = {item["id"] for item in writer_payload["_source_handling_modes"]}
+
+    assert planner_modes == {
+        "free_synthesis",
+        "source_grounded_rewrite",
+        "faithful_adaptation",
+        "extractive_conversion",
+    }
+    assert writer_modes == planner_modes
+    assert safety_payload["_source_handling_modes"] == []
+
+
 def test_generation_v2_skill_router_uses_planner_tool_needs() -> None:
     state = GenerationState(
         plan_draft=PlanDraft(
@@ -379,6 +450,33 @@ def test_generation_v2_skill_router_maps_explicit_generation_options() -> None:
         "html_page_design",
         "webpage_surface_design",
     ]
+
+
+def test_generation_v2_skill_router_maps_source_handling_mode() -> None:
+    state = GenerationState(
+        requirement_brief=RequirementBrief(
+            user_goal="Convert source faithfully.",
+            source_handling_mode=SourceHandlingMode.EXTRACTIVE_CONVERSION,
+        )
+    )
+
+    assert planned_skill_ids_for_agent("Planner", state) == ("source_extractive_conversion",)
+    assert planned_skill_ids_for_agent("ContentWriter", state) == ("source_extractive_conversion",)
+    assert planned_skill_ids_for_agent("HTMLCoder", state) == ("source_extractive_conversion",)
+    assert planned_skill_ids_for_agent("Verifier", state) == ("source_extractive_conversion",)
+    assert planned_skill_ids_for_agent("StyleDesigner", state) == ()
+    assert [skill.id for skill in resolve_skills_for_agent("ContentWriter", state)] == ["source_extractive_conversion"]
+    assert [skill.id for skill in resolve_skills_for_agent("HTMLCoder", state)] == ["safe_static_html", "source_extractive_conversion"]
+    assert [skill.id for skill in resolve_skills_for_agent("Verifier", state)] == ["content_quality_review", "source_extractive_conversion"]
+
+
+def test_generation_v2_source_handling_skills_are_not_planner_selectable() -> None:
+    registry_items = {item.id: item for item in iter_skill_registry_items()}
+
+    assert registry_items["source_free_synthesis"].planner_selectable is False
+    assert registry_items["source_grounded_rewrite"].planner_selectable is False
+    assert registry_items["source_faithful_adaptation"].planner_selectable is False
+    assert registry_items["source_extractive_conversion"].planner_selectable is False
 
 
 def test_generation_v2_public_summary_groups_skills_and_infers_running_checklist(tmp_path) -> None:
@@ -516,7 +614,7 @@ class AlwaysReviseVerifierClient(FakeGenerationModelClient):
     def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
         if node == "Verifier":
             return (
-                '{"ok": false, "score": 0.62, '
+                '{"ok": false, "verifier_action": "request_revision", "score": 0.62, '
                 '"checked_items": [{"id": "quality", "title": "Quality", "passed": false}], '
                 '"issues": [{"code": "needs_revision", "message": "Revise the HTML.", "severity": "warning"}], '
                 '"route_back_to": "html_coder", "retry_instruction": "Improve the page."}'
@@ -528,7 +626,7 @@ class EmptyRouteVerifierClient(FakeGenerationModelClient):
     def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
         if node == "Verifier":
             return (
-                '{"ok": false, "score": 0.72, '
+                '{"ok": false, "verifier_action": "request_revision", "score": 0.72, '
                 '"checked_items": [{"id": "source", "title": "Source fidelity", "passed": false}], '
                 '"missing_parts": ["Need source evidence for exact figures."], '
                 '"unsupported_claims": ["Exact value requires verification."], '
@@ -551,7 +649,7 @@ def test_generation_v2_stops_when_validation_revisions_do_not_converge() -> None
     assert result.revision_round == 2
 
 
-def test_generation_v2_falls_back_when_verifier_returns_empty_route() -> None:
+def test_generation_v2_does_not_guess_route_when_verifier_returns_empty_route() -> None:
     graph = HtmlGenerationV2Graph(model_client=EmptyRouteVerifierClient(), parser_mode="basic")
     state = graph.initial_state(
         GenerationInput(filename="source.txt", content=b"Source text", content_type="text/plain", instruction="Create HTML."),
@@ -560,10 +658,11 @@ def test_generation_v2_falls_back_when_verifier_returns_empty_route() -> None:
 
     result = graph.run(state)
 
-    assert "max_revision_rounds" in result.failed_steps
+    assert "verifier_invalid_output" in result.failed_steps
     assert "" not in result.failed_steps
-    assert result.revision_round == 2
-    assert any(event.agent == "ContentWriter" and event.status == "completed" for event in result.stage_trace)
+    assert result.same_node_retries["VerifierProtocol"] == 1
+    content_writer_completions = [event for event in result.stage_trace if event.agent == "ContentWriter" and event.status == "completed"]
+    assert len(content_writer_completions) == 1
 
 
 def test_generation_v2_orchestrator_routes_verifier_material_queries_back_to_verifier() -> None:
@@ -576,6 +675,7 @@ def test_generation_v2_orchestrator_routes_verifier_material_queries_back_to_ver
         html_draft=HtmlDraft(html="<!doctype html><html><body>Source</body></html>"),
         validation_report=ValidationReport(
             ok=False,
+            verifier_action=VerifierAction.REQUEST_EVIDENCE,
             material_queries=[MaterialQuery(id="verify-source", query="source table", purpose="Verify source completeness.")],
         ),
     )
@@ -583,6 +683,69 @@ def test_generation_v2_orchestrator_routes_verifier_material_queries_back_to_ver
     decision = GenerationOrchestrator().decide_next(state)
 
     assert decision.next_node == "verifier"
+
+
+def test_generation_v2_orchestrator_does_not_infer_verifier_revision_route() -> None:
+    state = GenerationState(
+        parsed_document=ParsedDocument(plain_text="source"),
+        requirement_brief=RequirementBrief(user_goal="Convert source"),
+        plan_draft=PlanDraft(page_goal="Convert source"),
+        content_draft=ContentDraft(title="Source"),
+        style_brief=StyleBrief(style_goal="Light report"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>Source</body></html>"),
+        validation_report=ValidationReport(
+            ok=False,
+            verifier_action=VerifierAction.REQUEST_REVISION,
+            missing_parts=["source table"],
+            retry_instruction="Route is intentionally missing.",
+        ),
+    )
+
+    decision = GenerationOrchestrator().decide_next(state)
+
+    assert decision.next_node == "verifier_protocol_retry"
+
+
+def test_generation_v2_orchestrator_fails_after_repeated_invalid_verifier_route() -> None:
+    state = GenerationState(
+        parsed_document=ParsedDocument(plain_text="source"),
+        requirement_brief=RequirementBrief(user_goal="Convert source"),
+        plan_draft=PlanDraft(page_goal="Convert source"),
+        content_draft=ContentDraft(title="Source"),
+        style_brief=StyleBrief(style_goal="Light report"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>Source</body></html>"),
+        validation_report=ValidationReport(
+            ok=False,
+            verifier_action=VerifierAction.REQUEST_REVISION,
+            style_mismatch=["wrong style"],
+            retry_instruction="Route is intentionally missing.",
+        ),
+        same_node_retries={"VerifierProtocol": 1},
+    )
+
+    decision = GenerationOrchestrator().decide_next(state)
+
+    assert decision.next_node == "verifier_invalid_output"
+
+
+def test_generation_v2_orchestrator_stops_when_verifier_blocks() -> None:
+    state = GenerationState(
+        parsed_document=ParsedDocument(plain_text=""),
+        requirement_brief=RequirementBrief(user_goal="Convert source"),
+        plan_draft=PlanDraft(page_goal="Convert source"),
+        content_draft=ContentDraft(title="Source"),
+        style_brief=StyleBrief(style_goal="Light report"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>Source</body></html>"),
+        validation_report=ValidationReport(
+            ok=False,
+            verifier_action=VerifierAction.BLOCKED,
+            retry_instruction="Parsed material is unavailable.",
+        ),
+    )
+
+    decision = GenerationOrchestrator().decide_next(state)
+
+    assert decision.next_node == "verifier_blocked"
 
 
 def test_generation_v2_verifier_instructions_require_recall_before_source_failure() -> None:
@@ -593,10 +756,41 @@ def test_generation_v2_verifier_instructions_require_recall_before_source_failur
     assert "output `material_queries` first instead of failing immediately" in prompt
     assert "Before returning `ok: false` for source fidelity" in prompt
     assert "lock down the concrete problem yourself" in prompt
+    assert "Return exactly one `verifier_action`" in prompt
+    assert "Runtime only interprets this protocol" in prompt
+    assert "is honest but is not a successful conversion" in prompt
+    assert "not pass a parse-failure notice" in prompt
     assert "two-phase evidence policy" in skill
     assert "return focused `material_queries` first" in skill
     assert "Verifier owns the validation decision" in skill
+    assert "Runtime will not infer business routes" in skill
+    assert "do not pass an artifact that only reports parsing failure" in skill
     assert "concrete confirmed defect" in skill
+
+
+def test_generation_v2_prompts_do_not_impose_global_section_compression() -> None:
+    planner = Path("html_lore/server/ai/generation_v2/prompts/planner.md").read_text(encoding="utf-8")
+    writer = Path("html_lore/server/ai/generation_v2/prompts/content_writer.md").read_text(encoding="utf-8")
+    coder = Path("html_lore/server/ai/generation_v2/prompts/html_coder.md").read_text(encoding="utf-8")
+    source_skill = Path("html_lore/server/ai/generation_v2/skills/source_extractive_conversion/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    design_prompt = Path("html_lore/server/ai/generation_v2/prompts/style_designer.md").read_text(encoding="utf-8")
+    review_skill = Path("html_lore/server/ai/generation_v2/skills/content_quality_review/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    combined = "\n".join([planner, writer, coder])
+    assert "4-7 sections" not in combined
+    assert "4-8 sections" not in combined
+    assert "12-22 KB" not in combined
+    assert "260 lines" not in combined
+
+    assert "do not impose a default section count" in planner
+    assert "do not merge distinct source sections solely to hit a section-count target" in writer
+    assert "visible source headings" in source_skill
+    assert "design around the source structure" in design_prompt
+    assert "table widths, scroll behavior, numeric readability" in review_skill
 
 
 def test_generation_v2_provider_model_client_extracts_json_and_includes_schema() -> None:
@@ -865,7 +1059,27 @@ def test_generation_v2_agent_payload_exposes_material_read_tool_schema() -> None
 
     assert payload["_available_material_tools"][0]["name"] == "MaterialReadTool"
     assert payload["_available_material_tools"][0]["request_field"] == "material_read_requests"
+    assert agent_payload(node="RequirementAnalyst", schema=RequirementBrief, state=state, fallback={}, skills=())["_available_material_tools"][0]["id"] == "material_read"
+    assert agent_payload(node="Verifier", schema=ValidationReport, state=state, fallback={}, skills=())["_available_material_tools"][0]["id"] == "material_read"
     assert agent_payload(node="Planner", schema=PlanDraft, state=state, fallback={}, skills=())["_available_material_tools"] == []
+
+
+def test_generation_v2_content_writer_requests_source_read_for_extractive_conversion() -> None:
+    parsed = merge_parsed_documents([ParsedDocument(source_files=[SourceFile(filename="source.md")], plain_text="完整原文内容")])
+    state = GenerationState(
+        input=GenerationInput(instruction="完整转换，禁止增加内容"),
+        parsed_document=parsed,
+        requirement_brief=RequirementBrief(
+            user_goal="完整转换，禁止增加内容",
+            source_handling_mode=SourceHandlingMode.EXTRACTIVE_CONVERSION,
+        ),
+    )
+
+    payload = ContentWriterAgent().fake_payload(state)
+
+    assert payload["material_queries"] == []
+    assert payload["material_read_requests"][0]["action"] == "read_file"
+    assert payload["material_read_requests"][0]["file_id"] == "file-1"
 
 
 def test_generation_v2_verifier_payload_keeps_full_material_read_evidence() -> None:
@@ -1343,6 +1557,7 @@ def test_generation_config_defaults_to_legacy(monkeypatch) -> None:
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_ENGINE", raising=False)
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_MODEL", raising=False)
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_HTML_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("HTML_LORE_AI_VISUAL_CHECK", raising=False)
     monkeypatch.delenv("HTML_LORE_DOCUMENT_PARSER", raising=False)
 
     settings = load_settings()
@@ -1350,6 +1565,7 @@ def test_generation_config_defaults_to_legacy(monkeypatch) -> None:
     assert settings.ai_generation_engine == "legacy"
     assert settings.ai_generation_model == DEFAULT_GENERATION_MODEL
     assert settings.ai_generation_html_timeout_seconds == 900
+    assert settings.ai_visual_check == "basic"
     assert settings.document_parser == "markitdown"
 
 
@@ -1493,6 +1709,50 @@ def test_document_parser_uses_markitdown_for_excel(monkeypatch) -> None:
     assert any(warning.code == "markitdown_used" for warning in parsed.warnings)
 
 
+def test_document_parser_uses_specialized_parser_before_markitdown(monkeypatch) -> None:
+    def specialized_parser(**_kwargs):
+        return ParsedDocument(plain_text="Specialized parser output")
+
+    class UnexpectedMarkItDown:
+        def convert(self, _path: str) -> object:
+            raise AssertionError("MarkItDown should not run when specialized parser succeeds.")
+
+    monkeypatch.setattr(document_parser, "parse_with_specialized_parser", specialized_parser)
+    monkeypatch.setattr(document_parser, "MarkItDown", UnexpectedMarkItDown)
+
+    parsed = parse_document(
+        filename="report.docx",
+        content=b"docx bytes",
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    assert parsed.plain_text == "Specialized parser output"
+    assert parsed.source_files[0].filename == "report.docx"
+
+
+def test_document_parser_retries_markitdown_once(monkeypatch) -> None:
+    class FlakyMarkItDown:
+        calls = 0
+
+        def convert(self, _path: str) -> object:
+            FlakyMarkItDown.calls += 1
+            if FlakyMarkItDown.calls == 1:
+                raise RuntimeError("temporary parser failure")
+            return type("Result", (), {"text_content": "Recovered on retry"})()
+
+    monkeypatch.setattr(document_parser, "MarkItDown", FlakyMarkItDown)
+
+    parsed = parse_document(
+        filename="report.pdf",
+        content=b"%PDF fake",
+        content_type="application/pdf",
+    )
+
+    assert parsed.plain_text == "Recovered on retry"
+    assert FlakyMarkItDown.calls == 2
+    assert any(warning.code == "markitdown_retry_succeeded" for warning in parsed.warnings)
+
+
 def test_document_parser_phase_one_file_type_matrix(monkeypatch) -> None:
     class MatrixMarkItDown:
         def convert(self, path: str) -> object:
@@ -1579,6 +1839,29 @@ def test_document_parser_keeps_markitdown_failure_warning(monkeypatch) -> None:
     assert parsed.source_files[0].filename == "report.pdf"
     assert any(warning.code == "markitdown_failed" for warning in parsed.warnings)
     assert any(warning.code == "markitdown_unavailable_or_failed" for warning in parsed.warnings)
+
+
+def test_generation_v2_parse_gate_stops_unreadable_enhanced_material(monkeypatch) -> None:
+    monkeypatch.setattr(document_parser, "MarkItDown", None)
+    graph = HtmlGenerationV2Graph(parser_mode="markitdown")
+    state = graph.initial_state(
+        GenerationInput(
+            filename="report.docx",
+            content=b"PK\x03\x04[Content_Types].xml word/document.xml \x00\x01\x02",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            instruction="完整转换为 HTML 报告，禁止添加或修改内容。",
+        )
+    )
+
+    result = graph.run(state)
+
+    assert result.current_step == GenerationStage.PARSE_FAILED.value
+    assert result.failed_steps == [GenerationStage.PARSE_FAILED.value]
+    assert result.requirement_brief is None
+    assert result.parsed_document is not None
+    assert any(event.stage == GenerationStage.PARSING and event.status == "failed" for event in result.stage_trace)
+    failure_event = next(event for event in result.stage_trace if event.stage == GenerationStage.PARSING and event.status == "failed")
+    assert failure_event.metadata["parse_failures"][0]["filename"] == "report.docx"
 
 
 def test_generation_store_reuses_ai_jobs_with_v2_fields(tmp_path) -> None:
@@ -2150,8 +2433,8 @@ def test_material_generation_v2_runner_writes_note_and_run(tmp_path) -> None:
     assert "private runner evidence" in (manifests[0].parent / "merged.md").read_text(encoding="utf-8")
 
     stored = AIRunStore(settings).add(result["run"])
-    assert stored["skill_trace"][0]["id"] == "html_page_design"
-    assert stored["skill_trace"][0]["agent"] == "StyleDesigner"
+    assert {item["id"] for item in stored["skill_trace"]} >= {"source_grounded_rewrite", "html_page_design"}
+    assert any(item["agent"] == "StyleDesigner" and item["id"] == "html_page_design" for item in stored["skill_trace"])
 
 
 def test_material_generation_v2_runner_writes_job_bundle_before_note_bundle(tmp_path) -> None:

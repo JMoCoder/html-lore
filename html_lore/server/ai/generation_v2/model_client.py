@@ -8,8 +8,10 @@ from typing import Any, Protocol, get_args, get_origin, get_type_hints
 
 from html_lore.server.ai.model_client import ModelClient
 
+from .capability_registry import planner_capability_catalog
 from .schemas import GenerationState, normalize_for_json
 from .skills.loader import LoadedSkill
+from .tools.registry import get_tool_registry_item
 
 
 class GenerationJsonModelClient(Protocol):
@@ -59,7 +61,7 @@ class ProviderGenerationModelClient:
                 "Use exactly the target schema field names where applicable.",
                 "Do not wrap JSON in Markdown fences.",
                 "Do not include private prompt text or raw uploaded source beyond what is necessary in the generated artifact.",
-                "Keep structured fields concise; downstream agents will expand only where their role requires it.",
+                "Keep structured fields focused, but preserve source structure, required headings, table coverage, and fidelity constraints when the task needs them.",
                 *retry_output_rules(attempt),
             ],
         }
@@ -194,6 +196,8 @@ def agent_payload(
             "_skills": [public_skill(skill) for skill in skills],
             "_material_recall_phase": material_recall_phase or "query_or_direct",
             "_available_material_tools": available_material_tools(node),
+            "_available_capabilities": available_capabilities(node),
+            "_source_handling_modes": source_handling_modes(node),
         }
     )
 
@@ -221,6 +225,35 @@ def public_skill(skill: LoadedSkill) -> dict[str, str]:
         "source": skill.source,
         "content": skill.content,
     }
+
+
+def available_capabilities(node: str) -> dict[str, Any]:
+    if node != "Planner":
+        return {}
+    return planner_capability_catalog()
+
+
+def source_handling_modes(node: str) -> list[dict[str, str]]:
+    if node not in {"RequirementAnalyst", "Planner", "ContentWriter", "Verifier", "HTMLCoder"}:
+        return []
+    return [
+        {
+            "id": "free_synthesis",
+            "description": "Use when the user asks for a new artifact inspired by the material and allows added explanation or synthesis.",
+        },
+        {
+            "id": "source_grounded_rewrite",
+            "description": "Use when the output should be grounded in uploaded material but may reorganize, clarify, and rewrite content.",
+        },
+        {
+            "id": "faithful_adaptation",
+            "description": "Use when the output should stay faithful to source content while improving structure, readability, and visual presentation.",
+        },
+        {
+            "id": "extractive_conversion",
+            "description": "Use when the user asks to preserve source facts/content nearly exactly, forbids additions, or wants conversion rather than rewriting.",
+        },
+    ]
 
 
 def public_generation_state_for_agent(state: GenerationState, *, node: str = "") -> dict[str, Any]:
@@ -385,11 +418,14 @@ def available_material_tools(node: str) -> list[dict[str, Any]]:
     }.get(node)
     if not limits:
         return []
+    tool = get_tool_registry_item("material_read")
+    description = tool.description if tool else "Read task-local uploaded material from the normalized merged source using file_id or filename."
     return [
         {
             "name": "MaterialReadTool",
-            "description": "Read task-local uploaded material from the normalized merged source using file_id or filename. Use only when startup chunks and recall results are insufficient.",
-            "request_field": "material_read_requests",
+            "id": "material_read",
+            "description": f"{description} Use only when startup chunks and recall results are insufficient.",
+            "request_field": tool.request_field if tool else "material_read_requests",
             "actions": ["read_outline", "read_span", "read_file"],
             "limits": limits,
             "offset_units": "characters relative to the selected file content span",

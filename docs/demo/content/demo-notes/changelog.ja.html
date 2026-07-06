@@ -15,12 +15,24 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.1.7</span></aside>
+<aside class="stat"><span class="badge">1.1.8</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
 <p>Languages: <a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.1.8] - 2026-07-06</h2>
+<h3>Added</h3>
+<ul>
+<li>AI generation v2 は registered capability catalog と source handling mode を使い、free synthesis、source-grounded rewrite、faithful adaptation、extractive conversion を区別します。</li>
+<li>Document parsing に specialized parsers、MarkItDown、local basic parser の 3 層 parser chain 拡張ポイントを追加しました。</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>Extractive conversion prompts は人工的な section count、compactness、byte-size guidance を課さないようになりました。</li>
+<li>Style と verification は source section identity、table width consistency、numeric readability をより明確に確認します。</li>
+<li>パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを <code>1.1.8</code> に更新しました。</li>
+</ul>
 <h2>[1.1.4] - 2026-06-30</h2>
 <h3>Added</h3>
 <ul>

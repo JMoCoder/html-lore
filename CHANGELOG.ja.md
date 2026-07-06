@@ -4,6 +4,23 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-07-06
+
+### 追加
+
+- AI 生成 v2 の Planner payload に登録済み capability catalog を追加し、`tool_needs` で選択できる skill と境界把握用の runtime tool を明確に分離しました。
+- AI 生成 v2 の requirement analysis が `source_handling_mode` を出力するようになり、free synthesis、source-grounded rewrite、faithful adaptation、extractive conversion を区別して、planning、writing、coding、verification がその mode に従います。
+- AI 生成 v2 の document parsing に 3 層 parser chain の拡張ポイントを追加しました。将来の specialized parser、MarkItDown、local basic parser の順に試し、有効な parser layer は 1 回 retry します。
+- AI 生成 v2 の source handling mode は planning、writing、coding、verification 向けの専用 skill に routing されるようになり、extractive conversion は通常の rewrite ではなく structured source transcription として扱われます。
+
+### 変更
+
+- AI 生成 v2 のブラウザー visual check の既定値を `basic` に変更しました。Playwright または Chrome/Chromium がない環境では、生成を止めずに skip を記録します。
+- AI 生成 v2 の Ingest は、enhanced format upload が明らかに unreadable な場合、LLM agents を呼ぶ前に `parse_failed` で停止し、DOCX/PDF container noise から生成しないようにしました。
+- OpenAI-compatible provider calls は incomplete HTTP read を retryable provider error として wrap するようになり、長い generation node が partial response で job 全体を即失敗させず retry できます。
+- AI 生成 v2 の extractive conversion prompts は、人工的な section count、compactness、byte-size guidance を課さないようになりました。StyleDesigner と Verifier は source section identity、table width consistency、numeric readability を確認します。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.8` に更新しました。
+
 ## [1.1.7] - 2026-07-02
 
 ### Added
