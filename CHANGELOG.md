@@ -9,6 +9,15 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-07-08
+
+### Changed
+
+- Added pre-output self-review guidance to AI generation v2 agent prompts, covering requirement fidelity, source handling mode, section/table/number preservation, skill selection, verifier routing, and safety review.
+- Strengthened HTMLCoder and static HTML skills with layout-repair behavior: overflow, width drift, title collisions, duplicated labels, and table-container defects should be fixed in HTML/CSS while preserving approved content.
+- Improved the AI generation workflow detail dialog so polling refreshes preserve scroll positions for the stage list, detail panel, checklist, and loaded-skill list.
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.9`.
+
 ## [1.1.8] - 2026-07-06
 
 ### Added

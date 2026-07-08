@@ -172,6 +172,7 @@ const i18n = {
     aiJobQueueEmpty: "No generation history yet.",
     aiJobQueued: "AI job queued: {jobId}",
     aiJobRetry: "Retry",
+    aiJobNotRetryable: "This AI job cannot be retried.",
     aiJobRetrying: "Retrying AI job: {jobId}",
     aiJobCompleted: "AI job completed.",
     aiJobFailed: "AI job failed: {message}",
@@ -677,6 +678,7 @@ const i18n = {
     aiJobQueueEmpty: "暂无生成历史。",
     aiJobQueued: "AI 任务已加入队列：{jobId}",
     aiJobRetry: "重试",
+    aiJobNotRetryable: "这个 AI 任务不能重试。",
     aiJobRetrying: "正在重试 AI 任务：{jobId}",
     aiJobCompleted: "AI 任务已完成。",
     aiJobFailed: "AI 任务失败：{message}",
@@ -1182,6 +1184,7 @@ const i18n = {
     aiJobQueueEmpty: "生成履歴はまだありません。",
     aiJobQueued: "AI ジョブをキューに追加しました: {jobId}",
     aiJobRetry: "再試行",
+    aiJobNotRetryable: "この AI ジョブは再試行できません。",
     aiJobRetrying: "AI ジョブを再試行中: {jobId}",
     aiJobCompleted: "AI ジョブが完了しました。",
     aiJobFailed: "AI ジョブに失敗しました: {message}",
@@ -1584,7 +1587,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.8",
+  currentVersion: "1.1.9",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -6568,7 +6571,7 @@ function renderAiGenerationHistoryRow(job, activeOrder = new Map()) {
     ? `<button type="button" class="ai-run-icon-button" data-ai-generation-open="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiGenerationHistoryOpenItem"))}" title="${escapeHtml(t("aiGenerationHistoryOpenItem"))}">${openNoteIcon()}</button>`
     : "";
   const retryButton = job.status === "failed"
-    ? `<button type="button" class="ai-run-icon-button" data-ai-generation-retry="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(t("aiJobRetry"))}">${retryIcon()}</button>`
+    ? `<button type="button" class="ai-run-icon-button" data-ai-generation-retry="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(job.retryable ? t("aiJobRetry") : t("aiJobNotRetryable"))}"${job.retryable ? "" : " disabled"}>${retryIcon()}</button>`
     : "";
   const queueIndex = activeOrder.get(jobId);
   const activeButton = isActive
@@ -6715,6 +6718,7 @@ function parseJsonSafe(value) {
 function renderAiGenerationDetail() {
   const job = state.aiGenerationDetailJob;
   if (!elements.aiGenerationDetail || !job) return;
+  const scrollSnapshot = captureAiGenerationDetailScroll();
   const title = job.label || getAiRunKindLabel(job);
   const statusClass = `status-${String(job.status || "pending").toLowerCase().replace(/[^a-z0-9-]/g, "") || "pending"}`;
   elements.aiGenerationDetailTitle.textContent = title;
@@ -6737,6 +6741,38 @@ function renderAiGenerationDetail() {
   renderAiGenerationStagePanel(job);
   renderAiGenerationDetailChecklist(job);
   renderAiGenerationDetailSkills(job);
+  restoreAiGenerationDetailScroll(scrollSnapshot);
+}
+
+function getAiGenerationDetailScrollTargets() {
+  if (!elements.aiGenerationDetail || elements.aiGenerationDetail.hidden) return [];
+  return [
+    ["stage-list", elements.aiGenerationStageList],
+    ["stage-panel", elements.aiGenerationStagePanel],
+    ["checklist", elements.aiGenerationDetailChecklist],
+    ["skills", elements.aiGenerationDetailSkills],
+  ].filter(([, element]) => element);
+}
+
+function captureAiGenerationDetailScroll() {
+  return getAiGenerationDetailScrollTargets().map(([key, element]) => ({
+    key,
+    scrollTop: element.scrollTop,
+    scrollLeft: element.scrollLeft,
+  }));
+}
+
+function restoreAiGenerationDetailScroll(snapshot) {
+  if (!Array.isArray(snapshot) || snapshot.length === 0) return;
+  const targets = new Map(getAiGenerationDetailScrollTargets());
+  snapshot.forEach(({ key, scrollTop, scrollLeft }) => {
+    const element = targets.get(key);
+    if (!element) return;
+    const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
+    const maxLeft = Math.max(0, element.scrollWidth - element.clientWidth);
+    element.scrollTop = Math.min(scrollTop || 0, maxTop);
+    element.scrollLeft = Math.min(scrollLeft || 0, maxLeft);
+  });
 }
 
 function renderAiGenerationDetailActions(job) {
@@ -6745,6 +6781,8 @@ function renderAiGenerationDetailActions(job) {
   elements.aiGenerationDetailOpen.hidden = false;
   elements.aiGenerationDetailOpen.disabled = !canOpenItem;
   elements.aiGenerationDetailRetry.hidden = job.status !== "failed";
+  elements.aiGenerationDetailRetry.disabled = job.status === "failed" && !job.retryable;
+  elements.aiGenerationDetailRetry.title = job.status === "failed" && !job.retryable ? t("aiJobNotRetryable") : t("aiJobRetry");
   elements.aiGenerationDetailOpen.onclick = () => {
     if (!canOpenItem) return;
     closeAiGenerationDetail();
@@ -6755,7 +6793,7 @@ function renderAiGenerationDetailActions(job) {
 }
 
 function getAiGenerationStages(job) {
-  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace.map((entry) => ({ ...entry })) : [];
+  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace.map((entry, index) => ({ ...entry, _traceIndex: index })) : [];
   const currentStage = String(job?.current_stage || "").trim();
   if (currentStage && !isTerminalAiJobStatus(job?.status)) {
     const hasActiveCurrent = traces.some((entry) => String(entry.stage || entry.node || "") === currentStage && !isTerminalAiStageStatus(entry.status));
@@ -6768,11 +6806,12 @@ function getAiGenerationStages(job) {
         agent: aiGenerationAgentForStage(currentStage),
         status: job.status === "pending" ? "pending" : "running",
         message: job.message || getAiGenerationCurrentAction(job),
+        _traceIndex: traces.length,
       });
     }
   }
   if (traces.length > 0) return traces;
-  if (currentStage) return [{ stage: currentStage, status: job.status || "pending", message: job.message || "" }];
+  if (currentStage) return [{ stage: currentStage, status: job.status || "pending", message: job.message || "", _traceIndex: 0 }];
   return [];
 }
 
@@ -6846,12 +6885,32 @@ function findAiGenerationArtifact(job, stage) {
   if (!stage || artifacts.length === 0) return null;
   const stageKey = String(stage.stage || stage.node || "").toLowerCase();
   const agentKey = String(stage.agent || "").toLowerCase();
-  return artifacts.find((artifact) => {
+  const stageOrdinal = aiGenerationStageOrdinal(job, stage);
+  const matches = artifacts.filter((artifact) => {
     const artifactStage = String(artifact.stage || "").toLowerCase();
     const artifactAgent = String(artifact.agent || "").toLowerCase();
     return (stageKey && artifactStage && (artifactStage.includes(stageKey) || stageKey.includes(artifactStage))) ||
       (agentKey && artifactAgent && artifactAgent === agentKey);
-  }) || null;
+  });
+  if (matches.length === 0) return null;
+  return matches[Math.min(stageOrdinal, matches.length - 1)] || matches[matches.length - 1] || null;
+}
+
+function aiGenerationStageOrdinal(job, stage) {
+  const traces = Array.isArray(job?.stage_trace) ? job.stage_trace : [];
+  const targetIndex = Number.isFinite(stage?._traceIndex) ? stage._traceIndex : traces.indexOf(stage);
+  const stageKey = String(stage?.stage || stage?.node || "").toLowerCase();
+  const agentKey = String(stage?.agent || "").toLowerCase();
+  let ordinal = 0;
+  for (let index = 0; index < traces.length && index < targetIndex; index += 1) {
+    const entry = traces[index];
+    const entryStage = String(entry?.stage || entry?.node || "").toLowerCase();
+    const entryAgent = String(entry?.agent || "").toLowerCase();
+    if ((stageKey && entryStage === stageKey) || (agentKey && entryAgent === agentKey)) {
+      ordinal += 1;
+    }
+  }
+  return ordinal;
 }
 
 function renderAiGenerationArtifactDetail(artifact) {
@@ -7100,6 +7159,18 @@ async function retryAiJob(jobId) {
 }
 
 async function retryAiGenerationJob(jobId) {
+  const job = state.aiJobs.find((item) => String(item.job_id || "") === String(jobId || "")) ||
+    (String(state.aiGenerationDetailJob?.job_id || "") === String(jobId || "") ? state.aiGenerationDetailJob : null);
+  if (job && !job.retryable) {
+    const message = t("aiJobNotRetryable");
+    if (elements.aiGenerationFeedback) elements.aiGenerationFeedback.textContent = message;
+    state.aiGenerationJobNotices[jobId] = message;
+    renderAiGenerationHistory();
+    if (state.aiGenerationDetailJobId === jobId && elements.aiGenerationDetailFeedback) {
+      elements.aiGenerationDetailFeedback.textContent = message;
+    }
+    return;
+  }
   if (elements.aiGenerationFeedback) elements.aiGenerationFeedback.textContent = "";
   state.aiGenerationJobNotices[jobId] = "";
   renderAiGenerationHistory();
@@ -7832,7 +7903,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.8-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.9-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

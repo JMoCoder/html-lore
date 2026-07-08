@@ -1587,7 +1587,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.8",
+  currentVersion: "1.1.9",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -6718,6 +6718,7 @@ function parseJsonSafe(value) {
 function renderAiGenerationDetail() {
   const job = state.aiGenerationDetailJob;
   if (!elements.aiGenerationDetail || !job) return;
+  const scrollSnapshot = captureAiGenerationDetailScroll();
   const title = job.label || getAiRunKindLabel(job);
   const statusClass = `status-${String(job.status || "pending").toLowerCase().replace(/[^a-z0-9-]/g, "") || "pending"}`;
   elements.aiGenerationDetailTitle.textContent = title;
@@ -6740,6 +6741,38 @@ function renderAiGenerationDetail() {
   renderAiGenerationStagePanel(job);
   renderAiGenerationDetailChecklist(job);
   renderAiGenerationDetailSkills(job);
+  restoreAiGenerationDetailScroll(scrollSnapshot);
+}
+
+function getAiGenerationDetailScrollTargets() {
+  if (!elements.aiGenerationDetail || elements.aiGenerationDetail.hidden) return [];
+  return [
+    ["stage-list", elements.aiGenerationStageList],
+    ["stage-panel", elements.aiGenerationStagePanel],
+    ["checklist", elements.aiGenerationDetailChecklist],
+    ["skills", elements.aiGenerationDetailSkills],
+  ].filter(([, element]) => element);
+}
+
+function captureAiGenerationDetailScroll() {
+  return getAiGenerationDetailScrollTargets().map(([key, element]) => ({
+    key,
+    scrollTop: element.scrollTop,
+    scrollLeft: element.scrollLeft,
+  }));
+}
+
+function restoreAiGenerationDetailScroll(snapshot) {
+  if (!Array.isArray(snapshot) || snapshot.length === 0) return;
+  const targets = new Map(getAiGenerationDetailScrollTargets());
+  snapshot.forEach(({ key, scrollTop, scrollLeft }) => {
+    const element = targets.get(key);
+    if (!element) return;
+    const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
+    const maxLeft = Math.max(0, element.scrollWidth - element.clientWidth);
+    element.scrollTop = Math.min(scrollTop || 0, maxTop);
+    element.scrollLeft = Math.min(scrollLeft || 0, maxLeft);
+  });
 }
 
 function renderAiGenerationDetailActions(job) {
@@ -7870,7 +7903,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.8-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.9-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

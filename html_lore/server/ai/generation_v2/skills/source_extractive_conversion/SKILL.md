@@ -24,6 +24,7 @@ This is a source conversion task, not a writing task.
 - Do not add explanatory claims, recommendations, disclaimers, assumptions, or interpretation.
 - Structural labels, containers, table markup, grouping, and responsive presentation are allowed.
 - Preserve visible source headings when they exist. Do not merge distinct source sections into artificial range headings or generic grouped titles merely to simplify the page.
+- If an important source paragraph has no heading, use a professional content-specific wrapper label or no visible label. Do not expose internal workflow labels such as "opening note", "source note", "开头说明", or "前置说明".
 - If source text is unavailable or unreadable, the task should block rather than invent content.
 
 ## Planner Guidance
@@ -43,6 +44,7 @@ ContentWriter acts as a structured transcriber.
 
 - Copy or closely preserve source prose into `sections.body`.
 - Convert source tables into `tables` without changing values, row order, columns, or labels.
+- Preserve source headings as user-facing headings. For unheaded source introductions or callouts, do not invent mechanical position labels; choose a meaningful label such as "执行摘要", "核心判断", "报告导语", or "前置判断" only when it improves comprehension without changing meaning.
 - Use bullets only when the source already has list-like content or when preserving short source statements.
 - Avoid meta sentences such as "this section preserves..." or "the report states..." unless those words are in the source.
 - Do not merge distinct source sections into a generic summary if the source contains separate headings.
@@ -54,11 +56,13 @@ ContentWriter acts as a structured transcriber.
 - Render the approved ContentDraft faithfully.
 - Do not create new business copy, metric cards, conclusions, or explanatory sidebars unless the content already exists in ContentDraft/source.
 - Visual enhancements are limited to typography, spacing, table readability, hierarchy, navigation, and responsive behavior.
+- Avoid duplicate visible labels: if a source heading already includes a number, do not add a separate visible number badge with the same number next to it; if a table sits directly under a same-named section, do not repeat that section title as a visible caption unless the source table has a distinct title.
 
 ## Verifier Guidance
 
 - Compare the final artifact against source coverage targets.
 - Fail if original prose is replaced by high-level summaries.
 - Fail if clear source headings are hidden behind artificial merged range titles that make the conversion harder to audit.
+- Fail or request revision when repeated heading numbers/captions make the page look mechanically duplicated, or when an internal label such as "开头说明" is exposed as a polished report heading.
 - Fail if any table rows, columns, key figures, caveats, or final usage notes are omitted.
 - Use material read when coverage cannot be verified from current context.

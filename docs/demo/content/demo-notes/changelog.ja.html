@@ -15,12 +15,20 @@
 <p class="eyebrow">Release history</p>
 <h1>HTMlore Changelog</h1>
 </article>
-<aside class="stat"><span class="badge">1.1.8</span></aside>
+<aside class="stat"><span class="badge">1.1.9</span></aside>
 </section>
 <section class="timeline doc">
 <h1>Changelog</h1>
 <p>Languages: <a href="CHANGELOG.md">English</a> | <a href="CHANGELOG.zh-CN.md">中文</a> | <a href="CHANGELOG.ja.md">日本語</a></p>
 <h2>[Unreleased]</h2>
+<h2>[1.1.9] - 2026-07-08</h2>
+<h3>Changed</h3>
+<ul>
+<li>AI 生成 v2 の各 agent prompt に出力前 self-review を追加し、requirement fidelity、source handling mode、section/table preservation、skill selection、verifier routing、safety review を確認するようにしました。</li>
+<li>HTMLCoder と static HTML skills は、承認済み content を保ちながら overflow、width drift、title collision、duplicated labels、table-container defects の layout repair を優先します。</li>
+<li>workflow detail dialog は background refresh 時も stage、detail、checklist、skill list の scroll position を保持します。</li>
+<li>パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを <code>1.1.9</code> に更新しました。</li>
+</ul>
 <h2>[1.1.8] - 2026-07-06</h2>
 <h3>Added</h3>
 <ul>

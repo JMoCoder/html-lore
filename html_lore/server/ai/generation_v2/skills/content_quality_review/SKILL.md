@@ -73,15 +73,16 @@ Ask these in order:
 6. Did HTMLCoder implement the StyleBrief in a visible way?
 7. Does the visual representation match the content relationship: table for matrices, flow for sequence/loops, cards for repeated independent items, prose/callout for narrative emphasis?
 8. In faithful or extractive source modes, does the artifact preserve visible source section identity instead of hiding distinct source sections behind artificial merged titles?
-9. Are layout basics sound: no obvious text overlap, no crowded labels, no stretched short-content cards, no large accidental blank areas, and no distracting background lines behind readable text?
-10. Are grouped or paired components visually coherent?
-11. For architecture/workflow pages, are nodes, edges, loops, ownership boundaries, and stop conditions represented clearly enough?
-12. For business/report pages, are conclusions, risks, recommendations, and responsibility/parameter matrices represented with suitable density?
-13. For table-heavy reports, are table widths, scroll behavior, numeric readability, and peer-level component consistency good enough for comprehension?
-14. If the user requested comparison, analysis, suitability, pricing, parameters, risk, or recommendations, does the artifact preserve enough analytical detail to support that purpose?
-15. If the source material is multi-file or dense, has the artifact avoided over-compressing distinct sources, evidence, dimensions, and unknowns into a generic summary?
-16. Are omissions honest and acceptable for the available material?
-17. Is the artifact complete enough to write into the knowledge base?
+9. Are visible labels professional and non-duplicative, with no repeated section number badge + numbered H2 + same table caption, and no internal labels such as "开头说明" exposed as polished report headings?
+10. Are layout basics sound: no obvious text overlap, no crowded labels, no stretched short-content cards, no large accidental blank areas, and no distracting background lines behind readable text?
+11. Are grouped or paired components visually coherent?
+12. For architecture/workflow pages, are nodes, edges, loops, ownership boundaries, and stop conditions represented clearly enough?
+13. For business/report pages, are conclusions, risks, recommendations, and responsibility/parameter matrices represented with suitable density?
+14. For table-heavy reports, are table widths, scroll behavior, numeric readability, and peer-level component consistency good enough for comprehension?
+15. If the user requested comparison, analysis, suitability, pricing, parameters, risk, or recommendations, does the artifact preserve enough analytical detail to support that purpose?
+16. If the source material is multi-file or dense, has the artifact avoided over-compressing distinct sources, evidence, dimensions, and unknowns into a generic summary?
+17. Are omissions honest and acceptable for the available material?
+18. Is the artifact complete enough to write into the knowledge base?
 
 ## Pass Criteria
 
@@ -92,6 +93,7 @@ Pass when:
 - serious source claims are supported by the provided material,
 - important planned sections are present,
 - visible source section identity is preserved when the selected source mode requires it,
+- visible section numbers, captions, and wrapper labels do not look duplicated or internally generated,
 - the HTML is complete enough to read and navigate,
 - visual treatment improves comprehension or at least does not harm it,
 - layout choices are readable and do not introduce obvious collisions, empty-card imbalance, or background interference,
@@ -116,6 +118,7 @@ Fail and route back when:
 - the structure does not match the requested purpose,
 - the layout pattern harms comprehension, such as using generic cards for a process that needs a flow or a matrix that needs a table,
 - table-heavy report layouts harm comprehension through inconsistent peer-level widths, avoidable internal table scrolling, or weak numeric/table hierarchy,
+- duplicated heading numbers, repeated adjacent captions, or internal wrapper labels make the report look mechanically generated,
 - visible text overlaps labels, badges, connector lines, or decorative backgrounds,
 - short-content cards or paired panels create major empty-space imbalance or inconsistent component language,
 - architecture or workflow pages hide edge conditions, loop stop conditions, or control ownership that the user explicitly asked to understand,

@@ -49,6 +49,13 @@ Material read guidance:
 - Include `file_id` when available from `parsed_document.materials`; otherwise include an exact filename.
 - Do not request the same broad file read repeatedly. If a read result is truncated, use `next_offset` only when the next page is necessary.
 
+Self-review before output:
+- Check that the user's explicit goal, uploaded-material relationship, non-default options, and target audience/use are reflected in the RequirementBrief.
+- Check that `source_handling_mode` follows the user's wording, especially requests for completeness, exact preservation, conversion, rewrite, or free synthesis.
+- Check that `must_include`, `success_criteria`, `source_summary`, and `uncertainty` preserve important source boundaries and do not hide multi-file differences.
+- If the brief depends on source facts you have not inspected enough, request material evidence instead of guessing or silently marking the source missing.
+- Do not add a self-review field to the JSON; fix the RequirementBrief before returning it.
+
 Boundaries:
 - Do not write final article content.
 - Do not plan page sections in detail.

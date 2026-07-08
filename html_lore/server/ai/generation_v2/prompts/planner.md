@@ -47,6 +47,14 @@ Planning principles:
 - When the page needs component-heavy implementation such as cards, grids, timelines, comparison blocks, process flows, callouts, or responsive tables, add a `tool_needs` item using the registered skill id `component_pattern_html`.
 - Do not add capability needs just because they are available. Pick at most 1-3 high-value needs.
 
+Self-review before output:
+- Check that every explicit user requirement and non-default option from RequirementBrief is visible in the plan, checklist, verification targets, or visual strategy.
+- Check that `source_handling_mode` is treated as a planning constraint and that faithful/extractive tasks preserve real source headings, tables, named entities, figures, and omissions in the planned structure.
+- Check that each major source section or required evidence group has a destination in `section_plan`, `evidence_needs`, or downstream checklist. Do not hide clear source sections behind artificial ranges or generic merged headings.
+- Check that `tool_needs` only names registered planner-selectable skill ids from `_available_capabilities.skills`; do not output invented skills or runtime tools.
+- Check that each planned representation matches the content relationship: matrix/table for structured evidence, flow/timeline for sequence, cards for repeated independent items, prose/callout for narrative emphasis.
+- Do not add a self-review field to the JSON; revise the plan itself before returning it.
+
 Boundaries:
 - Do not write final prose.
 - Do not write HTML or CSS.

@@ -31,6 +31,8 @@ Quality principles:
 - Prefer natural human prose over source-by-source narration.
 - Do not overuse phrases like "the note says" or "the source mentions".
 - Use section titles that help readers understand the topic.
+- For source-derived titles, preserve real source headings when they exist. Do not turn internal planning labels such as "opening note", "source note", "intro note", "开头说明", or "前置说明" into user-facing headings.
+- When an important source paragraph has no heading, either leave the callout title empty or choose a professional, content-specific label that reflects the paragraph's role, such as "执行摘要", "核心判断", "报告导语", or "前置判断". Avoid mechanical labels that describe position rather than meaning.
 - Avoid unsupported claims, fake citations, fake numbers, and invented organizations.
 - Keep tables only when tabular comparison improves comprehension.
 - Prefer evidence-backed tables or structured bullets when the user asks for comparison, parameters, counts, prices, timelines, responsibilities, risks, or other exact details.
@@ -48,6 +50,15 @@ Material read guidance:
 - Use `read_file` only for short files or faithful-conversion tasks where source completeness matters.
 - Include `file_id` when available from `parsed_document.materials`; otherwise include an exact filename.
 - Respect `truncated` and `next_offset`; request the next page only when needed for content completeness.
+
+Self-review before output:
+- Check that every PlanDraft section, expected content item, checklist item owned by ContentWriter, and verifier retry instruction is directly addressed.
+- Check that tables, figures, named entities, dates, numbers, requirements, assumptions, and omissions required by the plan or source mode are preserved or explicitly recorded in `omitted_items`.
+- Check that `source_handling_mode` governs the amount of rewriting: free synthesis may explain, grounded rewrite may clarify, faithful adaptation should preserve source meaning/order, and extractive conversion should avoid summary-only replacement.
+- Check that generated headings are professional user-facing labels, not internal wrapper names such as "opening note", "source note", "开头说明", or "前置说明".
+- Check that any source section numbering appears once in the content structure and that you have not duplicated the same title as a section title plus table caption.
+- If key source evidence is still missing, request material evidence instead of writing around the gap.
+- Do not add a self-review field to the JSON; revise ContentDraft before returning it.
 
 Boundaries:
 - Do not produce HTML or CSS.

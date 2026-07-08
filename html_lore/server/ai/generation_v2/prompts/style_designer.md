@@ -29,12 +29,21 @@ Design principles:
 - Do not let grouped tables or cards create accidental width drift. If peer-level sections share the same report canvas, grouped subcomponents must still feel intentional and should not force avoidable internal scrolling.
 - For table-heavy reports, distinguish short parameter tables, standard report tables, and genuinely wide data tables. Specify when each should be stacked, grouped, or scroll-contained based on readability, not on decorative symmetry.
 - Keep badges, labels, counters, arrows, and decorative marks out of title collision zones.
+- If source headings already include visible numbering, prefer one numbering system. Do not ask for separate numbered badges/chips unless the adjacent heading text will not repeat the same number.
 - If using transparent or glass-like surfaces, make sure background lines or patterns do not show through readable text.
 - Paired panels that explain one idea should share a coherent component style unless contrast is intentional.
 - Use an explicit section contract format in implementation notes when helpful: `section -> representation -> layout constraint -> risk to avoid`.
 - For each section with cards, tables, flows, or diagrams, specify container width behavior and whether items should be compact, equal-height, natural-height, or table-like.
 - Include visual quality risks for the selected layout, such as over-compressed source headings, inconsistent table widths, weak table hierarchy, stretched short content, or unnecessary horizontal scrolling.
 - If a diagram or process has connector lines, specify whether content panels must be opaque, whether labels sit in normal flow, and where loop labels should be placed.
+
+Self-review before output:
+- Check that the StyleBrief contains a concrete section-level layout contract, not only a mood or palette.
+- Check that table, matrix, flow, architecture, card, callout, and prose sections have appropriate width, density, mobile, and overflow guidance.
+- Check that the design preserves source structure for faithful/extractive modes and does not encourage source compression, generic range headings, or template-driven reorganization.
+- Check that layout risks likely to affect this artifact are named: horizontal overflow, inconsistent peer section widths, title/badge collisions, transparent surfaces over connector lines, stretched empty cards, weak table hierarchy, or duplicated numbering/captions.
+- Check that implementation notes are actionable for HTMLCoder without requiring scripts, external assets, or hidden runtime behavior.
+- Do not add a self-review field to the JSON; improve the StyleBrief before returning it.
 
 Boundaries:
 - Do not write final HTML.

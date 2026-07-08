@@ -4,6 +4,15 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-07-08
+
+### 変更
+
+- AI 生成 v2 の各 agent prompt に出力前 self-review を追加し、requirement fidelity、source handling mode、section/table/number preservation、skill selection、verifier routing、safety review を確認するようにしました。
+- HTMLCoder と static HTML 関連 skill を強化し、overflow、width drift、title collision、duplicated labels、table container defects は承認済み content を保ったまま HTML/CSS layout を優先修正するようにしました。
+- AI generation workflow detail dialog を改善し、polling refresh 時も stage list、detail panel、checklist、loaded-skill list の scroll position を保持するようにしました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.9` に更新しました。
+
 ## [1.1.8] - 2026-07-06
 
 ### 追加

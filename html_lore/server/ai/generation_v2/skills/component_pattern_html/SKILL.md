@@ -74,6 +74,7 @@ This skill is an implementation aid, not a page-planning authority. It should he
 
 - Use `box-sizing: border-box`.
 - Use `max-width`, `grid`, `flex`, `minmax`, `gap`, and natural wrapping.
+- Use a small number of shared outer wrapper classes for peer-level sections. Do not let each section invent a different canvas width.
 - Define page, section, panel, and grid wrappers deliberately. Avoid one-off wrapper widths that make adjacent report sections appear unrelated.
 - Avoid viewport-scaled font sizes.
 - Avoid fixed heights for content cards.
@@ -81,6 +82,7 @@ This skill is an implementation aid, not a page-planning authority. It should he
 - Use `overflow-wrap: anywhere` for long labels only where needed.
 - Tables need `overflow-x: auto` wrappers or mobile card alternatives.
 - Table overflow should be intentional. A wide annual/detail table may scroll; a short parameter table should not scroll merely because it was squeezed into an ornamental grid.
+- Prevent document-level horizontal overflow. Prefer `max-width: 100%`, `min-width: 0`, `overflow-wrap`, and scroll-contained table wrappers over fixed desktop widths.
 - Prefer `align-items: stretch` only when card content lengths are similar; otherwise use natural height or compact max-width.
 - Use opaque or nearly opaque surfaces for cards placed over diagrams, connector lines, or textured backgrounds.
 - Place badges and section labels in normal document flow where possible. If absolutely positioned, reserve padding so they cannot overlap headings.
@@ -106,5 +108,6 @@ Before returning final HTML, verify:
 - structured facts from the ContentDraft or PlanDraft remain structured in the HTML instead of being flattened into generic paragraphs,
 - comparison, fit, price, parameter, and risk relationships are implemented with a component that preserves their dimensions,
 - labels, loop badges, and counters have protected space and do not collide with headings,
+- the body and main page canvas do not overflow horizontally on common desktop and mobile widths,
 - no scripts or unsafe attributes were introduced,
 - visual patterns match StyleBrief rather than overriding it.

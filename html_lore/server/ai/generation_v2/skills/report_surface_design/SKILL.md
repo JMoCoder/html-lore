@@ -88,6 +88,7 @@ For analytical reports, choose the representation by decision need:
   - genuinely wide data tables need an explicit scroll container and stronger header/numeric treatment.
 - Use visual tokens consistently: surface, border, muted text, primary accent, risk/warning accent, and optional success/next-step accent.
 - Keep color functional. Use accent color for hierarchy and status, not decoration.
+- Use only one visible numbering system for numbered source sections. A decorative badge and a numbered heading should not repeat the same number side by side.
 - Make risk or warning treatments visible but not alarmist.
 - Keep charts or diagram-like blocks honest; do not fake data visualization when the source has no data.
 - Ensure paired report panels use the same component language unless contrast carries meaning.
@@ -102,11 +103,13 @@ When this skill is loaded, StyleDesigner should include:
 - which upstream sections need summary, finding, matrix, risk, recommendation, roadmap, or appendix treatment,
 - table/matrix guidance when the plan contains comparisons, responsibilities, options, parameters, or evidence categories,
 - table-density guidance that distinguishes short parameter tables, standard report tables, and wide data tables,
+- explicit horizontal overflow policy for report sections: shared canvas for peer-level sections, scroll containment only for genuinely wide tables, and no accidental full-document overflow,
 - analysis-depth guidance when source material is complex: whether the report should read as a short memo, standard report, deep comparison, technical review, or decision brief, and how much detail should be preserved,
 - explicit source-vs-judgment guidance when the page contains suitability, risk, or recommendation language,
 - density rules for findings, callouts, and long analysis sections,
 - mobile handling for tables, matrices, and multi-column report areas,
 - visual risk notes for empty cards, over-wide short content, weak contrast, and decorative elements that reduce credibility,
+- visual risk notes for duplicated section numbers, repeated captions, and internal labels exposed as report headings,
 - explicit reminder that missing data must remain missing, not invented for visual polish.
 
 ## Review Checklist
@@ -118,4 +121,5 @@ When this skill is loaded, StyleDesigner should include:
 - Are comparison, fit, pricing, parameter, and risk relationships visually explicit when the upstream content calls for them?
 - Is the report credible without inventing metrics or unsupported certainty?
 - Are dense sections readable on mobile?
+- Are peer-level sections aligned on a coherent report canvas, with wide tables contained intentionally rather than causing page-level overflow?
 - Is the visual hierarchy strong enough for decision reading, but not so decorative that it weakens trust?

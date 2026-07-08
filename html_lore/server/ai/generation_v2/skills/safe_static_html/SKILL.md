@@ -86,6 +86,19 @@ If `validation_report` or `safety_report` is present and not ok:
 - Make a concrete change. Do not return the same HTML unchanged.
 - Preserve approved content while fixing the reported problem.
 - If safety feedback conflicts with visual ambition, safety wins.
+- If feedback is layout-only, such as overflow, clipped labels, table containment, width drift, duplicated visible labels, or style implementation, patch HTML/CSS layout while preserving ContentDraft wording, facts, section coverage, and table data.
+- If VisualCheckReport identifies horizontal overflow, first look for fixed-width wrappers, wide tables without scroll containers, unconstrained grids, absolute badges, connector labels, or long unwrapped text. Fix the specific cause rather than simplifying the document.
+
+## Final Self-Check
+
+Before returning HTML, verify that:
+
+- all required ContentDraft sections and tables are still present,
+- peer-level section widths follow one intentional canvas,
+- tables and grids have responsive containment,
+- visible numbers, badges, and captions are not duplicated,
+- short panels do not create large accidental blank areas,
+- no scripts, event handlers, remote dependencies, local paths, prompts, or credentials were introduced.
 
 ## Output Budget
 

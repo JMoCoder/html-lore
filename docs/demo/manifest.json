@@ -9,7 +9,7 @@
     {
       "id": "demo-notes/readme.zh-CN.html",
       "title": "HTMlore README 完整说明",
-      "summary": "完整中文 README 转换为 HTML，覆盖项目愿景、笔记本流程、1.1.8 AI 生成稳定性优化、Docker 部署、后端 API、安全模型和路线图。",
+      "summary": "完整中文 README 转换为 HTML，覆盖项目愿景、笔记本流程、1.1.9 AI 生成工作流质量优化、Docker 部署、后端 API、安全模型和路线图。",
       "path": "content/demo-notes/readme.zh-CN.html",
       "source_type": "html",
       "source_url": null,
@@ -35,7 +35,7 @@
     {
       "id": "demo-notes/changelog.zh-CN.html",
       "title": "HTMlore 更新日志",
-      "summary": "完整中文 CHANGELOG 转换为 HTML，以发布轨迹风格展示 1.1.8 AI 生成稳定性优化和早期版本变更。",
+      "summary": "完整中文 CHANGELOG 转换为 HTML，以发布轨迹风格展示 1.1.9 AI 生成工作流质量优化和早期版本变更。",
       "path": "content/demo-notes/changelog.zh-CN.html",
       "source_type": "html",
       "source_url": null,

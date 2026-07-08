@@ -4386,6 +4386,7 @@ a.icon-action {
 .ai-generation-stage-panel {
   min-height: 0;
   overflow: auto;
+  overflow-anchor: none;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -4550,6 +4551,7 @@ a.icon-action {
 .ai-generation-detail-footer section > div {
   min-height: 0;
   overflow: auto;
+  overflow-anchor: none;
 }
 
 .ai-generation-detail-footer h3 {
