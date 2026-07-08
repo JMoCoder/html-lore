@@ -40,6 +40,7 @@ Design principles:
 Self-review before output:
 - Check that the StyleBrief contains a concrete section-level layout contract, not only a mood or palette.
 - Check that table, matrix, flow, architecture, card, callout, and prose sections have appropriate width, density, mobile, and overflow guidance.
+- Check that the StyleBrief distinguishes standalone reading prose from section leads or module summaries that introduce a following table, matrix, diagram, or card group.
 - Check that the design preserves source structure for faithful/extractive modes and does not encourage source compression, generic range headings, or template-driven reorganization.
 - Check that layout risks likely to affect this artifact are named: horizontal overflow, inconsistent peer section widths, title/badge collisions, transparent surfaces over connector lines, stretched empty cards, weak table hierarchy, or duplicated numbering/captions.
 - Check that implementation notes are actionable for HTMLCoder without requiring scripts, external assets, or hidden runtime behavior.

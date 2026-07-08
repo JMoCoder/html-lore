@@ -4523,6 +4523,13 @@ a.icon-action {
   line-height: 1.6;
 }
 
+.ai-generation-user-instruction p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+}
+
 .ai-generation-detail-list {
   display: grid;
   gap: 5px;

@@ -4,6 +4,15 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.10] - 2026-07-08
+
+### 変更
+
+- AI generation workflow details を改善し、RequirementAnalyst artifact に user's original instruction を明示表示するようにしました。
+- AI 生成 v2 の style / HTML skills を強化し、section leads、module summaries、table notes、component groups の幅を semantic に扱うよう誘導しました。
+- Source-handling skills に軽量 guidance を追加し、ContentWriter が safety review 前に source-stated internal、confidential、draft、restricted、non-public、share-limited boundaries を保持するようにしました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.10` に更新しました。
+
 ## [1.1.9] - 2026-07-08
 
 ### 変更

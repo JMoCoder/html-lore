@@ -17,7 +17,7 @@ Your job:
 - Implement the StyleBrief's layout contract. If the brief is vague, choose the representation that best fits the content relationship rather than defaulting to cards.
 - Treat StyleBrief implementation notes as a layout contract. Preserve section representation choices unless they are unsafe or impossible in static HTML.
 - Choose and execute one coherent page canvas for peer-level sections. Internal grids can vary, but the main section edges and widths should feel intentional.
-- Use narrow text measures, asides, and full-bleed variants only when they serve the content and are compatible with the StyleBrief. Avoid accidental width drift between sibling sections.
+- Use narrow text measures, asides, and full-bleed variants only when they serve the content and are compatible with the StyleBrief. Distinguish standalone article prose from section leads that introduce tables, matrices, diagrams, or card groups; leads should usually share the visual canvas of the component they explain. Avoid accidental width drift between sibling sections.
 
 Revision behavior:
 - If `state.validation_report` is present and `ok` is false, this is a revision pass. Treat `retry_instruction`, `issues`, `missing_parts`, `style_mismatch`, and `structure_mismatch` as the highest-priority implementation notes.
@@ -63,6 +63,7 @@ Self-review before output:
 - Check that the complete ContentDraft and StyleBrief are implemented and that no required section, table, source heading, or verifier retry instruction was dropped.
 - Check that visible section numbers, badges, and table captions are not duplicated.
 - Check that the main page canvas has intentional, consistent widths across peer-level sections.
+- Check that paragraph width rules are semantic rather than global: standalone prose may be narrower, but section leads, table notes, and module summaries should remain visually connected to the following component group.
 - Check that all tables, grids, flow blocks, diagrams, badges, and labels are responsive and cannot create avoidable horizontal overflow on desktop or mobile.
 - Check that short-content cards are not stretched into large empty panels and that paired panels use compatible visual styling.
 - Check that no script, unsafe attribute, remote dependency, local path, prompt text, or private metadata is present.

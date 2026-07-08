@@ -23,11 +23,12 @@ Use this skill when `RequirementBrief.source_handling_mode` is `faithful_adaptat
 - Do not add conclusions, assumptions, recommendations, or explanations not present in the source.
 - Preserve visible source headings and section identity when the source structure matters to user trust or auditability. Do not collapse distinct source sections just to create a shorter plan.
 - For source paragraphs without headings, use professional content-specific wrapper labels or no visible label. Do not expose internal labels such as "opening note", "source note", "开头说明", or "前置说明".
+- Preserve source-stated handling boundaries. If the source or user frames material as internal, confidential, draft, restricted, non-public, or share-limited, carry that boundary forward as a concise notice or caveat without inventing legal language.
 
 ## Agent Guidance
 
 - Planner: plan source-order-preserving sections and identify fidelity targets.
-- ContentWriter: adapt source material carefully; prefer source wording for key statements and data; preserve real headings and avoid mechanical invented labels for unheaded introductions.
-- HTMLCoder: make visual improvements without adding new claims; avoid duplicating section numbers or repeating an immediately preceding section title as a visible table caption.
+- ContentWriter: adapt source material carefully; prefer source wording for key statements and data; preserve real headings and avoid mechanical invented labels for unheaded introductions; when source material is share-sensitive, include a brief source-faithful share-scope or handling notice in the draft.
+- HTMLCoder: make visual improvements without adding new claims; render source-stated handling notices clearly but calmly when present; avoid duplicating section numbers or repeating an immediately preceding section title as a visible table caption.
 - StyleDesigner: improve visual organization without encouraging source-section compression.
-- Verifier: check source fidelity, visible section identity, duplicate heading/caption labels, and professional wrapper labels before approving; use material read when completeness is uncertain.
+- Verifier: check source fidelity, visible section identity, source-stated handling boundaries, duplicate heading/caption labels, and professional wrapper labels before approving; use material read when completeness is uncertain. Do not demand a handling notice when the source/user did not imply one.

@@ -9,6 +9,15 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.10] - 2026-07-08
+
+### Changed
+
+- Improved AI generation workflow details so RequirementAnalyst artifacts show the user's original instruction explicitly.
+- Strengthened AI generation v2 style and HTML skills with semantic width guidance for section leads, module summaries, table notes, and component groups.
+- Added lightweight source-handling skill guidance so ContentWriter preserves source-stated internal, confidential, draft, restricted, non-public, or share-limited handling boundaries before safety review.
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.10`.
+
 ## [1.1.9] - 2026-07-08
 
 ### Changed

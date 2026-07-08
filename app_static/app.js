@@ -149,6 +149,7 @@ const i18n = {
     aiGenerationDetailError: "Error",
     aiGenerationDetailSummary: "Summary",
     aiGenerationDetailCurrentAction: "Current action",
+    aiGenerationDetailUserInstruction: "Original user input",
     aiGenerationDetailInputSummary: "Input summary",
     aiGenerationDetailOutputSummary: "Output summary",
     aiGenerationDetailQualityScore: "Quality score",
@@ -655,6 +656,7 @@ const i18n = {
     aiGenerationDetailError: "错误",
     aiGenerationDetailSummary: "摘要",
     aiGenerationDetailCurrentAction: "当前动作",
+    aiGenerationDetailUserInstruction: "用户原始输入",
     aiGenerationDetailInputSummary: "输入摘要",
     aiGenerationDetailOutputSummary: "输出摘要",
     aiGenerationDetailQualityScore: "质量评分",
@@ -1161,6 +1163,7 @@ const i18n = {
     aiGenerationDetailError: "エラー",
     aiGenerationDetailSummary: "概要",
     aiGenerationDetailCurrentAction: "現在の動作",
+    aiGenerationDetailUserInstruction: "ユーザーの元入力",
     aiGenerationDetailInputSummary: "入力概要",
     aiGenerationDetailOutputSummary: "出力概要",
     aiGenerationDetailQualityScore: "品質スコア",
@@ -1587,7 +1590,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.9",
+  currentVersion: "1.1.10",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -6924,8 +6927,22 @@ function renderAiGenerationArtifactDetail(artifact) {
   const warnings = Array.isArray(artifact.warnings) && artifact.warnings.length > 0
     ? `<section><h4>${escapeHtml(t("aiGenerationDetailWarnings"))}</h4><ul class="ai-generation-detail-list">${artifact.warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`
     : "";
-  const data = artifact.data && typeof artifact.data === "object" ? renderKeyValueList(artifact.data) : "";
-  return `${summary}${inputSummary}${outputSummary}${quality}${usage}${warnings}${data ? `<section><h4>${escapeHtml(artifact.title || artifact.agent || t("aiJobArtifacts"))}</h4>${data}</section>` : ""}`;
+  const dataObject = artifact.data && typeof artifact.data === "object" ? artifact.data : {};
+  const userInstruction = renderAiGenerationUserInstruction(dataObject);
+  const dataRows = renderKeyValueList(omitArtifactDataKeys(dataObject, ["user_instruction"]));
+  return `${summary}${userInstruction}${inputSummary}${outputSummary}${quality}${usage}${warnings}${dataRows ? `<section><h4>${escapeHtml(artifact.title || artifact.agent || t("aiJobArtifacts"))}</h4>${dataRows}</section>` : ""}`;
+}
+
+function renderAiGenerationUserInstruction(data) {
+  const text = String(data?.user_instruction || "").trim();
+  if (!text) return "";
+  return `<section class="ai-generation-user-instruction"><h4>${escapeHtml(t("aiGenerationDetailUserInstruction"))}</h4><p>${escapeHtml(text)}</p></section>`;
+}
+
+function omitArtifactDataKeys(data, keys) {
+  if (!data || typeof data !== "object") return {};
+  const blocked = new Set(keys);
+  return Object.fromEntries(Object.entries(data).filter(([key]) => !blocked.has(key)));
 }
 
 function renderAiGenerationDetailChecklist(job) {
@@ -7903,7 +7920,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.9-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.10-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

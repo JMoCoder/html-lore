@@ -88,7 +88,8 @@ Every StyleBrief should give HTMLCoder a usable layout contract, not only a mood
 
 - Define the intended representation for each major section.
 - Name the capability labels that matter and explain why they matter for this source material.
-- Match container width to content amount. Short text should not sit in a wide empty card; use compact cards, split grids, callouts, or prose blocks instead.
+- Match container width to both content amount and content role. A standalone reading paragraph can use a comfortable measure; a lead paragraph that introduces a table, matrix, diagram, or card group should normally share that group's visual canvas or become a lead band/callout so it does not feel detached.
+- Use compact cards, split grids, callouts, inline facts, or same-canvas lead text to make short explanatory text feel composed. The goal is visual relationship, not always making text narrower.
 - Keep grouped components visually consistent. When two panels explain one idea, share border, radius, padding, background behavior, and type scale unless contrast is intentional.
 - Reserve collision-safe space for labels, badges, numbers, arrows, and decorative marks. They must not overlap or crowd headings.
 - Keep background layers subordinate to content. Do not put transparent or glass cards over strong connector lines, patterns, or high-contrast decoration unless the card has an opaque enough surface or local mask.

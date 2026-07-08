@@ -57,6 +57,7 @@ If a requested visual effect would require unsafe scripting, replace it with sta
 - Use icons only if they can be represented safely with text, CSS, or inline SVG. Do not fetch icon libraries.
 - Follow StyleBrief section contracts. If a section is specified as a table, flow, timeline, or architecture map, implement that representation instead of flattening it into generic cards.
 - Implement the StyleBrief's page canvas and section width strategy. Use constrained text measures intentionally; do not create unrelated `max-width` values for peer-level sections unless the brief calls for a narrow reading lane, aside, or full-bleed contrast.
+- Apply text measures with semantic classes instead of global paragraph rules. For example, an article-like `.prose` block may use a narrower measure, while `.section-lead`, `.table-note`, `.matrix-intro`, or `.module-summary` should align with the section or component group they introduce.
 - Keep main section left/right edges, panel widths, and repeated component groups aligned to the selected layout system. Internal grids may vary, but the page should not look like unrelated templates stitched together.
 - Reserve safe space for badges, loop labels, arrows, counters, and connector labels.
 - Keep repeated component groups visually coherent through shared classes and tokens.
