@@ -174,6 +174,7 @@ const i18n = {
     aiJobQueued: "AI job queued: {jobId}",
     aiJobRetry: "Retry",
     aiJobNotRetryable: "This AI job cannot be retried.",
+    aiJobRetryRemaining: "{count} retry left",
     aiJobRetrying: "Retrying AI job: {jobId}",
     aiJobCompleted: "AI job completed.",
     aiJobFailed: "AI job failed: {message}",
@@ -681,6 +682,7 @@ const i18n = {
     aiJobQueued: "AI 任务已加入队列：{jobId}",
     aiJobRetry: "重试",
     aiJobNotRetryable: "这个 AI 任务不能重试。",
+    aiJobRetryRemaining: "剩余 {count} 次",
     aiJobRetrying: "正在重试 AI 任务：{jobId}",
     aiJobCompleted: "AI 任务已完成。",
     aiJobFailed: "AI 任务失败：{message}",
@@ -1188,6 +1190,7 @@ const i18n = {
     aiJobQueued: "AI ジョブをキューに追加しました: {jobId}",
     aiJobRetry: "再試行",
     aiJobNotRetryable: "この AI ジョブは再試行できません。",
+    aiJobRetryRemaining: "残り {count} 回",
     aiJobRetrying: "AI ジョブを再試行中: {jobId}",
     aiJobCompleted: "AI ジョブが完了しました。",
     aiJobFailed: "AI ジョブに失敗しました: {message}",
@@ -1590,7 +1593,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.10",
+  currentVersion: "1.1.11",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -6481,8 +6484,9 @@ function renderAiJobRow(job) {
   const isFailed = job.status === "failed";
   const timeValue = job.completed_at || job.updated_at || job.created_at || "";
   const timeMeta = timeValue ? `<span>${escapeHtml(formatDateTime(timeValue))}</span>` : "";
-  const retryAction = isFailed && job.retryable
-    ? `<button type="button" class="ai-job-icon-button" data-ai-job-retry="${escapeHtml(job.job_id)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(t("aiJobRetry"))}">${retryIcon()}</button>`
+  const retryTitle = aiJobRetryTitle(job);
+  const retryAction = isFailed
+    ? `<button type="button" class="ai-job-icon-button" data-ai-job-retry="${escapeHtml(job.job_id)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(retryTitle)}"${job.retryable ? "" : " disabled"}>${retryIcon()}</button>`
     : "";
   row.innerHTML = `
     <div class="ai-job-main">
@@ -6500,7 +6504,7 @@ function renderAiJobRow(job) {
   `;
   row.querySelector("[data-ai-job-retry]")?.addEventListener("click", (event) => {
     event.stopPropagation();
-    retryAiJob(job.job_id);
+    retryAiGenerationJob(job.job_id);
   });
   row.querySelector("[data-ai-job-details]")?.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -6574,7 +6578,7 @@ function renderAiGenerationHistoryRow(job, activeOrder = new Map()) {
     ? `<button type="button" class="ai-run-icon-button" data-ai-generation-open="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiGenerationHistoryOpenItem"))}" title="${escapeHtml(t("aiGenerationHistoryOpenItem"))}">${openNoteIcon()}</button>`
     : "";
   const retryButton = job.status === "failed"
-    ? `<button type="button" class="ai-run-icon-button" data-ai-generation-retry="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(job.retryable ? t("aiJobRetry") : t("aiJobNotRetryable"))}"${job.retryable ? "" : " disabled"}>${retryIcon()}</button>`
+    ? `<button type="button" class="ai-run-icon-button" data-ai-generation-retry="${escapeHtml(jobId)}" aria-label="${escapeHtml(t("aiJobRetry"))}" title="${escapeHtml(aiJobRetryTitle(job))}"${job.retryable ? "" : " disabled"}>${retryIcon()}</button>`
     : "";
   const queueIndex = activeOrder.get(jobId);
   const activeButton = isActive
@@ -6785,7 +6789,7 @@ function renderAiGenerationDetailActions(job) {
   elements.aiGenerationDetailOpen.disabled = !canOpenItem;
   elements.aiGenerationDetailRetry.hidden = job.status !== "failed";
   elements.aiGenerationDetailRetry.disabled = job.status === "failed" && !job.retryable;
-  elements.aiGenerationDetailRetry.title = job.status === "failed" && !job.retryable ? t("aiJobNotRetryable") : t("aiJobRetry");
+  elements.aiGenerationDetailRetry.title = aiJobRetryTitle(job);
   elements.aiGenerationDetailOpen.onclick = () => {
     if (!canOpenItem) return;
     closeAiGenerationDetail();
@@ -7179,7 +7183,7 @@ async function retryAiGenerationJob(jobId) {
   const job = state.aiJobs.find((item) => String(item.job_id || "") === String(jobId || "")) ||
     (String(state.aiGenerationDetailJob?.job_id || "") === String(jobId || "") ? state.aiGenerationDetailJob : null);
   if (job && !job.retryable) {
-    const message = t("aiJobNotRetryable");
+    const message = aiJobRetryTitle(job);
     if (elements.aiGenerationFeedback) elements.aiGenerationFeedback.textContent = message;
     state.aiGenerationJobNotices[jobId] = message;
     renderAiGenerationHistory();
@@ -7198,6 +7202,25 @@ async function retryAiGenerationJob(jobId) {
     state.aiGenerationJobNotices[jobId] = result?.message || t("aiJobFailed", { message: jobId });
   }
   renderAiGenerationHistory();
+  if (state.aiGenerationDetailJobId === jobId) {
+    await loadAiGenerationDetail(jobId);
+    startAiGenerationDetailPolling();
+  }
+}
+
+function aiJobRetryTitle(job) {
+  if (job?.retryable) {
+    if (job.retry_layer === "checkpoint_resume" || job.retry_mode === "resume_from_checkpoint") {
+      const remaining = Number(job.retry_remaining || 0);
+      const suffix = [
+        job.retry_reason || "",
+        remaining > 0 ? t("aiJobRetryRemaining", { count: remaining }) : "",
+      ].filter(Boolean).join(" · ");
+      return `${t("aiJobRetry")}${suffix ? ` · ${suffix}` : ""}`;
+    }
+    return t("aiJobRetry");
+  }
+  return job?.retry_reason || job?.retry_reason_code || t("aiJobNotRetryable");
 }
 
 function hasActiveAiJobs() {
@@ -7920,7 +7943,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.10-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.11-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

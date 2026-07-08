@@ -4,6 +4,13 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.11] - 2026-07-08
+
+### 変更
+
+- AI generation retry は resumable technical interruption と workflow/content failure を区別するようになりました。v2 material jobs は private checkpoint を保存し、checkpoint から復旧できる failed job のみ manual retry を表示します。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.11` に更新しました。
+
 ## [1.1.10] - 2026-07-08
 
 ### 変更

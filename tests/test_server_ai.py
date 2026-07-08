@@ -14,6 +14,8 @@ from html_lore.server.ai.guardrails import GuardrailError
 from html_lore.server.ai.eval import KnowledgeQAEvalSpec, run_knowledge_qa_eval
 from html_lore.server.ai.html_generation import GenerationSpec, HtmlGenerationError
 from html_lore.server.ai.html_generation_graph import HtmlGenerationGraph, HtmlGenerationState, review_html
+from html_lore.server.ai.generation_v2.checkpoint import write_state_checkpoint
+from html_lore.server.ai.generation_v2.schemas import GenerationInput, GenerationStage, GenerationState, ParsedDocument, ParsedMaterialItem, SourceFile, StageTraceEvent
 from html_lore.server.ai.knowledge_qa_graph import EXTERNAL_NO_RESULTS_ANSWER, EXTERNAL_UNAVAILABLE_ANSWER, KnowledgeQAGraph, KnowledgeQAState, NO_EVIDENCE_ANSWER, assess_answer_quality, assess_evidence_coverage, assess_evidence_sufficiency, assign_source_indices, build_answer_prompt, budget_prompt_inputs, dedupe_display_sources, evidence_with_display_source_indices, filter_evidence_by_context, format_evidence_for_prompt, is_time_sensitive_question, prompt_chars, public_qa_run, rank_answer_evidence, rerank_answer_evidence, verify_answer_citations
 from html_lore.server.ai.langgraph_qa import langgraph_available
 from html_lore.server.ai.material_generation import MaterialGenerationError, parse_material
@@ -4070,6 +4072,195 @@ def test_ai_material_jobs_are_not_retryable_without_persisting_source(tmp_path: 
         assert job["retryable"] is False
         assert code == 400
         assert "cannot be retried" in error["detail"]
+    finally:
+        server.close()
+
+
+def test_ai_v2_material_job_retries_from_private_checkpoint(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    settings = ServerSettings(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Test", max_upload_bytes=1024 * 1024)
+    job_id = "ai_job_v2_resume"
+    checkpoint_state = GenerationState(
+        job_id=job_id,
+        run_id="run-v2-resume",
+        input=GenerationInput(
+            instruction="Create a short HTML note.",
+            filename="source.md",
+            content=b"",
+            materials=[{"filename": "source.md", "content_type": "text/markdown", "size": 42}],
+        ),
+        parsed_document=ParsedDocument(
+            plain_text="# Resume Source\n\nUse checkpointed parsed material.",
+            source_files=[SourceFile(filename="source.md", content_type="text/markdown", size=42, file_id="file-1")],
+            materials=[
+                ParsedMaterialItem(
+                    file_id="file-1",
+                    filename="source.md",
+                    content_type="text/markdown",
+                    content_start_char=0,
+                    content_end_char=49,
+                    char_count=49,
+                )
+            ],
+        ),
+        failed_steps=[GenerationStage.WRITING_CONTENT.value],
+        same_node_retries={"ContentWriter": 3},
+        stage_trace=[
+            StageTraceEvent(
+                stage=GenerationStage.WRITING_CONTENT,
+                agent="ContentWriter",
+                status="failed",
+                metadata={"error_type": "ProviderCallError"},
+            )
+        ],
+    )
+    checkpoint_path = write_state_checkpoint(settings, checkpoint_state, job_id=job_id)
+    store_path = meta_dir / "ai" / "jobs.json"
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "jobs": [
+                    {
+                        "job_id": job_id,
+                        "kind": "material_html_generation",
+                        "generation_engine": "v2",
+                        "status": "failed",
+                        "label": "source.md",
+                        "created_at": "2026-07-08T00:00:00+00:00",
+                        "updated_at": "2026-07-08T00:00:01+00:00",
+                        "started_at": "2026-07-08T00:00:00+00:00",
+                        "completed_at": "2026-07-08T00:00:01+00:00",
+                        "message": "Provider failed.",
+                        "error": {"code": "provider_failed", "message": "Provider failed."},
+                        "retryable": True,
+                        "retry_layer": "checkpoint_resume",
+                        "retry_mode": "resume_from_checkpoint",
+                        "retry_reason_code": "provider_failed",
+                        "retry_reason": "Provider or model call failed after node-level retries.",
+                        "retry_limit": 2,
+                        "workspace": {"status": "ready", "checkpoint_path": checkpoint_path},
+                        "payload": {
+                            "type": "material_html_generation",
+                            "filename": "source.md",
+                            "instruction": "Create a short HTML note.",
+                            "engine": "v2",
+                            "spec": {"theme": "default", "target_use": "default", "style_preference": "default", "audience": "default"},
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    server = run_api_server(
+        content_dir=content_dir,
+        meta_dir=meta_dir,
+        public_dir=public_dir,
+        ai_provider="fake",
+        ai_model="fake-test-model",
+        ai_enabled=True,
+        ai_generation_engine="v2",
+        document_parser="basic",
+    )
+    try:
+        failed = server.request("GET", f"/api/ai/jobs/{job_id}")["job"]
+        assert failed["retryable"] is True
+        assert failed["retry_layer"] == "checkpoint_resume"
+        assert failed["retry_mode"] == "resume_from_checkpoint"
+        assert failed["retry_reason_code"] == "provider_failed"
+        assert failed["retry_limit"] == 2
+        assert failed["retry_remaining"] == 2
+        assert "payload" not in failed
+
+        retried = server.request("POST", f"/api/ai/jobs/{job_id}/retry")["job"]
+        completed = wait_for_ai_job(server, job_id, timeout=8)
+
+        assert retried["status"] == "pending"
+        assert retried["attempts"] == 1
+        assert completed["status"] == "completed"
+        assert completed["retryable"] is False
+        assert completed["item_id"].startswith("generated/")
+    finally:
+        server.close()
+
+
+def test_ai_v2_material_job_retry_limit_is_enforced(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = make_dirs(tmp_path)
+    settings = ServerSettings(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Test", max_upload_bytes=1024 * 1024)
+    job_id = "ai_job_v2_retry_limit"
+    checkpoint_state = GenerationState(
+        job_id=job_id,
+        run_id="run-v2-limit",
+        input=GenerationInput(instruction="Create a short HTML note.", filename="source.md"),
+        parsed_document=ParsedDocument(
+            plain_text="# Resume Source\n\nUse checkpointed parsed material.",
+            source_files=[SourceFile(filename="source.md", content_type="text/markdown", size=42, file_id="file-1")],
+        ),
+        failed_steps=[GenerationStage.WRITING_CONTENT.value],
+        stage_trace=[
+            StageTraceEvent(
+                stage=GenerationStage.WRITING_CONTENT,
+                agent="ContentWriter",
+                status="failed",
+                metadata={"error_type": "ProviderCallError"},
+            )
+        ],
+    )
+    checkpoint_path = write_state_checkpoint(settings, checkpoint_state, job_id=job_id)
+    store_path = meta_dir / "ai" / "jobs.json"
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "jobs": [
+                    {
+                        "job_id": job_id,
+                        "kind": "material_html_generation",
+                        "generation_engine": "v2",
+                        "status": "failed",
+                        "label": "source.md",
+                        "created_at": "2026-07-08T00:00:00+00:00",
+                        "updated_at": "2026-07-08T00:00:01+00:00",
+                        "started_at": "2026-07-08T00:00:00+00:00",
+                        "completed_at": "2026-07-08T00:00:01+00:00",
+                        "message": "Provider failed.",
+                        "error": {"code": "provider_failed", "message": "Provider failed."},
+                        "retryable": True,
+                        "retry_layer": "checkpoint_resume",
+                        "retry_mode": "resume_from_checkpoint",
+                        "retry_reason_code": "provider_failed",
+                        "retry_reason": "Provider or model call failed after node-level retries.",
+                        "retry_limit": 2,
+                        "attempts": 2,
+                        "workspace": {"status": "ready", "checkpoint_path": checkpoint_path},
+                        "payload": {
+                            "type": "material_html_generation",
+                            "filename": "source.md",
+                            "instruction": "Create a short HTML note.",
+                            "engine": "v2",
+                            "spec": {"theme": "default", "target_use": "default", "style_preference": "default", "audience": "default"},
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir)
+    try:
+        failed = server.request("GET", f"/api/ai/jobs/{job_id}")["job"]
+        assert failed["retryable"] is False
+        assert failed["retry_reason_code"] == "manual_retry_limit_reached"
+        assert failed["retry_remaining"] == 0
+
+        code, error = server.json_error("POST", f"/api/ai/jobs/{job_id}/retry", {})
+        assert code == 400
+        assert "Manual recovery limit reached" in error["detail"]
     finally:
         server.close()
 

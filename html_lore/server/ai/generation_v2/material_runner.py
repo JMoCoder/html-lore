@@ -10,6 +10,7 @@ from html_lore.server.ai.providers import AIProviderConfigError, ProviderCallErr
 from html_lore.server.ai.html_generation import GenerationSpec
 from html_lore.server.config import ServerSettings
 
+from .checkpoint import generation_v2_retry_metadata, prepare_state_for_manual_retry, write_state_checkpoint
 from .graph import HtmlGenerationV2Graph
 from .graph import StateCallback
 from .material_bundle import MaterialBundleReference, build_material_bundle, cleanup_expired_failed_job_workspaces, write_job_material_bundle, write_job_workspace_json, write_job_workspace_jsonl, write_job_workspace_text
@@ -32,6 +33,7 @@ def generate_note_from_material_v2(
     job_id: str = "",
     on_state: StateCallback | None = None,
     on_material_bundle_ready: Callable[[MaterialBundleReference], None] | None = None,
+    on_checkpoint_ready: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     started_at = datetime.now(timezone.utc)
     def workspace_writer(state: GenerationState, relative_path: str, value: Any, mode: str) -> None:
@@ -78,6 +80,9 @@ def generate_note_from_material_v2(
         nonlocal material_bundle_reference
         if on_state is not None:
             on_state(next_state)
+        checkpoint_path = write_state_checkpoint(settings, next_state, job_id=job_id) if job_id else ""
+        if checkpoint_path and on_checkpoint_ready is not None:
+            on_checkpoint_ready(checkpoint_path)
         if material_bundle_reference is not None or next_state.parsed_document is None or not job_id:
             return
         bundle = build_material_bundle(next_state.parsed_document, run_id=next_state.run_id)
@@ -90,7 +95,12 @@ def generate_note_from_material_v2(
     try:
         graph.on_state = sync_state
         state = graph.run(state)
-    except (AIProviderConfigError, ProviderCallError) as exc:
+    except AIProviderConfigError as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
+        completed_at = datetime.now(timezone.utc)
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="provider_config_failed", error_message=str(exc))
+        raise MaterialGenerationError(str(exc), run=run) from exc
+    except ProviderCallError as exc:
         cleanup_expired_failed_job_workspaces(settings, keep_days=7)
         completed_at = datetime.now(timezone.utc)
         run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="provider_failed", error_message=str(exc))
@@ -122,6 +132,100 @@ def generate_note_from_material_v2(
     return {"run": run, "item": {"id": write_result.item_id, "title": write_result.title}}
 
 
+def resume_note_from_material_v2(
+    *,
+    settings: ServerSettings,
+    state: GenerationState,
+    model_client: GenerationJsonModelClient | None = None,
+    on_state: StateCallback | None = None,
+    on_checkpoint_ready: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    retry_state = prepare_state_for_manual_retry(state)
+    return run_material_v2_state(
+        settings=settings,
+        state=retry_state,
+        model_client=model_client,
+        on_state=on_state,
+        on_checkpoint_ready=on_checkpoint_ready,
+    )
+
+
+def run_material_v2_state(
+    *,
+    settings: ServerSettings,
+    state: GenerationState,
+    model_client: GenerationJsonModelClient | None = None,
+    on_state: StateCallback | None = None,
+    on_checkpoint_ready: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    started_at = datetime.now(timezone.utc)
+
+    def workspace_writer(next_state: GenerationState, relative_path: str, value: Any, mode: str) -> None:
+        if not next_state.job_id:
+            return
+        if mode == "jsonl":
+            write_job_workspace_jsonl(settings, next_state.job_id, relative_path, value if isinstance(value, list) else [value])
+        elif mode == "json":
+            write_job_workspace_json(settings, next_state.job_id, relative_path, value)
+        elif mode == "text":
+            write_job_workspace_text(settings, next_state.job_id, relative_path, str(value or ""))
+
+    graph = HtmlGenerationV2Graph(
+        model_client=model_client,
+        parser_mode=settings.document_parser,
+        on_state=on_state,
+        workspace_writer=workspace_writer,
+        visual_check_mode=settings.ai_visual_check,
+        visual_check_browser_channel=settings.ai_visual_check_browser_channel,
+        visual_check_timeout_seconds=settings.ai_visual_check_timeout_seconds,
+    )
+
+    def sync_state(next_state: GenerationState) -> None:
+        if on_state is not None:
+            on_state(next_state)
+        checkpoint_path = write_state_checkpoint(settings, next_state, job_id=next_state.job_id) if next_state.job_id else ""
+        if checkpoint_path and on_checkpoint_ready is not None:
+            on_checkpoint_ready(checkpoint_path)
+
+    material_bundle_reference: MaterialBundleReference | None = None
+    try:
+        graph.on_state = sync_state
+        state = graph.run(state)
+    except AIProviderConfigError as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
+        completed_at = datetime.now(timezone.utc)
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="provider_config_failed", error_message=str(exc))
+        raise MaterialGenerationError(str(exc), run=run) from exc
+    except ProviderCallError as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
+        completed_at = datetime.now(timezone.utc)
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="provider_failed", error_message=str(exc))
+        raise MaterialGenerationError(str(exc), run=run) from exc
+    except Exception as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
+        completed_at = datetime.now(timezone.utc)
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="generation_v2_failed", error_message=str(exc))
+        raise MaterialGenerationError(str(exc), run=run) from exc
+    if state.failed_steps or state.create_note_proposal is None:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
+        completed_at = datetime.now(timezone.utc)
+        message = ", ".join(state.failed_steps) or "Generation v2 did not produce a note proposal."
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="generation_v2_failed", error_message=message)
+        raise MaterialGenerationError(message, run=run)
+    try:
+        bundle = build_material_bundle(state.parsed_document, run_id=state.run_id)
+        material_bundle_reference = write_job_material_bundle(settings, bundle, job_id=state.job_id) if bundle is not None and state.job_id else None
+        write_result = WriteGateway(settings).write(state.create_note_proposal, workspace_reference=material_bundle_reference)
+    except Exception as exc:
+        cleanup_expired_failed_job_workspaces(settings, keep_days=7)
+        completed_at = datetime.now(timezone.utc)
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="write_gateway_failed", error_message=str(exc))
+        raise MaterialGenerationError(str(exc), run=run) from exc
+    completed_at = datetime.now(timezone.utc)
+    run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="completed", item_id=write_result.item_id)
+    return {"run": run, "item": {"id": write_result.item_id, "title": write_result.title}}
+
+
 def public_material_v2_run(
     state: GenerationState,
     *,
@@ -132,7 +236,7 @@ def public_material_v2_run(
     error_code: str = "",
     error_message: str = "",
 ) -> dict[str, Any]:
-    return {
+    data = {
         "id": state.run_id,
         "kind": "material_html_generation",
         "status": status,
@@ -154,9 +258,10 @@ def public_material_v2_run(
         "material": {"filename": state.input.filename, "filenames": material_filenames(state), "reference_file_name": state.input.reference_file_name},
         "item_id": item_id,
         "error": {"code": error_code or "generation_v2_failed", "message": error_message or ", ".join(state.failed_steps)} if status == "failed" else {},
-        "retryable": status == "failed",
         "cancellable": False,
     }
+    data.update(generation_v2_retry_metadata(data, state))
+    return data
 
 
 def public_generation_input(state: GenerationState) -> dict[str, Any]:

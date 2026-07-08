@@ -13,8 +13,10 @@ from .html_generation import GenerationSpec, HtmlGenerationError, generate_note_
 from .jobs import AIJobError, AIJobStore, ai_job_queue
 from .material_generation import MaterialGenerationError, generate_note_from_material
 from .generation_v2.fake_model import FakeGenerationModelClient
-from .generation_v2.material_runner import generate_note_from_material_v2
+from .generation_v2.checkpoint import read_state_checkpoint
+from .generation_v2.material_runner import generate_note_from_material_v2, resume_note_from_material_v2
 from .generation_v2.model_client import build_provider_generation_client
+from .generation_v2.store import GenerationStore
 from .model_client import ModelClient, test_provider
 from .providers import AIProviderConfigError, AIProviderConfigStore, ProviderCallError
 from .runs import AIRunError, AIRunStore
@@ -98,6 +100,11 @@ def sync_v2_job_from_run(settings: ServerSettings, job_id: str, run: object, *, 
         "agent_artifacts": run.get("agent_artifacts") if isinstance(run.get("agent_artifacts"), list) else [],
         "message": "AI generation completed." if final_status == "completed" else str(run.get("error", {}).get("message") or "AI generation failed."),
         "retryable": bool(run.get("retryable", final_status == "failed")),
+        "retry_layer": str(run.get("retry_layer") or ""),
+        "retry_mode": str(run.get("retry_mode") or ""),
+        "retry_reason_code": str(run.get("retry_reason_code") or ""),
+        "retry_reason": str(run.get("retry_reason") or ""),
+        "retry_limit": int(run.get("retry_limit") or 0),
         "cancellable": bool(run.get("cancellable", False)),
     }
     if final_status in {"completed", "failed", "cancelled", "canceled"}:
@@ -310,6 +317,7 @@ class AIConversationService:
         payload = {
             "type": "material_html_generation",
             "filename": label,
+            "instruction": instruction,
             "spec": spec.as_dict(),
             "engine": self.settings.ai_generation_engine,
         }
@@ -331,15 +339,30 @@ class AIConversationService:
                         generation_store.jobs.update(str(job["job_id"]), generation_store.public_state_summary(state))
 
                     def sync_material_bundle(reference) -> None:
+                        current = generation_store.jobs.get(str(job["job_id"]), include_private=True)
                         generation_store.jobs.update(
                             str(job["job_id"]),
                             {
                                 "workspace": {
+                                    **(current.get("workspace") if isinstance(current.get("workspace"), dict) else {}),
                                     "status": "ready",
                                     "bundle_id": str(getattr(reference, "bundle_id", "") or ""),
                                     "workspace_path": str(getattr(reference, "workspace_path", "") or ""),
                                     "merged_path": str(getattr(reference, "merged_path", "") or ""),
                                     "manifest_path": str(getattr(reference, "manifest_path", "") or ""),
+                                }
+                            },
+                        )
+
+                    def sync_checkpoint(checkpoint_path: str) -> None:
+                        current = generation_store.jobs.get(str(job["job_id"]), include_private=True)
+                        generation_store.jobs.update(
+                            str(job["job_id"]),
+                            {
+                                "workspace": {
+                                    **(current.get("workspace") if isinstance(current.get("workspace"), dict) else {}),
+                                    "status": "ready",
+                                    "checkpoint_path": checkpoint_path,
                                 }
                             },
                         )
@@ -356,6 +379,7 @@ class AIConversationService:
                         job_id=str(job["job_id"]),
                         on_state=sync_v2_state,
                         on_material_bundle_ready=sync_material_bundle,
+                        on_checkpoint_ready=sync_checkpoint,
                     )
                 else:
                     combined = combine_materials_for_legacy(material_list)
@@ -438,13 +462,29 @@ class AIConversationService:
         job = store.get(job_id, include_private=True)
         if job.get("status") != "failed":
             raise AIJobError("Only failed AI jobs can be retried.")
+        if not bool(job.get("retryable")):
+            raise AIJobError(str(job.get("retry_reason") or "This AI job cannot be retried."))
+        retry_limit = int(job.get("retry_limit") or 0)
+        attempts = int(job.get("attempts") or 0)
+        if retry_limit and attempts >= retry_limit:
+            raise AIJobError("Manual recovery limit reached.")
         payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
-        if str(payload.get("type") or "") != "conversation_html_generation":
+        payload_type = str(payload.get("type") or "")
+        if payload_type == "conversation_html_generation":
+            conversation_id = str(payload.get("conversation_id") or "").strip()
+            spec_values = payload.get("spec") if isinstance(payload.get("spec"), dict) else {}
+            spec = GenerationSpec.from_values(spec_values)
+            self.store.get(conversation_id)
+            task = self._conversation_generation_task(conversation_id, spec.as_dict())
+        elif payload_type == "material_html_generation" and str(job.get("generation_engine") or "") == "v2":
+            workspace = job.get("workspace") if isinstance(job.get("workspace"), dict) else {}
+            checkpoint_path = str(workspace.get("checkpoint_path") or "").strip()
+            if not checkpoint_path:
+                raise AIJobError("This AI job has no resumable checkpoint.")
+            checkpoint_state = read_state_checkpoint(self.settings, checkpoint_path)
+            task = self._material_v2_resume_task(str(job["job_id"]), checkpoint_state)
+        else:
             raise AIJobError("This AI job cannot be retried.")
-        conversation_id = str(payload.get("conversation_id") or "").strip()
-        spec_values = payload.get("spec") if isinstance(payload.get("spec"), dict) else {}
-        spec = GenerationSpec.from_values(spec_values)
-        self.store.get(conversation_id)
         retried = store.update(
             job_id,
             {
@@ -456,10 +496,13 @@ class AIConversationService:
                 "item_id": "",
                 "error": {},
                 "cancel_requested": False,
+                "retryable": False,
+                "retry_mode": "",
+                "retry_reason": "",
                 "attempts": int(job.get("attempts") or 0) + 1,
             },
         )
-        ai_job_queue.enqueue(settings=self.settings, job=retried, task=self._conversation_generation_task(conversation_id, spec.as_dict()))
+        ai_job_queue.enqueue(settings=self.settings, job=retried, task=task)
         return {"job": retried, "job_id": retried["job_id"]}
 
     def _conversation_generation_task(self, conversation_id: str, spec_values: dict[str, Any]):
@@ -472,6 +515,46 @@ class AIConversationService:
                 self._store_failed_run(exc)
                 raise
             run = self.run_store.add(result["run"])
+            return {"run": run, "item": result["item"]}
+
+        return task
+
+    def _material_v2_resume_task(self, job_id: str, checkpoint_state):
+        def task() -> dict[str, Any]:
+            from dataclasses import replace
+
+            generation_store = GenerationStore(self.settings)
+            retry_state = replace(checkpoint_state, job_id=job_id)
+
+            def sync_v2_state(state) -> None:
+                generation_store.jobs.update(str(job_id), generation_store.public_state_summary(state))
+
+            def sync_checkpoint(checkpoint_path: str) -> None:
+                generation_store.jobs.update(
+                    str(job_id),
+                    {
+                        "workspace": {
+                            **(generation_store.jobs.get(str(job_id), include_private=True).get("workspace") or {}),
+                            "status": "ready",
+                            "checkpoint_path": checkpoint_path,
+                        }
+                    },
+                )
+
+            try:
+                result = resume_note_from_material_v2(
+                    settings=self.settings,
+                    state=retry_state,
+                    model_client=self._generation_v2_model_client(),
+                    on_state=sync_v2_state,
+                    on_checkpoint_ready=sync_checkpoint,
+                )
+            except MaterialGenerationError as exc:
+                self._store_failed_run(exc)
+                self._sync_v2_job_from_run(str(job_id), getattr(exc, "run", None), status="failed")
+                raise
+            run = self.run_store.add(result["run"])
+            self._sync_v2_job_from_run(str(job_id), run, status=str(run.get("status") or "completed"), item_id=str(result.get("item", {}).get("id") or ""))
             return {"run": run, "item": result["item"]}
 
         return task

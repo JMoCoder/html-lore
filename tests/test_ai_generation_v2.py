@@ -13,6 +13,7 @@ from html_lore.server.ai.generation_v2.agents.planner import PlannerAgent
 from html_lore.server.ai.generation_v2.agents.verifier import VerifierAgent
 from html_lore.server.ai.generation_v2.graph import HtmlGenerationV2Graph, merge_parsed_documents
 from html_lore.server.ai.generation_v2.fake_model import FakeGenerationModelClient
+from html_lore.server.ai.generation_v2.checkpoint import checkpoint_state_payload, generation_v2_retry_metadata, prepare_state_for_manual_retry, read_state_checkpoint, write_state_checkpoint
 from html_lore.server.ai.generation_v2.material_context import build_material_index, build_temporary_material_context, recall_material
 from html_lore.server.ai.generation_v2.material_runner import generate_note_from_material_v2
 from html_lore.server.ai.generation_v2.material_bundle import build_material_bundle, cleanup_expired_failed_job_workspaces, write_job_material_bundle, read_material_bundle_reference
@@ -53,6 +54,98 @@ def test_generation_v2_state_serializes_enums() -> None:
     assert data["stage_trace"][0]["status"] == "completed"
     assert data["stage_trace"][0]["duration_ms"] >= 0
     assert data["completed_steps"] == ["parsing"]
+
+
+def test_generation_v2_checkpoint_roundtrip_omits_raw_upload_bytes(tmp_path: Path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    state = GenerationState(
+        job_id="ai_job_checkpoint",
+        run_id="run-checkpoint",
+        input=GenerationInput(
+            instruction="Create HTML from source.",
+            filename="source.md",
+            content=b"raw upload should not be checkpointed",
+            materials=[{"filename": "source.md", "content": b"private raw bytes", "content_type": "text/markdown"}],
+        ),
+        parsed_document=ParsedDocument(
+            plain_text="# Source\n\nParsed source text.",
+            source_files=[SourceFile(filename="source.md", content_type="text/markdown", size=17, file_id="file-1")],
+        ),
+        failed_steps=[GenerationStage.WRITING_CONTENT.value],
+        same_node_retries={"ContentWriter": 3},
+        stage_trace=[
+            StageTraceEvent(
+                stage=GenerationStage.WRITING_CONTENT,
+                agent="ContentWriter",
+                status="failed",
+                metadata={"error_type": "ProviderCallError"},
+            )
+        ],
+    )
+
+    payload = checkpoint_state_payload(state)
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert "private raw bytes" not in serialized
+    assert "raw upload should not be checkpointed" not in serialized
+    assert "Parsed source text" in serialized
+
+    checkpoint_path = write_state_checkpoint(settings, state, job_id=state.job_id)
+    restored = read_state_checkpoint(settings, checkpoint_path)
+    retry_state = prepare_state_for_manual_retry(restored)
+
+    assert restored.parsed_document is not None
+    assert restored.parsed_document.plain_text == "# Source\n\nParsed source text."
+    assert restored.input.content == b""
+    assert restored.input.materials[0]["filename"] == "source.md"
+    assert retry_state.failed_steps == []
+    assert retry_state.same_node_retries["ContentWriter"] == 0
+    assert retry_state.run_id != restored.run_id
+
+
+def test_generation_v2_retry_metadata_classifies_failure_layers() -> None:
+    technical = GenerationState(
+        stage_trace=[
+            StageTraceEvent(
+                stage=GenerationStage.CODING_HTML,
+                agent="HTMLCoder",
+                status="failed",
+                metadata={"error_type": "AgentOutputSchemaError"},
+            )
+        ],
+    )
+    schema_retry = generation_v2_retry_metadata({"status": "failed", "error": {"code": "generation_v2_failed"}}, technical)
+    assert schema_retry["retryable"] is True
+    assert schema_retry["retry_layer"] == "checkpoint_resume"
+    assert schema_retry["retry_reason_code"] == "schema_failed"
+    assert schema_retry["retry_limit"] == 2
+
+    parse_failed = generation_v2_retry_metadata(
+        {"status": "failed", "error": {"code": "generation_v2_failed"}},
+        GenerationState(current_step=GenerationStage.PARSE_FAILED.value, failed_steps=[GenerationStage.PARSE_FAILED.value]),
+    )
+    assert parse_failed["retryable"] is False
+    assert parse_failed["retry_layer"] == "not_retryable"
+    assert parse_failed["retry_reason_code"] == "parse_failed"
+
+    revision_limit = generation_v2_retry_metadata(
+        {"status": "failed", "error": {"code": "generation_v2_failed"}},
+        GenerationState(failed_steps=["max_revision_rounds"]),
+    )
+    assert revision_limit["retryable"] is False
+    assert revision_limit["retry_reason_code"] == "revision_limit_reached"
+
+    provider_config = generation_v2_retry_metadata(
+        {"status": "failed", "error": {"code": "provider_config_failed"}},
+        GenerationState(),
+    )
+    assert provider_config["retryable"] is False
+    assert provider_config["retry_reason_code"] == "config_error"
 
 
 def test_generation_v2_graph_initial_state_uses_input() -> None:

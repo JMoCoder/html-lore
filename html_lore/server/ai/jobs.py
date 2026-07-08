@@ -32,6 +32,7 @@ AI_GENERATION_STAGES = {
     "failed",
     "canceled",
 }
+DEFAULT_MANUAL_RETRY_LIMIT = 2
 
 
 class AIJobError(ValueError):
@@ -209,6 +210,15 @@ def sanitize_ai_job(job: dict[str, Any], *, include_private: bool = False) -> di
     if status not in AI_JOB_STATUSES:
         status = "pending"
     payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+    attempts = sanitize_int(job.get("attempts"))
+    retry_limit = sanitize_int(job.get("retry_limit")) or (DEFAULT_MANUAL_RETRY_LIMIT if (bool(job.get("retryable")) or is_retryable_payload(payload)) else 0)
+    raw_retryable = status == "failed" and (is_retryable_payload(payload) or bool(job.get("retryable")))
+    retryable = raw_retryable and (retry_limit <= 0 or attempts < retry_limit)
+    retry_reason = str(job.get("retry_reason") or "").strip()[:240]
+    retry_reason_code = str(job.get("retry_reason_code") or "").strip()[:80]
+    if raw_retryable and not retryable:
+        retry_reason = "Manual recovery limit reached."
+        retry_reason_code = "manual_retry_limit_reached"
     sanitized = {
         "job_id": str(job.get("job_id") or ""),
         "kind": str(job.get("kind") or ""),
@@ -224,9 +234,23 @@ def sanitize_ai_job(job: dict[str, Any], *, include_private: bool = False) -> di
         "error": sanitize_error(job.get("error")),
         "cancel_requested": bool(job.get("cancel_requested")),
         "cancellable": status in {"pending", "running"},
-        "retryable": status == "failed" and is_retryable_payload(payload),
-        "attempts": sanitize_int(job.get("attempts")),
+        "retryable": retryable,
+        "attempts": attempts,
+        "retry_attempts": attempts,
     }
+    if retry_limit:
+        sanitized["retry_limit"] = retry_limit
+        sanitized["retry_remaining"] = max(0, retry_limit - attempts) if status == "failed" else retry_limit
+    retry_layer = str(job.get("retry_layer") or "").strip()[:80]
+    retry_mode = str(job.get("retry_mode") or "").strip()[:80]
+    if retry_layer:
+        sanitized["retry_layer"] = retry_layer
+    if retry_mode:
+        sanitized["retry_mode"] = retry_mode
+    if retry_reason_code:
+        sanitized["retry_reason_code"] = retry_reason_code
+    if retry_reason:
+        sanitized["retry_reason"] = retry_reason
     workspace = sanitize_workspace(job.get("workspace") or job.get("material_bundle"), include_private=include_private)
     if workspace:
         sanitized["workspace"] = workspace
@@ -282,12 +306,15 @@ def sanitize_workspace(value: Any, *, include_private: bool = False) -> dict[str
         workspace_path = str(value.get("workspace_path") or "").strip()[:500]
         merged_path = str(value.get("merged_path") or "").strip()[:500]
         manifest_path = str(value.get("manifest_path") or "").strip()[:500]
+        checkpoint_path = str(value.get("checkpoint_path") or "").strip()[:500]
         if workspace_path:
             result["workspace_path"] = workspace_path
         if merged_path:
             result["merged_path"] = merged_path
         if manifest_path:
             result["manifest_path"] = manifest_path
+        if checkpoint_path:
+            result["checkpoint_path"] = checkpoint_path
     return result
 
 
@@ -295,24 +322,33 @@ def sanitize_private_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
     payload_type = str(payload.get("type") or "")
-    if payload_type != "conversation_html_generation":
-        return {}
     spec = payload.get("spec") if isinstance(payload.get("spec"), dict) else {}
-    return {
-        "type": payload_type,
-        "conversation_id": str(payload.get("conversation_id") or "")[:120],
-        "spec": {
-            "theme": str(spec.get("theme") or "default")[:40],
-            "target_use": str(spec.get("target_use") or "default")[:40],
-            "reference_style": str(spec.get("reference_style") or "default")[:40],
-            "reference_note_id": str(spec.get("reference_note_id") or "")[:240],
-            "reference_file_name": str(spec.get("reference_file_name") or "")[:180],
-            "reference_file_type": str(spec.get("reference_file_type") or "")[:120],
-            "reference_file_size": str(spec.get("reference_file_size") or "0")[:40],
-            "style_preference": str(spec.get("style_preference") or "default")[:40],
-            "audience": str(spec.get("audience") or "default")[:40],
-        },
+    safe_spec = {
+        "theme": str(spec.get("theme") or "default")[:40],
+        "target_use": str(spec.get("target_use") or "default")[:40],
+        "reference_style": str(spec.get("reference_style") or "default")[:40],
+        "reference_note_id": str(spec.get("reference_note_id") or "")[:240],
+        "reference_file_name": str(spec.get("reference_file_name") or "")[:180],
+        "reference_file_type": str(spec.get("reference_file_type") or "")[:120],
+        "reference_file_size": str(spec.get("reference_file_size") or "0")[:40],
+        "style_preference": str(spec.get("style_preference") or "default")[:40],
+        "audience": str(spec.get("audience") or "default")[:40],
     }
+    if payload_type == "conversation_html_generation":
+        return {
+            "type": payload_type,
+            "conversation_id": str(payload.get("conversation_id") or "")[:120],
+            "spec": safe_spec,
+        }
+    if payload_type == "material_html_generation":
+        return {
+            "type": payload_type,
+            "filename": str(payload.get("filename") or "")[:180],
+            "instruction": str(payload.get("instruction") or "")[:20000],
+            "engine": str(payload.get("engine") or "")[:40],
+            "spec": safe_spec,
+        }
+    return {}
 
 
 def sanitize_error(value: Any) -> dict[str, str]:

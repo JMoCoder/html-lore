@@ -9,6 +9,13 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.11] - 2026-07-08
+
+### Changed
+
+- AI generation retry now distinguishes resumable technical interruptions from workflow/content failures. V2 material jobs write private checkpoints and only expose manual retry when a failed job can resume from the saved checkpoint.
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.11`.
+
 ## [1.1.10] - 2026-07-08
 
 ### Changed
