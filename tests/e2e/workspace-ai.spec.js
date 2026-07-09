@@ -452,8 +452,9 @@ test("workspace file create mode uploads material to the AI generation endpoint"
   await expect(page.locator("#ai-job-list")).not.toContainText("HTML draft");
   await expect(page.locator("#ai-job-list")).not.toContainText("completed");
   await expect(page.locator("#ai-chat-log")).not.toContainText("AI job completed");
-  await expect(page.locator("#ai-job-list").getByRole("button", { name: "Retry" })).toBeVisible();
-  await page.locator("#ai-job-list").getByRole("button", { name: "Retry" }).click();
+  const retryableJobRow = page.locator("#ai-job-list .ai-job-row", { hasText: "Failed note" });
+  await expect(retryableJobRow.getByRole("button", { name: "Retry" })).toBeVisible();
+  await retryableJobRow.getByRole("button", { name: "Retry" }).click();
   await expect(page.locator("#ai-chat-log")).toContainText("Retrying AI job");
   await page.locator("#ai-job-list .ai-job-row", { hasText: "material.md" }).getByRole("button", { name: "Details" }).click();
   await expect(page.locator("[data-settings-tab='ai-generation-history']")).toHaveClass(/active/);
