@@ -4,6 +4,13 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.15] - 2026-07-09
+
+### 変更
+
+- AI generation layout skills と prompts の表現を調整し、具体的な width への偏りを減らし、report module summaries、callouts、tables、related evidence を semantic visual groups として扱うようにしました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.15` に更新しました。
+
 ## [1.1.14] - 2026-07-09
 
 ### 修正

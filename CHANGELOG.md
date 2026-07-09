@@ -9,6 +9,13 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.15] - 2026-07-09
+
+### Changed
+
+- Refined AI generation layout skills and prompts to reduce concrete-width bias and guide report module summaries, callouts, tables, and related evidence as semantic visual groups.
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.15`.
+
 ## [1.1.14] - 2026-07-09
 
 ### Fixed

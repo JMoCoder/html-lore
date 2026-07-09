@@ -78,10 +78,10 @@ For analytical reports, choose the representation by decision need:
 
 - Use a stable layout grid with restrained spacing, readable line length, and clear section dividers.
 - Choose one primary report canvas for peer-level sections and keep their left/right edges visually consistent.
-- Treat narrow reading lanes, sidebars, appendix notes, or full-bleed bands as intentional variants. If a report section changes width, the StyleBrief should state why and how it relates to the main canvas.
-- Tables, matrices, comparison panels, and multi-card finding groups usually belong on the primary report canvas. Narrow reading lanes, compact side notes, and full-width evidence areas are all acceptable when their visual weight matches the content.
+- Treat alternate reading lanes, sidebars, appendix notes, or full-bleed bands as intentional semantic variants. If a report section changes canvas relationship, the StyleBrief should state why and how it relates to peer sections.
+- Tables, matrices, comparison panels, and multi-card finding groups usually belong on the primary report canvas. Compact notes, sidebars, and expanded evidence areas are acceptable only when their visual weight and semantic relationship match the content.
 - Let content weight decide layout weight. A short caveat, one-sentence conclusion, or small note should not become the dominant wide/tall panel merely because it sits near longer evidence. Give short material compact treatment such as a side note, inline fact row, small callout, or balanced companion block.
-- Distinguish article prose from report module leads. Long narrative analysis may use a comfortable reading measure. Short section introductions, table notes, matrix explanations, and module summaries should remain visually related to the evidence they introduce, but they do not need to stretch to the same width or height.
+- Distinguish standalone article prose from report module text. Section introductions, module summaries, table notes, matrix explanations, boundary callouts, and related evidence that belong to the same report module should read as one composed group. Do not mix a detached prose lane with a sibling callout, table, or card group unless the relationship is explicitly intentional.
 - When mixing asymmetric blocks, make the asymmetry intentional: the visually larger area should usually carry denser or more important content, while short supporting material should feel compact, anchored, or subordinate.
 - Give summary or conclusion areas stronger hierarchy, but avoid oversized marketing hero treatment unless the report is meant for external presentation.
 - Tables and matrices should be legible on desktop and usable on mobile through horizontal scroll or stacked rows.
@@ -103,7 +103,7 @@ When this skill is loaded, StyleDesigner should include:
 - report surface type and intended reading mode,
 - primary canvas behavior for main report sections, including whether sections are panel-first, article-flow, dashboard-like, or mixed intentionally,
 - rules for matching component scale to content amount and importance, especially when combining short notes with longer evidence, tables, or bullet groups,
-- rules for when prose should use a narrow reading measure, when a section lead should stay visually connected to the following table/matrix/card group, and how compact notes, sidebars, and full-width areas relate to the main canvas,
+- rules for when prose is standalone reading content versus module text, how section leads stay visually connected to related callouts/tables/matrices/card groups, and how compact notes, sidebars, or expanded evidence areas relate to the main canvas,
 - which upstream sections need summary, finding, matrix, risk, recommendation, roadmap, or appendix treatment,
 - table/matrix guidance when the plan contains comparisons, responsibilities, options, parameters, or evidence categories,
 - table-density guidance that distinguishes short parameter tables, standard report tables, and wide data tables,

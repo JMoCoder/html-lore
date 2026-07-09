@@ -88,7 +88,7 @@ Every StyleBrief should give HTMLCoder a usable layout contract, not only a mood
 
 - Define the intended representation for each major section.
 - Name the capability labels that matter and explain why they matter for this source material.
-- Match container width to both content amount and content role. A standalone reading paragraph can use a comfortable measure; a lead paragraph that introduces a table, matrix, diagram, or card group should normally share that group's visual canvas or become a lead band/callout so it does not feel detached.
+- Match container behavior to both content amount and content role. Standalone reading paragraphs may have their own article rhythm; lead paragraphs, module summaries, caveats, and callouts that introduce or qualify a table, matrix, diagram, or card group should remain in the same visual family as that group so they do not feel detached.
 - Use compact cards, split grids, callouts, inline facts, or same-canvas lead text to make short explanatory text feel composed. The goal is visual relationship, not always making text narrower.
 - Keep grouped components visually consistent. When two panels explain one idea, share border, radius, padding, background behavior, and type scale unless contrast is intentional.
 - Reserve collision-safe space for labels, badges, numbers, arrows, and decorative marks. They must not overlap or crowd headings.

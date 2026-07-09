@@ -397,7 +397,9 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "comparisons, responsibilities, parameters" in report
     assert "missing data must remain missing" in report
     assert "primary report canvas" in report
-    assert "narrow reading measure" in report
+    assert "report module text" in report
+    assert "one composed group" in report
+    assert "detached prose lane" in report
     assert "content weight decide layout weight" in report
     assert "unbalanced split panels" in report
 

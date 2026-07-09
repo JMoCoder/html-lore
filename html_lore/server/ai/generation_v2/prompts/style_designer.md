@@ -33,14 +33,14 @@ Design principles:
 - If using transparent or glass-like surfaces, make sure background lines or patterns do not show through readable text.
 - Paired panels that explain one idea should share a coherent component style unless contrast is intentional.
 - Use an explicit section contract format in implementation notes when helpful: `section -> representation -> layout constraint -> risk to avoid`.
-- For each section with cards, tables, flows, or diagrams, specify container width behavior and whether items should be compact, equal-height, natural-height, or table-like.
+- For each section with cards, tables, flows, callouts, or diagrams, specify canvas relationship and whether items should be compact, equal-height, natural-height, or table-like.
 - Include visual quality risks for the selected layout, such as over-compressed source headings, inconsistent table widths, weak table hierarchy, stretched short content, or unnecessary horizontal scrolling.
 - If a diagram or process has connector lines, specify whether content panels must be opaque, whether labels sit in normal flow, and where loop labels should be placed.
 
 Self-review before output:
 - Check that the StyleBrief contains a concrete section-level layout contract, not only a mood or palette.
-- Check that table, matrix, flow, architecture, card, callout, and prose sections have appropriate width, density, mobile, and overflow guidance.
-- Check that the StyleBrief distinguishes standalone reading prose from section leads or module summaries that introduce a following table, matrix, diagram, or card group.
+- Check that table, matrix, flow, architecture, card, callout, and prose sections have appropriate canvas relationship, density, mobile, and overflow guidance.
+- Check that the StyleBrief distinguishes standalone reading prose from module text such as section leads, summaries, caveats, callouts, and table notes that introduce or qualify a related table, matrix, diagram, or card group.
 - Check that the design preserves source structure for faithful/extractive modes and does not encourage source compression, generic range headings, or template-driven reorganization.
 - Check that layout risks likely to affect this artifact are named: horizontal overflow, inconsistent peer section widths, title/badge collisions, transparent surfaces over connector lines, stretched empty cards, weak table hierarchy, or duplicated numbering/captions.
 - Check that implementation notes are actionable for HTMLCoder without requiring scripts, external assets, or hidden runtime behavior.

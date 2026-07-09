@@ -56,8 +56,8 @@ If a requested visual effect would require unsafe scripting, replace it with sta
 - For diagrams, prefer semantic HTML boxes and CSS connectors. Inline SVG is acceptable for compact diagrams, but keep it simple and accessible.
 - Use icons only if they can be represented safely with text, CSS, or inline SVG. Do not fetch icon libraries.
 - Follow StyleBrief section contracts. If a section is specified as a table, flow, timeline, or architecture map, implement that representation instead of flattening it into generic cards.
-- Implement the StyleBrief's page canvas and section width strategy. Use constrained text measures intentionally; do not create unrelated `max-width` values for peer-level sections unless the brief calls for a narrow reading lane, aside, or full-bleed contrast.
-- Apply text measures with semantic classes instead of global paragraph rules. For example, an article-like `.prose` block may use a narrower measure, while `.section-lead`, `.table-note`, `.matrix-intro`, or `.module-summary` should align with the section or component group they introduce.
+- Implement the StyleBrief's page canvas and section relationship strategy. Use text measures semantically; do not create unrelated one-off width rules for peer-level sections unless the brief calls for an intentional aside, appendix lane, or expanded evidence area.
+- Apply text measures with semantic classes instead of global paragraph rules. For example, an article-like `.article-prose` block may have its own reading rhythm, while `.section-lead`, `.table-note`, `.matrix-intro`, `.module-summary`, and related callouts should align with the section or component group they introduce.
 - Keep main section left/right edges, panel widths, and repeated component groups aligned to the selected layout system. Internal grids may vary, but the page should not look like unrelated templates stitched together.
 - Reserve safe space for badges, loop labels, arrows, counters, and connector labels.
 - Keep repeated component groups visually coherent through shared classes and tokens.

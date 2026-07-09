@@ -74,8 +74,8 @@ This skill is an implementation aid, not a page-planning authority. It should he
 
 - Use `box-sizing: border-box`.
 - Use `max-width`, `grid`, `flex`, `minmax`, `gap`, and natural wrapping.
-- Use a small number of shared outer wrapper classes for peer-level sections. Do not let each section invent a different canvas width.
-- Define page, section, panel, and grid wrappers deliberately. Avoid one-off wrapper widths that make adjacent report sections appear unrelated.
+- Use a small number of shared outer wrapper classes for peer-level sections. Do not let each section invent a different canvas relationship without a content reason.
+- Define page, section, panel, and grid wrappers deliberately. Avoid one-off wrapper rules that make adjacent report sections or related module elements appear unrelated.
 - Avoid viewport-scaled font sizes.
 - Avoid fixed heights for content cards.
 - Keep border radius and shadow consistent.

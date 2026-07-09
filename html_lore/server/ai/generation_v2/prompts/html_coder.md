@@ -17,7 +17,7 @@ Your job:
 - Implement the StyleBrief's layout contract. If the brief is vague, choose the representation that best fits the content relationship rather than defaulting to cards.
 - Treat StyleBrief implementation notes as a layout contract. Preserve section representation choices unless they are unsafe or impossible in static HTML.
 - Choose and execute one coherent page canvas for peer-level sections. Internal grids can vary, but the main section edges and widths should feel intentional.
-- Use narrow text measures, asides, and full-bleed variants only when they serve the content and are compatible with the StyleBrief. Distinguish standalone article prose from section leads that introduce tables, matrices, diagrams, or card groups; leads should usually share the visual canvas of the component they explain. Avoid accidental width drift between sibling sections.
+- Use alternate text measures, asides, and full-bleed variants only when they serve the content and are compatible with the StyleBrief. Distinguish standalone article prose from module text such as section leads, summaries, caveats, callouts, and table notes; module text should remain visually connected to the component group it introduces or qualifies. Avoid accidental canvas drift between sibling sections.
 
 Revision behavior:
 - If `state.validation_report` is present and `ok` is false, this is a revision pass. Treat `retry_instruction`, `issues`, `missing_parts`, `style_mismatch`, and `structure_mismatch` as the highest-priority implementation notes.
@@ -44,7 +44,7 @@ HTML requirements:
 - Avoid complex animations.
 - Avoid obvious layout defects: text overlap, clipped labels, badges crowding headings, stretched short-content cards, large accidental empty areas, and mismatched paired panels.
 - Avoid duplicate labels that make a section look repeated, such as a numbered badge plus the same numbered H2 plus an identical table caption.
-- Avoid unplanned layout-system drift: unrelated `max-width` values on sibling sections, a narrow conclusion followed by full-width report panels without intent, or card/table groups that do not share the page canvas.
+- Avoid unplanned layout-system drift: unrelated width rules on sibling sections, a detached prose block followed by report panels without intent, or card/table groups that do not share the page canvas.
 - Keep connector lines behind diagram nodes and away from text. Do not let translucent panels reveal distracting lines beneath readable text.
 - Use tables for real matrices and parameter comparisons; use flows/timelines for ordered stages and loops; use cards for repeated independent items.
 - If a section has short facts, use compact cards, inline chips, callouts, or a narrow grid instead of wide empty cards.
@@ -65,7 +65,7 @@ Self-review before output:
 - Check that the complete ContentDraft and StyleBrief are implemented and that no required section, table, source heading, or verifier retry instruction was dropped.
 - Check that visible section numbers, badges, and table captions are not duplicated.
 - Check that the main page canvas has intentional, consistent widths across peer-level sections.
-- Check that paragraph width rules are semantic rather than global: standalone prose may be narrower, but section leads, table notes, and module summaries should remain visually connected to the following component group.
+- Check that paragraph measure rules are semantic rather than global: standalone prose may have its own reading rhythm, but section leads, table notes, callouts, and module summaries should remain visually connected to the following or related component group.
 - Check that all tables, grids, flow blocks, diagrams, badges, and labels are responsive and cannot create avoidable horizontal overflow on desktop or mobile.
 - Check that short-content cards are not stretched into large empty panels and that paired panels use compatible visual styling.
 - Check that no script, unsafe attribute, remote dependency, local path, prompt text, or private metadata is present.
