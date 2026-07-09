@@ -9,6 +9,16 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.13] - 2026-07-09
+
+### Added
+
+- Added a low-profile download action on public share pages and static share fallback pages so viewers can download the shared HTML document.
+
+### Changed
+
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.13`.
+
 ## [1.1.12] - 2026-07-09
 
 ### Added

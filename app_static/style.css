@@ -234,12 +234,49 @@ textarea {
   padding-bottom: 14px;
 }
 
+.share-fallback-banner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
 .share-fallback-brand {
   color: #0f766e;
   font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+
+.share-fallback-download {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  color: #0f766e;
+  opacity: 0.22;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  backdrop-filter: blur(12px);
+}
+
+.share-fallback-download:hover,
+.share-fallback-download:focus-visible {
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(15, 118, 110, 0.42);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.share-fallback-download .button-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .share-fallback-banner h1 {
@@ -5322,6 +5359,18 @@ a.icon-action {
 
   .share-fallback-banner p {
     color: #a9b6c6;
+  }
+
+  .share-fallback-download {
+    background: rgba(15, 23, 42, 0.48);
+    border-color: rgba(148, 163, 184, 0.22);
+    color: #99f6e4;
+  }
+
+  .share-fallback-download:hover,
+  .share-fallback-download:focus-visible {
+    background: rgba(15, 23, 42, 0.74);
+    border-color: rgba(153, 246, 228, 0.42);
   }
 
   .share-fallback-frame {

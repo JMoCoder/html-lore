@@ -1602,7 +1602,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.12",
+  currentVersion: "1.1.13",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1968,7 +1968,12 @@ async function renderStaticShareFallback() {
   elements.body.innerHTML = `
     <main class="share-fallback-shell">
       <section class="share-fallback-banner">
-        <div class="share-fallback-brand">HTMlore shared note</div>
+        <div class="share-fallback-banner-top">
+          <div class="share-fallback-brand">HTMlore shared note</div>
+          <button type="button" class="share-fallback-download" aria-label="Download shared HTML" title="Download shared HTML">
+            ${downloadIcon()}
+          </button>
+        </div>
         <h1>Loading shared note...</h1>
         <p></p>
       </section>
@@ -1988,6 +1993,7 @@ async function renderStaticShareFallback() {
     document.querySelector(".share-fallback-banner p").textContent = summary;
     frame.title = title;
     frame.srcdoc = renderShareSrcdoc(data);
+    document.querySelector(".share-fallback-download")?.addEventListener("click", () => downloadShareFallbackHtml(frame, title));
     window.addEventListener("message", (event) => {
       if (!frame || event.source !== frame.contentWindow || !event.data) return;
       if (event.data.type === "html-lore-share-height") {
@@ -2008,8 +2014,27 @@ async function renderStaticShareFallback() {
     console.error(error);
     document.querySelector(".share-fallback-banner h1").textContent = "Share not found";
     document.querySelector(".share-fallback-banner p").textContent = "This shared note is unavailable, expired, or has been revoked.";
+    document.querySelector(".share-fallback-download")?.remove();
     document.querySelector(".share-fallback-frame").remove();
   }
+}
+
+function downloadShareFallbackHtml(frame, title) {
+  const source = frame?.getAttribute("srcdoc") || frame?.srcdoc || "";
+  if (!source) return;
+  downloadBlob(getSharedHtmlDownloadFilename(title), new Blob([source], { type: "text/html;charset=utf-8" }));
+}
+
+function getSharedHtmlDownloadFilename(title) {
+  let filename = String(title || "html-lore-shared-note")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120);
+  if (!filename) filename = "html-lore-shared-note";
+  if (!/\.html?$/i.test(filename)) filename = `${filename}.html`;
+  return filename;
 }
 
 function renderShareSrcdoc(data) {
@@ -8005,7 +8030,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.12-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.13-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

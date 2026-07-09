@@ -185,6 +185,8 @@ test("static share fallback renders public shared content instead of the workspa
 
   await expect(page.locator(".share-fallback-shell")).toBeVisible();
   await expect(page.locator(".share-fallback-banner h1")).toHaveText("Shared Note");
+  await expect(page.locator(".share-fallback-download")).toBeVisible();
+  await expect(page.locator(".share-fallback-download")).toHaveCSS("opacity", "0.22");
   await expect(page.locator(".shell")).toHaveCount(0);
   await expect(page.frameLocator(".share-fallback-frame").locator("h1")).toHaveText("Rendered shared HTML");
 });

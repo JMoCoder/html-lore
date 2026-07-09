@@ -73,6 +73,8 @@ def test_share_link_allows_public_sanitized_note_without_login(tmp_path: Path) -
         assert "run" not in public_json.lower()
         assert "HTMlore shared note" in public_page
         assert "HTMlore shared note" in public_page_trailing_slash
+        assert "Download shared HTML" in public_page
+        assert "share-download-button" in public_page
         assert "GitHub repository" not in public_page_trailing_slash
         assert public_page.count("<html") == 1
         assert public_page.count("<head") == 1

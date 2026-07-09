@@ -1010,7 +1010,32 @@ def render_share_page(data: dict) -> str:
     body {{ margin: 0; background: #f8fafc; color: #172033; }}
     .share-shell {{ padding: 18px 20px 56px; }}
     .share-banner {{ max-width: 1100px; margin: 0 auto 18px; border-bottom: 1px solid #d9e2ec; padding-bottom: 14px; }}
+    .share-banner-top {{ display: flex; align-items: center; justify-content: space-between; gap: 14px; }}
     .share-brand {{ color: #0f766e; font-size: 0.8rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }}
+    .share-download-button {{
+      width: 36px;
+      height: 36px;
+      border: 1px solid rgba(15, 118, 110, 0.24);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.56);
+      color: #0f766e;
+      opacity: 0.22;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      backdrop-filter: blur(12px);
+    }}
+    .share-download-button:hover,
+    .share-download-button:focus-visible {{
+      opacity: 0.9;
+      background: rgba(255, 255, 255, 0.82);
+      border-color: rgba(15, 118, 110, 0.42);
+      transform: translateY(-1px);
+      outline: none;
+    }}
+    .share-download-button svg {{ width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }}
     .share-title {{ margin: 8px 0; font-size: clamp(1.45rem, 3vw, 2.25rem); line-height: 1.15; }}
     .share-summary {{ color: #607086; font-size: 0.95rem; line-height: 1.55; }}
     .share-frame {{ display: block; width: min(1100px, 100%); min-height: 70vh; margin: 0 auto; border: 0; border-radius: 12px; background: white; }}
@@ -1018,6 +1043,9 @@ def render_share_page(data: dict) -> str:
       body {{ background: #101820; color: #e6edf3; }}
       .share-banner {{ border-color: #334155; }}
       .share-summary {{ color: #a9b6c6; }}
+      .share-download-button {{ background: rgba(15, 23, 42, 0.48); border-color: rgba(148, 163, 184, 0.22); color: #99f6e4; }}
+      .share-download-button:hover,
+      .share-download-button:focus-visible {{ background: rgba(15, 23, 42, 0.74); border-color: rgba(153, 246, 228, 0.42); }}
       .share-frame {{ background: #111827; }}
     }}
   </style>
@@ -1025,7 +1053,16 @@ def render_share_page(data: dict) -> str:
 <body>
   <div class="share-shell">
     <div class="share-banner">
-      <div class="share-brand">HTMlore shared note</div>
+      <div class="share-banner-top">
+        <div class="share-brand">HTMlore shared note</div>
+        <button type="button" class="share-download-button" aria-label="Download shared HTML" title="Download shared HTML">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v12"></path>
+            <path d="m7 10 5 5 5-5"></path>
+            <path d="M5 21h14"></path>
+          </svg>
+        </button>
+      </div>
       <h1 class="share-title">{title}</h1>
       <p class="share-summary">{summary}</p>
     </div>
@@ -1033,6 +1070,28 @@ def render_share_page(data: dict) -> str:
   </div>
   <script>
     const frame = document.querySelector(".share-frame");
+    const downloadButton = document.querySelector(".share-download-button");
+    function shareDownloadFilename() {{
+      const title = (document.querySelector(".share-title")?.textContent || "html-lore-shared-note").trim();
+      let filename = title.replace(/[\\\\/:*?"<>|\\u0000-\\u001f]+/g, "-").replace(/\\s+/g, " ").trim().replace(/[. ]+$/g, "").slice(0, 120);
+      if (!filename) filename = "html-lore-shared-note";
+      if (!/\\.html?$/i.test(filename)) filename = `${{filename}}.html`;
+      return filename;
+    }}
+    function downloadSharedHtml() {{
+      if (!frame) return;
+      const source = frame.getAttribute("srcdoc") || frame.srcdoc || "";
+      const blob = new Blob([source], {{ type: "text/html;charset=utf-8" }});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = shareDownloadFilename();
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }}
+    downloadButton?.addEventListener("click", downloadSharedHtml);
     window.addEventListener("message", (event) => {{
       if (!frame || event.source !== frame.contentWindow || !event.data) return;
       if (event.data.type === "html-lore-share-height") {{

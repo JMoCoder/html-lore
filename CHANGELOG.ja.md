@@ -4,6 +4,16 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.13] - 2026-07-09
+
+### 追加
+
+- Public share page と static share fallback page に控えめな download action を追加し、閲覧者が共有 HTML document をダウンロードできるようにしました。
+
+### 変更
+
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.13` に更新しました。
+
 ## [1.1.12] - 2026-07-09
 
 ### 追加
