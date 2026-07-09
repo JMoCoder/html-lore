@@ -9,6 +9,16 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.14] - 2026-07-09
+
+### Fixed
+
+- Fixed AI-generated HTML safety scanning so CSS class names such as `risk-table-mobile` are not misclassified as API-key secrets while real `sk-...` secret patterns are still blocked.
+
+### Changed
+
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.14`.
+
 ## [1.1.13] - 2026-07-09
 
 ### Added

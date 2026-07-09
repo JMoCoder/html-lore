@@ -172,7 +172,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.1.13 curl-compatible",
+                "User-Agent": "HTMlore/1.1.14 curl-compatible",
                 "Accept": "application/json, text/event-stream",
             },
         )
@@ -210,7 +210,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.1.13 curl-compatible",
+                "User-Agent": "HTMlore/1.1.14 curl-compatible",
                 "Accept": "application/json",
             },
         )

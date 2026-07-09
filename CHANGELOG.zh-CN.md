@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+## [1.1.14] - 2026-07-09
+
+### 修复
+
+- 修复 AI 生成 HTML 安全扫描误报，`risk-table-mobile` 等 CSS class 名不再被误判为 API key，同时真实 `sk-...` 密钥模式仍会被拦截。
+
+### 变更
+
+- 包版本、应用版本、PWA、Demo 缓存版本和 provider user-agent 更新为 `1.1.14`。
+
 ## [1.1.13] - 2026-07-09
 
 ### 新增

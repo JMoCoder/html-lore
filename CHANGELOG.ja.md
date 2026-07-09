@@ -4,6 +4,16 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.14] - 2026-07-09
+
+### 修正
+
+- AI-generated HTML safety scanning の誤検知を修正し、`risk-table-mobile` などの CSS class name を API key secret と誤判定しないようにしました。実際の `sk-...` secret pattern は引き続きブロックされます。
+
+### 変更
+
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.14` に更新しました。
+
 ## [1.1.13] - 2026-07-09
 
 ### 追加

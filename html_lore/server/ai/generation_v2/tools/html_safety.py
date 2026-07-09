@@ -17,7 +17,7 @@ CSS_UNSAFE_PATTERNS = [
 CSS_URL_PATTERN = re.compile(r"url\(([^)]+)\)", re.I)
 DANGEROUS_EXTENSIONS = {".js", ".mjs", ".cjs", ".svg", ".html", ".htm", ".xhtml", ".xml"}
 SECRET_PATTERNS = [
-    re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
+    re.compile(r"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{12,}"),
     re.compile(r"HTML_LORE_[A-Z0-9_]*=\S+"),
 ]
 

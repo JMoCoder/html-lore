@@ -5,10 +5,16 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from html_lore.server.shares import scan_share_content
 from tests.api_server import run_api_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_share_safety_does_not_treat_risk_table_css_class_as_secret() -> None:
+    scan = scan_share_content('<html><body><table class="risk-table-mobile"><tr><td>Risk</td></tr></table></body></html>')
+    assert scan["shareable"] is True
 
 
 def copy_fixture_tree(tmp_path: Path) -> tuple[Path, Path, Path]:

@@ -2448,11 +2448,13 @@ def test_generation_v2_html_safety_blocks_scripts_handlers_css_and_secrets() -> 
     handler = scan_html_safety("<html><body><div onclick=\"steal()\">Bad</div></body></html>")
     css = scan_html_safety("<html><head><style>@import url(https://example.test/a.css)</style></head><body></body></html>")
     secret = scan_html_safety("<html><body>sk-test-secret-value-123456</body></html>")
+    css_class = scan_html_safety("<html><body><table class=\"risk-table-mobile\"><tr><td>Risk</td></tr></table></body></html>")
 
     assert "blocked-tag:script" in script["reasons"]
     assert "inline-event-handler" in handler["reasons"]
     assert "css-import" in css["reasons"]
     assert "sensitive-secret" in secret["reasons"]
+    assert css_class["ok"] is True
 
 
 def test_generation_v2_visual_check_disabled_and_empty_html_paths() -> None:

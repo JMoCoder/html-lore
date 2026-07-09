@@ -3539,6 +3539,21 @@ def test_html_generation_share_review_uses_share_safety_scan() -> None:
     assert legacy_decision["safety"]["shareable"] is False
 
 
+def test_html_generation_review_does_not_treat_risk_table_css_class_as_secret() -> None:
+    decision = review_html(
+        '<!doctype html><html><body><table class="risk-table-mobile"><tr><td>Risk</td></tr></table></body></html>',
+        {},
+    )
+    assert decision["ok"] is True
+
+    secret_decision = review_html(
+        "<!doctype html><html><body>sk-test-secret-value-123456</body></html>",
+        {},
+    )
+    assert secret_decision["ok"] is False
+    assert "likely secret" in secret_decision["message"]
+
+
 def test_generation_spec_maps_legacy_target_use_to_audience() -> None:
     spec = GenerationSpec.from_values({"target_use": "share"})
     assert spec.target_use == "default"

@@ -201,7 +201,7 @@ def qa_html(html: str) -> dict[str, Any]:
 
 def review_html(html: str, spec: dict[str, str]) -> dict[str, Any]:
     lowered = html.lower()
-    if "html_lore_ai_api_key" in lowered or re.search(r"sk-[a-z0-9_-]{12,}", html, re.IGNORECASE):
+    if "html_lore_ai_api_key" in lowered or re.search(r"(?<![a-z0-9_-])sk-[a-z0-9_-]{12,}", html, re.IGNORECASE):
         return {"ok": False, "message": "Generated HTML contains a likely secret."}
     if spec.get("audience") == "share" or spec.get("target_use") == "share":
         scan = scan_share_content(html)
