@@ -18,7 +18,7 @@ from html_lore.server.ai.generation_v2.material_context import build_material_in
 from html_lore.server.ai.generation_v2.material_runner import generate_note_from_material_v2
 from html_lore.server.ai.generation_v2.material_bundle import build_material_bundle, cleanup_expired_failed_job_workspaces, write_job_material_bundle, read_material_bundle_reference
 from html_lore.server.ai.generation_v2.material_read import read_material
-from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, agent_payload, extract_html_document, extract_json_object, public_generation_state_for_agent, retry_output_rules
+from html_lore.server.ai.generation_v2.model_client import ProviderGenerationModelClient, agent_payload, extract_html_document, extract_json_object, load_agent_prompt, public_generation_state_for_agent, retry_output_rules
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.orchestrator import GenerationOrchestrator
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
@@ -386,6 +386,9 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "architecture_scene" in presentation
     assert "talk-track order" in presentation
     assert "unsupported runtime" in presentation
+    assert "Static Navigation" in presentation
+    assert "script-free anchor links" in presentation
+    assert "footer/page-number zone" in presentation
 
     report = load_skill_by_id("report_surface_design").content
     assert "Report Surface Design Skill" in report
@@ -395,6 +398,13 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "missing data must remain missing" in report
     assert "primary report canvas" in report
     assert "narrow reading measure" in report
+    assert "content weight decide layout weight" in report
+    assert "unbalanced split panels" in report
+
+    html_coder_prompt = load_agent_prompt("HTMLCoder")
+    assert "global slide navigation" in html_coder_prompt
+    assert "safe in-page anchor links" in html_coder_prompt
+    assert "consistent title zone" in html_coder_prompt
 
     webpage = load_skill_by_id("webpage_surface_design").content
     assert "Webpage Surface Design Skill" in webpage
@@ -495,6 +505,8 @@ def test_generation_v2_skill_router_loads_optional_capability_skills() -> None:
     state = GenerationState(
         plan_draft=PlanDraft(
             tool_needs=[
+                ToolNeed(tool_name="report surface design", reason="Create a decision report with findings and risks.", priority="high"),
+                ToolNeed(tool_name="webpage surface design", reason="Create a static product webpage.", priority="medium"),
                 ToolNeed(tool_name="presentation surface design", reason="External roadshow pitch page.", priority="high"),
                 ToolNeed(tool_name="architecture explainer design", reason="Explain runtime nodes, edges, and loops.", priority="high"),
                 ToolNeed(tool_name="component pattern html", reason="Use grids, process flow, and comparison cards.", priority="medium"),
@@ -502,11 +514,18 @@ def test_generation_v2_skill_router_loads_optional_capability_skills() -> None:
         ),
     )
 
-    assert planned_skill_ids_for_agent("StyleDesigner", state) == ("presentation_surface_design", "architecture_explainer_design")
+    assert planned_skill_ids_for_agent("StyleDesigner", state) == (
+        "presentation_surface_design",
+        "report_surface_design",
+        "webpage_surface_design",
+        "architecture_explainer_design",
+    )
     assert planned_skill_ids_for_agent("HTMLCoder", state) == ("architecture_explainer_design", "component_pattern_html")
     assert [skill.id for skill in resolve_skills_for_agent("StyleDesigner", state)] == [
         "html_page_design",
         "presentation_surface_design",
+        "report_surface_design",
+        "webpage_surface_design",
         "architecture_explainer_design",
     ]
     assert [skill.id for skill in resolve_skills_for_agent("HTMLCoder", state)] == [
@@ -585,6 +604,16 @@ def test_generation_v2_public_summary_groups_skills_and_infers_running_checklist
         plan_draft=PlanDraft(
             tool_needs=[
                 ToolNeed(
+                    tool_name="report_surface_design",
+                    reason="Create a decision report with findings and risks.",
+                    priority="high",
+                ),
+                ToolNeed(
+                    tool_name="webpage_surface_design",
+                    reason="Create a static product webpage.",
+                    priority="medium",
+                ),
+                ToolNeed(
                     tool_name="architecture explainer design",
                     reason="Explain runtime nodes, edges, and loops.",
                     priority="high",
@@ -599,6 +628,8 @@ def test_generation_v2_public_summary_groups_skills_and_infers_running_checklist
         ],
         skill_trace=[
             SkillTraceEntry(id="html_page_design", title="HTML page design", agent="StyleDesigner", kind="default"),
+            SkillTraceEntry(id="report_surface_design", title="Report surface design", agent="StyleDesigner", kind="enhanced"),
+            SkillTraceEntry(id="webpage_surface_design", title="Webpage surface design", agent="StyleDesigner", kind="enhanced"),
             SkillTraceEntry(id="architecture_explainer_design", title="Architecture explainer", agent="StyleDesigner", kind="enhanced"),
         ],
     )
@@ -607,6 +638,10 @@ def test_generation_v2_public_summary_groups_skills_and_infers_running_checklist
     skills = {item["id"]: item for item in summary["skill_trace"]}
 
     assert skills["html_page_design"]["kind"] == "default"
+    assert skills["report_surface_design"]["kind"] == "enhanced"
+    assert skills["report_surface_design"]["trigger_reason"] == "Create a decision report with findings and risks."
+    assert skills["webpage_surface_design"]["kind"] == "enhanced"
+    assert skills["webpage_surface_design"]["trigger_reason"] == "Create a static product webpage."
     assert skills["architecture_explainer_design"]["kind"] == "enhanced"
     assert skills["architecture_explainer_design"]["trigger_reason"] == "Explain runtime nodes, edges, and loops."
     assert summary["execution_checklist"][0]["status"] == "running"

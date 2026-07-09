@@ -4,6 +4,17 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.1.12] - 2026-07-09
+
+### 追加
+
+- Reader page の action button に、現在の note の original HTML source をダウンロードする入口を追加しました。
+
+### 変更
+
+- AI generation の report / virtual slide 向け surface skills を改善し、report blocks の balance と slide navigation / layout rhythm を安定させました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.12` に更新しました。
+
 ## [1.1.11] - 2026-07-08
 
 ### 変更

@@ -51,6 +51,8 @@ HTML requirements:
 - If a section has a matrix, responsibilities, parameters, or control boundaries, use a table or comparison grid instead of prose cards.
 - If a section has nodes and edges, reserve collision-free zones for labels, arrows, counters, and loop badges.
 - If paired panels sit side by side, give them compatible padding, border, radius, background opacity, and type scale.
+- For presentation-like HTML, if StyleBrief calls for global slide navigation, implement it as safe in-page anchor links only. A fixed or sticky translucent previous/next or dot/index control is allowed, but do not add JavaScript, forms, inputs, keyboard handlers, or presenter runtime behavior.
+- For presentation-like HTML, use repeatable slide structure when appropriate: consistent title zone, content zone, footer/page-number zone, and similar desktop minimum heights across peer slide sections, while allowing content-driven exceptions.
 
 Performance budget:
 - Keep the first-pass HTML complete, production-readable, and proportionate to the task.

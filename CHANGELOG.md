@@ -9,6 +9,17 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.1.12] - 2026-07-09
+
+### Added
+
+- Added a reader-page action to download the current note's original HTML source.
+
+### Changed
+
+- Improved AI generation surface skills for report and virtual-slide outputs, including more balanced report blocks and consistent slide navigation/layout rhythm.
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.12`.
+
 ## [1.1.11] - 2026-07-08
 
 ### Changed

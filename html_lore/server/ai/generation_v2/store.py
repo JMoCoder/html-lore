@@ -103,6 +103,8 @@ def skill_trigger_reason(skill_id: str, needs: list[Any]) -> str:
     if not skill_id or not needs:
         return ""
     keywords_by_skill = {
+        "report_surface_design": ("report", "analysis", "findings", "risk", "recommendation", "matrix", "decision", "brief"),
+        "webpage_surface_design": ("webpage", "web page", "website", "landing", "docs", "documentation", "article", "product", "campaign", "portfolio", "prototype"),
         "presentation_surface_design": ("presentation", "pitch", "deck", "roadshow", "briefing", "showcase", "launch", "ppt"),
         "architecture_explainer_design": ("architecture", "workflow", "system", "process", "pipeline", "state machine", "runtime", "agent", "edge", "loop", "diagram"),
         "component_pattern_html": ("component", "cards", "grid", "timeline", "process flow", "comparison", "callout", "responsive table", "pattern"),

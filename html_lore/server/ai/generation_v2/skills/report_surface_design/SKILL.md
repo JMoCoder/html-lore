@@ -2,7 +2,7 @@
 name: report_surface_design
 title: Report surface design
 description: Use when the generated HTML is explicitly requested as a report or should present already-planned report content with credible hierarchy, scannable findings, matrices, risks, recommendations, and decision-oriented reading flow. Helps StyleDesigner design report-like HTML without imposing a fixed report template.
-version: 0.1.0
+version: 0.1.1
 author: HTMlore
 license: project-internal
 metadata:
@@ -79,9 +79,10 @@ For analytical reports, choose the representation by decision need:
 - Use a stable layout grid with restrained spacing, readable line length, and clear section dividers.
 - Choose one primary report canvas for peer-level sections and keep their left/right edges visually consistent.
 - Treat narrow reading lanes, sidebars, appendix notes, or full-bleed bands as intentional variants. If a report section changes width, the StyleBrief should state why and how it relates to the main canvas.
-- Tables, matrices, comparison panels, and multi-card finding groups usually belong on the primary report canvas. Avoid mixing a narrow prose measure with full-width report panels at the same hierarchy unless it is an intentional editorial rhythm.
-- Distinguish article prose from report module leads. Long narrative analysis may use a comfortable reading measure, while section introductions, table notes, matrix explanations, and module summaries should usually align with the component group they introduce so the reader sees one coherent report block.
-- When a section lead sits above a full-canvas table, matrix, or card group, design it as part of that section: a full-width lead band, callout, two-column lead plus key points, or same-canvas intro text can all work. Choose the option that keeps the lead visually connected to the following evidence.
+- Tables, matrices, comparison panels, and multi-card finding groups usually belong on the primary report canvas. Narrow reading lanes, compact side notes, and full-width evidence areas are all acceptable when their visual weight matches the content.
+- Let content weight decide layout weight. A short caveat, one-sentence conclusion, or small note should not become the dominant wide/tall panel merely because it sits near longer evidence. Give short material compact treatment such as a side note, inline fact row, small callout, or balanced companion block.
+- Distinguish article prose from report module leads. Long narrative analysis may use a comfortable reading measure. Short section introductions, table notes, matrix explanations, and module summaries should remain visually related to the evidence they introduce, but they do not need to stretch to the same width or height.
+- When mixing asymmetric blocks, make the asymmetry intentional: the visually larger area should usually carry denser or more important content, while short supporting material should feel compact, anchored, or subordinate.
 - Give summary or conclusion areas stronger hierarchy, but avoid oversized marketing hero treatment unless the report is meant for external presentation.
 - Tables and matrices should be legible on desktop and usable on mobile through horizontal scroll or stacked rows.
 - For table-heavy financial or parameter reports, choose table layouts by readability:
@@ -101,7 +102,8 @@ When this skill is loaded, StyleDesigner should include:
 
 - report surface type and intended reading mode,
 - primary canvas behavior for main report sections, including whether sections are panel-first, article-flow, dashboard-like, or mixed intentionally,
-- rules for when prose should use a narrow reading measure, when a section lead should align with the following table/matrix/card group, and how those variants relate to the main canvas,
+- rules for matching component scale to content amount and importance, especially when combining short notes with longer evidence, tables, or bullet groups,
+- rules for when prose should use a narrow reading measure, when a section lead should stay visually connected to the following table/matrix/card group, and how compact notes, sidebars, and full-width areas relate to the main canvas,
 - which upstream sections need summary, finding, matrix, risk, recommendation, roadmap, or appendix treatment,
 - table/matrix guidance when the plan contains comparisons, responsibilities, options, parameters, or evidence categories,
 - table-density guidance that distinguishes short parameter tables, standard report tables, and wide data tables,
@@ -110,7 +112,7 @@ When this skill is loaded, StyleDesigner should include:
 - explicit source-vs-judgment guidance when the page contains suitability, risk, or recommendation language,
 - density rules for findings, callouts, and long analysis sections,
 - mobile handling for tables, matrices, and multi-column report areas,
-- visual risk notes for empty cards, over-wide short content, weak contrast, and decorative elements that reduce credibility,
+- visual risk notes for empty cards, over-wide short content, unbalanced split panels, weak contrast, and decorative elements that reduce credibility,
 - visual risk notes for duplicated section numbers, repeated captions, and internal labels exposed as report headings,
 - explicit reminder that missing data must remain missing, not invented for visual polish.
 
@@ -124,4 +126,5 @@ When this skill is loaded, StyleDesigner should include:
 - Is the report credible without inventing metrics or unsupported certainty?
 - Are dense sections readable on mobile?
 - Are peer-level sections aligned on a coherent report canvas, with wide tables contained intentionally rather than causing page-level overflow?
+- Does each component's scale feel proportional to its content and importance, especially when a short note sits beside longer evidence?
 - Is the visual hierarchy strong enough for decision reading, but not so decorative that it weakens trust?

@@ -426,6 +426,9 @@ const i18n = {
     noSummary: "No summary yet.",
     read: "Read",
     original: "Original",
+    downloadOriginalHtml: "Download HTML",
+    downloadOriginalDone: "HTML download started.",
+    downloadOriginalFailed: "HTML download failed.",
     shareAction: "Share",
     editMetadata: "Edit metadata",
     editCode: "Edit code",
@@ -934,6 +937,9 @@ const i18n = {
     noSummary: "暂无摘要。",
     read: "阅读",
     original: "原文",
+    downloadOriginalHtml: "下载 HTML 原文",
+    downloadOriginalDone: "已开始下载 HTML 原文。",
+    downloadOriginalFailed: "HTML 原文下载失败。",
     shareAction: "分享",
     editMetadata: "编辑元信息",
     editCode: "编辑代码",
@@ -1442,6 +1448,9 @@ const i18n = {
     noSummary: "概要はまだありません。",
     read: "読む",
     original: "原文",
+    downloadOriginalHtml: "HTML 原文をダウンロード",
+    downloadOriginalDone: "HTML 原文のダウンロードを開始しました。",
+    downloadOriginalFailed: "HTML 原文のダウンロードに失敗しました。",
     shareAction: "共有",
     editMetadata: "メタデータを編集",
     editCode: "コードを編集",
@@ -1593,7 +1602,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.1.11",
+  currentVersion: "1.1.12",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1829,6 +1838,7 @@ const elements = {
   readerFavorite: document.querySelector("#reader-favorite"),
   readerArchive: document.querySelector("#reader-archive"),
   readerAiPanelOpen: document.querySelector("#reader-ai-panel-open"),
+  readerDownload: document.querySelector("#reader-download"),
   readerOriginal: document.querySelector("#reader-original"),
   readerShare: document.querySelector("#reader-share"),
   readerFrame: document.querySelector("#reader-frame"),
@@ -3697,6 +3707,10 @@ function renderReaderActions(item) {
   elements.readerArchive.innerHTML = archiveIcon();
   elements.readerArchive.setAttribute("aria-label", archiveLabel);
   elements.readerArchive.setAttribute("title", archiveLabel);
+  if (elements.readerDownload) {
+    elements.readerDownload.innerHTML = downloadIcon();
+    setIconButtonLabel(elements.readerDownload, "downloadOriginalHtml");
+  }
   if (elements.readerAiPanelOpen) {
     elements.readerAiPanelOpen.hidden = !archived;
     elements.readerAiPanelOpen.innerHTML = trashIcon();
@@ -3927,6 +3941,41 @@ async function openCodeEditor(id = state.editingItemId) {
     console.error(error);
     elements.codeEditorFeedback.textContent = t("codeSaveFailed");
   }
+}
+
+async function downloadReaderOriginalHtml() {
+  const item = getItemById(state.currentReaderItemId);
+  if (!item || elements.readerDownload?.disabled) return;
+  if (elements.readerDownload) elements.readerDownload.disabled = true;
+  try {
+    const response = state.agentUrl
+      ? await apiFetch(`/api/items/${encodeURIComponent(item.id)}/raw`, { cache: "no-store" })
+      : await fetch(getReaderRawUrl(item), { cache: "no-store" });
+    if (!response.ok) throw new Error(`Source returned ${response.status}`);
+    const source = await response.text();
+    downloadBlob(getReaderDownloadFilename(item), new Blob([source], { type: "text/html;charset=utf-8" }));
+    setFeedback("downloadOriginalDone");
+  } catch (error) {
+    console.error(error);
+    setFeedback("downloadOriginalFailed");
+  } finally {
+    if (elements.readerDownload) elements.readerDownload.disabled = false;
+  }
+}
+
+function getReaderDownloadFilename(item) {
+  const title = getItemTitle(item);
+  const pathName = String(item?.path || "").split(/[\\/]/).pop() || "";
+  const preferred = title || pathName;
+  let filename = String(preferred || "html-lore-note")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120);
+  if (!filename) filename = "html-lore-note";
+  if (!/\.html?$/i.test(filename)) filename = `${filename}.html`;
+  return filename;
 }
 
 function closeCodeEditor(force = false) {
@@ -7688,7 +7737,10 @@ function exportPreferencesData() {
 }
 
 function downloadJson(filename, payload) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  downloadBlob(filename, new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+}
+
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -7848,6 +7900,16 @@ function shareIcon() {
   `;
 }
 
+function downloadIcon() {
+  return `
+    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3v12"></path>
+      <path d="m7 10 5 5 5-5"></path>
+      <path d="M5 21h14"></path>
+    </svg>
+  `;
+}
+
 function openContextIcon() {
   return `
     <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -7943,7 +8005,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.11-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.1.12-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
@@ -8014,6 +8076,8 @@ function isTransientFeedback(key) {
     "codeSaved",
     "codeSaveFailed",
     "codeNeedsAgent",
+    "downloadOriginalDone",
+    "downloadOriginalFailed",
     "editFileComingSoon",
     "fileEditorSaved",
     "fileEditorSaveFailed",
@@ -8181,6 +8245,7 @@ elements.readerArchive.addEventListener("click", () => {
 elements.readerShare.addEventListener("click", () => {
   if (state.currentReaderItemId) openShareDialog(state.currentReaderItemId);
 });
+elements.readerDownload?.addEventListener("click", downloadReaderOriginalHtml);
 elements.readerAiPanelOpen?.addEventListener("click", () => {
   if (state.currentReaderItemId) permanentlyDeleteItem(state.currentReaderItemId);
 });

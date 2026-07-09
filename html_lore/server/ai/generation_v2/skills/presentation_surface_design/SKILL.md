@@ -2,7 +2,7 @@
 name: presentation_surface_design
 title: Presentation surface design
 description: Use when the generated HTML should feel like a PPT, slide deck, pitch deck, executive briefing, keynote-like story, roadshow, product launch, tech sharing, or presentation-like artifact while remaining safe static HTML. Helps StyleDesigner build slide-like narrative rhythm, audience-facing visual hierarchy, talk-track sections, and deck-quality layout contracts without introducing a deck runtime.
-version: 0.2.0
+version: 0.3.0
 author: HTMlore
 license: project-internal
 metadata:
@@ -34,9 +34,9 @@ Avoid instructions such as:
 - every slide must use the same card grid,
 - every technical sharing page must look like a neon developer keynote,
 - every business presentation must invent metrics, customers, timelines, or value claims,
-- every presentation must include speaker notes, presenter controls, keyboard navigation, or slide runtime.
+- every presentation must include speaker notes, keyboard navigation, JavaScript controls, or a slide runtime.
 
-The current delivery target is safe static HTML. Design slide-like sections and presentation rhythm, but do not assume a real deck runtime unless the implementation layer explicitly provides one.
+The current delivery target is safe static HTML. Design slide-like sections and presentation rhythm, but do not assume a real deck runtime unless the implementation layer explicitly provides one. Static in-page anchor navigation is acceptable when it helps shared reading.
 
 ## Presentation Surface Types
 
@@ -69,12 +69,23 @@ If the user only selects `ppt` and provides no narrower intent, infer the least 
 The output is HTML, but each major presentation section should behave like a stable slide canvas:
 
 - Use strong section boundaries so the reader can mentally page through the artifact.
-- Keep titles, badges, slide numbers, decorative marks, and diagrams in collision-safe zones.
-- Use viewport-aware sizing, but do not require every section to be exactly full-screen.
+- Keep a consistent canvas rhythm across slide-like sections. On desktop, comparable slides should usually share a similar minimum height, inner padding, title zone, content zone, and footer/page-number zone so the artifact feels like a deck rather than a mixed webpage.
+- Keep titles, section labels, slide numbers, decorative marks, and diagrams in predictable collision-safe zones. They do not need identical styling, but their placement should feel deliberate from slide to slide.
+- Use viewport-aware sizing. A slide-like section may be near full-screen, slightly shorter, or taller when content requires it, but avoid arbitrary height changes that make adjacent slides feel unrelated.
 - Keep text blocks short enough for presentation reading. Move supporting detail into compact notes, appendix-like sections, or lower-emphasis blocks.
 - Avoid tiny dense paragraphs inside large hero scenes.
 - Preserve content hierarchy when the viewport shrinks. Mobile should become a clean stacked talk track, not a broken slide.
 - Do not add visible presenter-only instructions. If speaker notes are generated later, they belong in hidden or clearly separated metadata, not on the audience-facing surface.
+
+## Static Navigation
+
+For shareable HTML presentations, consider a lightweight global navigation aid:
+
+- Use script-free anchor links to slide sections, such as a fixed or sticky translucent control with previous/next links, section dots, or a compact slide index.
+- Keep the control elegant and unobtrusive: semi-transparent surface, readable contrast, small footprint, and enough safe-area spacing so it does not cover slide titles or key content.
+- Do not rely on JavaScript, keyboard handlers, forms, inputs, or hidden runtime state.
+- On mobile, collapse the control to a compact bottom or top rail that remains readable without blocking content.
+- The control should support sharing and reading, not simulate a full presentation app.
 
 ## Visual Patterns
 
@@ -114,6 +125,7 @@ Cards are useful for repeated points, but they are not a substitute for comparis
 - A presentation-like section still needs a strong content grid. Do not rely on large empty areas to create drama.
 - Pair short claims with compact supporting blocks, not oversized cards that leave half the component blank.
 - When placing a badge or label near a headline, keep it above or beside the title in normal flow unless there is clear reserved space.
+- Reserve repeatable zones for title, main content, and footer/page metadata when the artifact has multiple slide-like sections. Use those zones flexibly, but avoid moving page numbers and titles to arbitrary positions on each slide.
 - If a section uses connector lines, loops, or diagram backgrounds, keep text panels opaque enough to hide visual noise.
 - Keep companion panels visually aligned. A summary panel and a key insight panel should share the same design language unless the contrast is the message.
 - Avoid split layouts where one side is dense and the other is mostly empty. Use asymmetric grids only when the sparse side carries a deliberate hero claim or visual anchor.
@@ -144,6 +156,8 @@ StyleBrief should include:
 
 - the presentation surface type and audience reading mode,
 - recommended scene rhythm and talk-track order,
+- the slide canvas rhythm: typical minimum height, title zone, content zone, footer/page-number zone, and when a slide may intentionally break that rhythm,
+- whether to include script-free global slide navigation, and if so its placement, opacity, anchor behavior, and mobile fallback,
 - opening scene strategy and whether it should be a hero, executive summary, or title scene,
 - component patterns for value, capability, roadmap, architecture, comparison, evidence, and summary blocks,
 - section-level contracts describing scene -> representation -> layout constraint -> visual risk,
@@ -157,6 +171,8 @@ StyleBrief should include:
 
 - Does the artifact feel like a coherent PPT-style presentation rather than a webpage, report, or styled Markdown?
 - Does each slide-like section have one main message and a clear support structure?
+- Do slide-like sections share a coherent canvas rhythm, with predictable title and page-number placement?
+- If navigation is present, is it script-free, semi-transparent, unobtrusive, and useful for sharing?
 - Is the opening scene appropriate for the audience and source material?
 - Are claims, metrics, customers, dates, and roadmaps supported by the uploaded material or user instruction?
 - Are tables, diagrams, timelines, cards, and comparison panels used for the right relationships?

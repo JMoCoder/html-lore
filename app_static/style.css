@@ -2838,15 +2838,19 @@ textarea {
 }
 
 #reader-original {
-  order: 4;
-}
-
-#reader-share {
   order: 5;
 }
 
-#reader-ai-panel-open {
+#reader-share {
   order: 6;
+}
+
+#reader-download {
+  order: 4;
+}
+
+#reader-ai-panel-open {
+  order: 7;
 }
 
 .card-footer a {
