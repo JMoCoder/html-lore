@@ -59,6 +59,7 @@ If a requested visual effect would require unsafe scripting, replace it with sta
 - Implement the StyleBrief's page canvas and section relationship strategy. Use text measures semantically; do not create unrelated one-off width rules for peer-level sections unless the brief calls for an intentional aside, appendix lane, or expanded evidence area.
 - Apply text measures with semantic classes instead of global paragraph rules. For example, an article-like `.article-prose` block may have its own reading rhythm, while `.section-lead`, `.table-note`, `.matrix-intro`, `.module-summary`, and related callouts should align with the section or component group they introduce.
 - Keep main section left/right edges, panel widths, and repeated component groups aligned to the selected layout system. Internal grids may vary, but the page should not look like unrelated templates stitched together.
+- For opening, summary, and module-entry groups, let component scale follow information density and semantic importance. Do not use a rigid two-column wrapper when it cramps dense material beside a sparse companion.
 - Reserve safe space for badges, loop labels, arrows, counters, and connector labels.
 - Keep repeated component groups visually coherent through shared classes and tokens.
 
@@ -99,6 +100,7 @@ Before returning HTML, verify that:
 - tables and grids have responsive containment,
 - visible numbers, badges, and captions are not duplicated,
 - short panels do not create large accidental blank areas,
+- dense and sparse companion panels are not forced into an obviously mismatched width relationship,
 - no scripts, event handlers, remote dependencies, local paths, prompts, or credentials were introduced.
 
 ## Output Budget

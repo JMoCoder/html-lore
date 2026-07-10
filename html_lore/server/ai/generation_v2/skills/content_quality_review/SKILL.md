@@ -2,7 +2,7 @@
 name: content_quality_review
 title: Content quality review
 description: Use when verifying whether generated HTML satisfies the user request, source material, plan, content draft, and style brief. Guides Verifier to pass useful complete artifacts, identify unsupported claims or missing sections, and route revisions to the right upstream agent.
-version: 0.2.0
+version: 0.2.1
 author: HTMlore
 license: project-internal
 metadata:
@@ -75,14 +75,15 @@ Ask these in order:
 8. In faithful or extractive source modes, does the artifact preserve visible source section identity instead of hiding distinct source sections behind artificial merged titles?
 9. Are visible labels professional and non-duplicative, with no repeated section number badge + numbered H2 + same table caption, and no internal labels such as "开头说明" exposed as polished report headings?
 10. Are layout basics sound: no obvious text overlap, no crowded labels, no stretched short-content cards, no large accidental blank areas, and no distracting background lines behind readable text?
-11. Are grouped or paired components visually coherent?
-12. For architecture/workflow pages, are nodes, edges, loops, ownership boundaries, and stop conditions represented clearly enough?
-13. For business/report pages, are conclusions, risks, recommendations, and responsibility/parameter matrices represented with suitable density?
-14. For table-heavy reports, are table widths, scroll behavior, numeric readability, and peer-level component consistency good enough for comprehension?
-15. If the user requested comparison, analysis, suitability, pricing, parameters, risk, or recommendations, does the artifact preserve enough analytical detail to support that purpose?
-16. If the source material is multi-file or dense, has the artifact avoided over-compressing distinct sources, evidence, dimensions, and unknowns into a generic summary?
-17. Are omissions honest and acceptable for the available material?
-18. Is the artifact complete enough to write into the knowledge base?
+11. In opening, summary, and report module areas, does visual weight broadly follow information density and semantic importance?
+12. Are grouped or paired components visually coherent?
+13. For architecture/workflow pages, are nodes, edges, loops, ownership boundaries, and stop conditions represented clearly enough?
+14. For business/report pages, are conclusions, risks, recommendations, and responsibility/parameter matrices represented with suitable density?
+15. For table-heavy reports, are table widths, scroll behavior, numeric readability, and peer-level component consistency good enough for comprehension?
+16. If the user requested comparison, analysis, suitability, pricing, parameters, risk, or recommendations, does the artifact preserve enough analytical detail to support that purpose?
+17. If the source material is multi-file or dense, has the artifact avoided over-compressing distinct sources, evidence, dimensions, and unknowns into a generic summary?
+18. Are omissions honest and acceptable for the available material?
+19. Is the artifact complete enough to write into the knowledge base?
 
 ## Pass Criteria
 
@@ -106,6 +107,8 @@ Do not block for:
 - minor copyediting,
 - lack of advanced animations,
 - not using a layout pattern you personally prefer,
+- a reasonable but different opening or table-of-contents style,
+- minor whitespace that does not reduce comprehension,
 - missing facts that were not present in the source material.
 
 ## Fail Criteria
@@ -120,7 +123,7 @@ Fail and route back when:
 - table-heavy report layouts harm comprehension through inconsistent peer-level widths, avoidable internal table scrolling, or weak numeric/table hierarchy,
 - duplicated heading numbers, repeated adjacent captions, or internal wrapper labels make the report look mechanically generated,
 - visible text overlaps labels, badges, connector lines, or decorative backgrounds,
-- short-content cards or paired panels create major empty-space imbalance or inconsistent component language,
+- opening, summary, short-content cards, or paired panels create major empty-space imbalance that materially harms comprehension, such as dense material being cramped while a sparse companion dominates the canvas,
 - architecture or workflow pages hide edge conditions, loop stop conditions, or control ownership that the user explicitly asked to understand,
 - business/report pages turn responsibility matrices, assumptions, or option comparisons into vague prose or decorative cards,
 - comparison, fit, pricing, parameter, or risk reports flatten important dimensions into a short summary and do not provide enough structured evidence for the requested audience,

@@ -27,6 +27,8 @@ Design principles:
 - Presentation-style pages may be more visual but must remain static and readable.
 - Do not let short text create wide empty cards. Match component width and grid columns to content density.
 - Do not let grouped tables or cards create accidental width drift. If peer-level sections share the same report canvas, grouped subcomponents must still feel intentional and should not force avoidable internal scrolling.
+- In opening, summary, and module-entry areas, choose layout relationships from content density and reading priority. Do not default to a split panel when one side is dense and the other is sparse.
+- Avoid arbitrary numeric widths or mechanical column proportions in the StyleBrief. Prefer semantic layout decisions, proportional relationships, responsive behavior, and risks to avoid. Numeric sizing is acceptable only when it solves a practical containment problem such as wide tables or mobile fallbacks.
 - For table-heavy reports, distinguish short parameter tables, standard report tables, and genuinely wide data tables. Specify when each should be stacked, grouped, or scroll-contained based on readability, not on decorative symmetry.
 - Keep badges, labels, counters, arrows, and decorative marks out of title collision zones.
 - If source headings already include visible numbering, prefer one numbering system. Do not ask for separate numbered badges/chips unless the adjacent heading text will not repeat the same number.
@@ -39,6 +41,7 @@ Design principles:
 
 Self-review before output:
 - Check that the StyleBrief contains a concrete section-level layout contract, not only a mood or palette.
+- Check that "concrete" means actionable representation, relationship, density, and responsive guidance rather than arbitrary pixel widths.
 - Check that table, matrix, flow, architecture, card, callout, and prose sections have appropriate canvas relationship, density, mobile, and overflow guidance.
 - Check that the StyleBrief distinguishes standalone reading prose from module text such as section leads, summaries, caveats, callouts, and table notes that introduce or qualify a related table, matrix, diagram, or card group.
 - Check that the design preserves source structure for faithful/extractive modes and does not encourage source compression, generic range headings, or template-driven reorganization.
@@ -53,4 +56,4 @@ Boundaries:
 
 Output:
 - Return one JSON object matching StyleBrief.
-- Use concrete tokens and implementation notes that HTMLCoder can apply directly, including section contracts and layout risks to avoid.
+- Use actionable tokens and implementation notes that HTMLCoder can apply directly, including section contracts and layout risks to avoid. Prefer semantic layout contracts over fixed measurements unless measurement is needed for containment.

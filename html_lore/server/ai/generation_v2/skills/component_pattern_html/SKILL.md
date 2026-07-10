@@ -34,6 +34,7 @@ This skill is an implementation aid, not a page-planning authority. It should he
 - Components in the same conceptual group must look related: consistent padding, border, radius, type scale, and background opacity.
 - Peer-level component groups should share the same outer canvas unless the StyleBrief explicitly creates a narrow lane, aside, or full-bleed variant.
 - Component size should follow content density. Do not stretch a short label or one-sentence fact into a wide empty card.
+- If side-by-side components have clearly different information density, use natural grouping, stacking, compact side notes, or proportional tracks instead of a rigid split that makes the sparse block dominate or the dense block wrap excessively.
 - Visual decoration must never compete with content. Connectors, badges, counters, and background lines need reserved space or reduced contrast.
 - The component pattern must follow the relationship in the content: matrix -> table, sequence -> flow/timeline, bounded system -> architecture map, repeated independent facts -> cards.
 
@@ -88,6 +89,7 @@ This skill is an implementation aid, not a page-planning authority. It should he
 - Place badges and section labels in normal document flow where possible. If absolutely positioned, reserve padding so they cannot overlap headings.
 - Connector lines should sit behind nodes and stop before content surfaces. They should not cross readable text.
 - For side-by-side panels, define shared class names and tokens so left and right panels look intentionally related.
+- For summary or entry panels, prefer content-aware tracks and natural height over fixed widths that only solve one viewport.
 - If a panel sits over a diagram or patterned background, make it opaque enough to hide the layer below. Avoid glass panels over connector lines.
 - Use `grid-template-columns: repeat(auto-fit, minmax(...))` for repeated cards, but cap max widths or use natural-height rows when content is short.
 
