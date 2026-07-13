@@ -202,6 +202,7 @@ def test_ai_status_is_unavailable_without_provider(tmp_path: Path) -> None:
         assert status["external_search"] == {"provider": "disabled", "available": False, "max_results": 5}
         assert status["limits"]["max_upload_bytes"] == 100 * 1024 * 1024
         assert status["limits"]["max_upload_total_bytes"] == 500 * 1024 * 1024
+        assert status["provider"]["reasoning_effort"] == ""
         assert "api_key" not in status["provider"]
     finally:
         server.close()
@@ -757,10 +758,12 @@ def test_ai_fake_provider_can_be_configured_and_tested(tmp_path: Path) -> None:
                 "provider": "fake",
                 "enabled": True,
                 "model": "fake-test-model",
+                "reasoning_effort": "high",
             },
         )
         assert provider["provider"]["provider"] == "fake"
         assert provider["provider"]["model"] == "fake-test-model"
+        assert provider["provider"]["reasoning_effort"] == "high"
         assert provider["provider"]["configured"] is True
 
         result = server.json("POST", "/api/ai/test-provider", {})
@@ -839,9 +842,44 @@ def test_openai_compatible_adapter_uses_bearer_header_without_logging_key(monkey
     assert seen["timeout"] == 360
     assert seen["authorization"] == "Bearer test-secret-key"
     assert seen["body"].count('"stream": true') == 1
+    assert "reasoning_effort" not in json.loads(seen["body"])
     assert "HTMlore" in seen["user_agent"]
     assert "test-secret-key" not in seen["body"]
     assert response["content"] == "connection ok"
+
+
+def test_openai_compatible_adapter_passes_configured_reasoning_effort(monkeypatch) -> None:
+    seen: dict[str, str] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        seen["body"] = request.data.decode("utf-8")
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    adapter = OpenAICompatibleHttpAdapter(
+        AIProviderConfig(
+            provider="openai-compatible",
+            base_url="https://api.example.test",
+            model="gpt-5.6-terra",
+            reasoning_effort="high",
+            enabled=True,
+            api_key="test-secret-key",
+        ),
+    )
+
+    adapter.chat(messages=[{"role": "user", "content": "ping"}])
+
+    assert json.loads(seen["body"])["reasoning_effort"] == "high"
 
 
 def test_openai_compatible_adapter_wraps_socket_timeout(monkeypatch) -> None:

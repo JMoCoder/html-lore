@@ -4,6 +4,27 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-13
+
+### 追加
+
+- OpenAI-compatible Chat Completions の reasoning effort を明示的に設定できるようにし、V2 generation workflow では個別に上書きできるようにしました。`none`、`low`、`medium`、`high`、`xhigh`、`max` をサポートします。
+
+### 変更
+
+- V2 Verifier を軽量で収束しやすい quality gate に調整し、直接 material evidence を優先し、空の evidence request を拒否し、HTML preview の切り詰めを full artifact 欠落と誤判定しないようにしました。
+- Virtual presentation の browser-width scene と、安全な previous / directory / next の 3-part anchor navigation guidance を改善しました。
+- Static fragment navigation と、source に含まれる confidentiality、non-offer、risk notice を適切に許可し、承認済み本文を不要に置き換えないよう safety review の境界を明確化しました。
+- GPT-5.6 の品質優先 evaluation baseline として `gpt-5.6-sol + medium` を AI configuration documentation で推奨しました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.2.0` に更新しました。
+
+## [1.1.16] - 2026-07-10
+
+### 変更
+
+- AI generation layout prompts / skills をさらに調整し、content-led proportions、早すぎる改行と空白の不均衡の抑制、report-level component grouping の改善を行いました。
+- パッケージ、アプリ、PWA、Demo cache、provider user-agent のバージョンを `1.1.16` に更新しました。
+
 ## [1.1.15] - 2026-07-09
 
 ### 変更

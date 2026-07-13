@@ -56,6 +56,11 @@ class GenerationOrchestrator:
         if action == VerifierAction.PASS:
             return "verifier"
         if action == VerifierAction.REQUEST_EVIDENCE:
+            has_evidence_request = bool(getattr(report, "material_queries", None) or getattr(report, "material_read_requests", None))
+            if not has_evidence_request:
+                if state.same_node_retries.get("VerifierProtocol", 0) < self.max_verifier_protocol_retries:
+                    return "verifier_protocol_retry"
+                return "verifier_invalid_output"
             return "verifier"
         if action == VerifierAction.BLOCKED:
             return "verifier_blocked"

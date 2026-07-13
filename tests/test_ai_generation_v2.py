@@ -22,7 +22,7 @@ from html_lore.server.ai.generation_v2.model_client import ProviderGenerationMod
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.orchestrator import GenerationOrchestrator
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, DocumentImage, DocumentLink, DocumentTable, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, MaterialReadRequest, NoteMetadataProposal, OutlineItem, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SourceHandlingMode, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport, VerifierAction
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, DocumentImage, DocumentLink, DocumentTable, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, MaterialReadRequest, MaterialReadResult, NoteMetadataProposal, OutlineItem, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SourceHandlingMode, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport, VerifierAction
 from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
 from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
@@ -389,6 +389,8 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "Static Navigation" in presentation
     assert "script-free anchor links" in presentation
     assert "footer/page-number zone" in presentation
+    assert "previous / directory / next" in presentation
+    assert "`首页`, `目录`, `提示`, `末页`" in presentation
 
     report = load_skill_by_id("report_surface_design").content
     assert "Report Surface Design Skill" in report
@@ -407,6 +409,11 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "global slide navigation" in html_coder_prompt
     assert "safe in-page anchor links" in html_coder_prompt
     assert "consistent title zone" in html_coder_prompt
+    assert "Do not replace the document body with a generic access warning" in html_coder_prompt
+    assert "previous / directory / next" in html_coder_prompt
+    assert "首页 / 目录 / 提示 / 末页" in html_coder_prompt
+    assert "implement them as `<a href=\"#...\">` fragment links" in html_coder_prompt
+    assert "Do not use `<button>`" in html_coder_prompt
 
     webpage = load_skill_by_id("webpage_surface_design").content
     assert "Webpage Surface Design Skill" in webpage
@@ -815,6 +822,29 @@ def test_generation_v2_orchestrator_routes_verifier_material_queries_back_to_ver
     assert decision.next_node == "verifier"
 
 
+def test_generation_v2_orchestrator_rejects_empty_verifier_evidence_request() -> None:
+    base = {
+        "parsed_document": ParsedDocument(plain_text="source"),
+        "requirement_brief": RequirementBrief(user_goal="Convert source"),
+        "plan_draft": PlanDraft(page_goal="Convert source"),
+        "content_draft": ContentDraft(title="Source"),
+        "style_brief": StyleBrief(style_goal="Light report"),
+        "html_draft": HtmlDraft(html="<!doctype html><html><body>Source</body></html>"),
+        "validation_report": ValidationReport(
+            ok=False,
+            verifier_action=VerifierAction.REQUEST_EVIDENCE,
+            material_queries=[],
+            material_read_requests=[],
+        ),
+    }
+
+    first = GenerationOrchestrator().decide_next(GenerationState(**base))
+    second = GenerationOrchestrator().decide_next(GenerationState(**base, same_node_retries={"VerifierProtocol": 1}))
+
+    assert first.next_node == "verifier_protocol_retry"
+    assert second.next_node == "verifier_invalid_output"
+
+
 def test_generation_v2_orchestrator_does_not_infer_verifier_revision_route() -> None:
     state = GenerationState(
         parsed_document=ParsedDocument(plain_text="source"),
@@ -890,12 +920,24 @@ def test_generation_v2_verifier_instructions_require_recall_before_source_failur
     assert "Runtime only interprets this protocol" in prompt
     assert "is honest but is not a successful conversion" in prompt
     assert "not pass a parse-failure notice" in prompt
+    assert "Do not block solely because the visible `html_draft.html` preview is truncated" in prompt
     assert "two-phase evidence policy" in skill
     assert "return focused `material_queries` first" in skill
     assert "Verifier owns the validation decision" in skill
     assert "Runtime will not infer business routes" in skill
     assert "do not pass an artifact that only reports parsing failure" in skill
     assert "concrete confirmed defect" in skill
+
+
+def test_generation_v2_safety_prompt_preserves_source_confidentiality_boundaries() -> None:
+    prompt = load_agent_prompt("SafetyReviewer")
+
+    assert "interpret `share` as a request for a self-contained, readable artifact" in prompt
+    assert "do not block solely because such notices exist" in prompt
+    assert "Do not ask HTMLCoder to remove, summarize, or replace already validated source content" in prompt
+    assert "Basic static navigation controls are acceptable" in prompt
+    assert "previous / directory / next" in prompt
+    assert "href=\"#slide-03\"" in prompt
 
 
 def test_generation_v2_prompts_do_not_impose_global_section_compression() -> None:
@@ -988,6 +1030,59 @@ def test_generation_v2_verifier_state_keeps_html_visible_in_compact_view() -> No
     assert "<!doctype html>" in view["html_draft"]["html"]
     assert "html_tail" in view["html_draft"]
     assert len(view["parsed_document"]["plain_text"]) < 1300
+
+
+def test_generation_v2_verifier_state_includes_protocol_retry_feedback() -> None:
+    state = GenerationState(
+        input=GenerationInput(instruction="Create HTML from source."),
+        parsed_document=ParsedDocument(plain_text="Source text."),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>Done</body></html>"),
+        same_node_retries={"VerifierProtocol": 1},
+    )
+
+    view = public_generation_state_for_agent(state, node="Verifier")
+
+    assert view["verifier_protocol_feedback"]["retry_count"] == 1
+    assert "request_evidence" in view["verifier_protocol_feedback"]["invalid_previous_output"]
+    assert "material_read_results" in view["verifier_protocol_feedback"]["invalid_previous_output"]
+
+
+def test_generation_v2_verifier_state_prioritizes_material_read_before_html() -> None:
+    state = GenerationState(
+        input=GenerationInput(instruction="Verify source fidelity."),
+        parsed_document=ParsedDocument(plain_text="Source preview."),
+        material_read_results=[
+            MaterialReadResult(
+                agent="Verifier",
+                request_id="read-full-source",
+                file_id="file-1",
+                filename="source.pptx",
+                text="FULL SOURCE EVIDENCE " * 200,
+                char_count=4200,
+                truncated=False,
+                end_offset=4200,
+            ),
+            MaterialReadResult(
+                agent="ContentWriter",
+                request_id="read-full-source-duplicate",
+                file_id="file-1",
+                filename="source.pptx",
+                text="DUPLICATE FULL SOURCE " * 200,
+                char_count=4200,
+                truncated=False,
+                end_offset=4200,
+            )
+        ],
+        html_draft=HtmlDraft(html="<!doctype html><html><body>" + ("LONG HTML " * 2000) + "</body></html>"),
+    )
+
+    serialized = json.dumps(public_generation_state_for_agent(state, node="Verifier"), ensure_ascii=False)
+
+    assert serialized.count("source.pptx") == 1
+    assert serialized.index("material_read_results") < serialized.index("html_draft")
+    assert serialized.index("FULL SOURCE EVIDENCE") < serialized.index("LONG HTML")
+    assert "DUPLICATE FULL SOURCE" not in serialized
+    assert serialized.index("html_draft") < serialized.index("content_draft")
 
 
 def test_generation_v2_temporary_material_context_keeps_later_file_table_evidence() -> None:
@@ -1540,6 +1635,57 @@ def test_generation_v2_verifier_can_escalate_from_recall_to_material_read() -> N
     assert result.validation_report.material_read_requests == []
 
 
+def test_generation_v2_verifier_strips_repeated_material_read_after_direct_read() -> None:
+    parsed = merge_parsed_documents(
+        [
+            ParsedDocument(
+                source_files=[SourceFile(filename="deck.pptx")],
+                plain_text="Slide 1 标题。Slide 2 数据。Slide 3 特别提示。",
+            )
+        ]
+    )
+    state = GenerationState(
+        input=GenerationInput(instruction="保留原PPT内容重构为HTML虚拟PPT"),
+        parsed_document=parsed,
+        material_index=build_material_index(parsed, instruction="Slide"),
+        requirement_brief=RequirementBrief(user_goal="保留原PPT内容重构为HTML虚拟PPT"),
+        plan_draft=PlanDraft(page_goal="PPT重构"),
+        content_draft=ContentDraft(title="PPT", summary="保留内容", sections=[ContentSection(id="s", title="Slide", body="Slide 1 标题。")]),
+        style_brief=StyleBrief(style_goal="虚拟PPT"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>Slide 1 标题。Slide 2 数据。</body></html>"),
+    )
+
+    class RepeatingReadVerifierClient(FakeGenerationModelClient):
+        def complete_json(self, *, node: str, schema_name: str, payload: dict, attempt: int = 0) -> str:
+            if node != "Verifier":
+                return super().complete_json(node=node, schema_name=schema_name, payload=payload, attempt=attempt)
+            return json.dumps(
+                {
+                    "ok": False,
+                    "verifier_action": "request_evidence",
+                    "score": 0.78,
+                    "checked_items": [{"id": "source", "title": "源PPT核验", "passed": False}],
+                    "issues": [{"code": "needs_more_evidence", "message": "还想继续读取原文。", "severity": "medium"}],
+                    "missing_parts": [],
+                    "unsupported_claims": [],
+                    "style_mismatch": [],
+                    "structure_mismatch": [],
+                    "route_back_to": "",
+                    "retry_instruction": "继续读取原文。",
+                    "material_queries": [],
+                    "material_read_requests": [{"id": "read-source", "action": "read_file", "file_id": "file-1", "limit": 500, "purpose": "读取完整原文核验"}],
+                },
+                ensure_ascii=False,
+            )
+
+    result = VerifierAgent(model_client=RepeatingReadVerifierClient()).run(state).state
+
+    assert len(result.material_read_results) == 1
+    assert result.validation_report is not None
+    assert result.validation_report.material_queries == []
+    assert result.validation_report.material_read_requests == []
+
+
 def test_generation_v2_agent_state_uses_temporary_material_context_over_raw_prefix() -> None:
     parsed = ParsedDocument(
         source_files=[SourceFile(filename="first.md"), SourceFile(filename="second.md")],
@@ -1686,6 +1832,8 @@ def test_generation_model_profile_defaults_to_quality_model(tmp_path) -> None:
 def test_generation_config_defaults_to_legacy(monkeypatch) -> None:
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_ENGINE", raising=False)
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_MODEL", raising=False)
+    monkeypatch.delenv("HTML_LORE_AI_GENERATION_REASONING_EFFORT", raising=False)
+    monkeypatch.delenv("HTML_LORE_AI_REASONING_EFFORT", raising=False)
     monkeypatch.delenv("HTML_LORE_AI_GENERATION_HTML_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("HTML_LORE_AI_VISUAL_CHECK", raising=False)
     monkeypatch.delenv("HTML_LORE_DOCUMENT_PARSER", raising=False)
@@ -1694,6 +1842,8 @@ def test_generation_config_defaults_to_legacy(monkeypatch) -> None:
 
     assert settings.ai_generation_engine == "legacy"
     assert settings.ai_generation_model == DEFAULT_GENERATION_MODEL
+    assert settings.ai_generation_reasoning_effort == ""
+    assert settings.ai_reasoning_effort == ""
     assert settings.ai_generation_html_timeout_seconds == 900
     assert settings.ai_visual_check == "basic"
     assert settings.document_parser == "markitdown"
@@ -1702,6 +1852,8 @@ def test_generation_config_defaults_to_legacy(monkeypatch) -> None:
 def test_generation_config_accepts_v2(monkeypatch) -> None:
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_ENGINE", "v2")
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_MODEL", "custom-generation-model")
+    monkeypatch.setenv("HTML_LORE_AI_REASONING_EFFORT", "medium")
+    monkeypatch.setenv("HTML_LORE_AI_GENERATION_REASONING_EFFORT", "high")
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_MAX_TOKENS", "16000")
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_JSON_MAX_TOKENS", "6000")
     monkeypatch.setenv("HTML_LORE_AI_GENERATION_HTML_MAX_TOKENS", "18000")
@@ -1714,6 +1866,8 @@ def test_generation_config_accepts_v2(monkeypatch) -> None:
 
     assert settings.ai_generation_engine == "v2"
     assert settings.ai_generation_model == "custom-generation-model"
+    assert settings.ai_reasoning_effort == "medium"
+    assert settings.ai_generation_reasoning_effort == "high"
     assert settings.ai_generation_max_tokens == 16000
     assert settings.ai_generation_json_max_tokens == 6000
     assert settings.ai_generation_html_max_tokens == 18000
@@ -1732,17 +1886,27 @@ def test_generation_v2_service_uses_larger_prompt_budget_for_material_evidence(t
         max_upload_bytes=1024,
         ai_max_prompt_chars=12000,
         ai_generation_engine="v2",
+        ai_reasoning_effort="medium",
+        ai_generation_reasoning_effort="high",
     )
 
     class FakeStore:
         def get(self) -> AIProviderConfig:
-            return AIProviderConfig(provider="openai-compatible", base_url="https://example.invalid/v1", api_key="test-key", enabled=True, model="fake-model")
+            return AIProviderConfig(
+                provider="openai-compatible",
+                base_url="https://example.invalid/v1",
+                api_key="test-key",
+                enabled=True,
+                model="fake-model",
+                reasoning_effort="low",
+            )
 
     service = AIConversationService(settings, store=None, item_service=None, provider_store=FakeStore(), run_store=None)
     client = service._generation_v2_model_client()
 
     assert isinstance(client, ProviderGenerationModelClient)
     assert client.max_prompt_chars == 48000
+    assert client.model_client.config.reasoning_effort == "high"
 
 
 def test_basic_document_parser_handles_markdown() -> None:

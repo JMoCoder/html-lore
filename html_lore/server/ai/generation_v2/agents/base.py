@@ -105,8 +105,10 @@ class GenerationAgent:
     def apply_material_read_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...], depth: int = 0) -> tuple[GenerationState, Any]:
         if self.name not in MATERIAL_READ_AGENTS or state.parsed_document is None:
             return state, output
+        if self.name == "Verifier" and any(result.agent == self.name for result in state.material_read_results):
+            return state, strip_pending_material_evidence(output)
         if depth >= max_material_read_rounds(self.name):
-            return state, output
+            return (state, strip_pending_material_evidence(output)) if self.name == "Verifier" else (state, output)
         requests = material_read_requests_from_output(output)
         if not requests:
             return state, output
@@ -128,7 +130,7 @@ class GenerationAgent:
         if self.name not in MATERIAL_RECALL_AGENTS or state.material_index is None:
             return state, output
         if self.name == "Verifier" and any(result.agent == self.name for result in state.material_read_results):
-            return state, strip_pending_material_queries(output)
+            return state, strip_pending_material_evidence(output)
         if self.name == "Verifier" and material_recall_phase_is_final(state, self.name):
             if material_read_requests_from_output(output):
                 state, output = self.apply_material_read_if_needed(state, output, skills=skills)
@@ -931,6 +933,22 @@ def strip_pending_material_queries(output: Any) -> Any:
         return next_output
     except TypeError:
         return output
+
+
+def strip_pending_material_read_requests(output: Any) -> Any:
+    requests = material_read_requests_from_output(output)
+    if not requests:
+        return output
+    try:
+        next_output = replace(output, material_read_requests=[])
+        object.__setattr__(next_output, "_suppressed_material_read_request_count", len(requests))
+        return next_output
+    except TypeError:
+        return output
+
+
+def strip_pending_material_evidence(output: Any) -> Any:
+    return strip_pending_material_read_requests(strip_pending_material_queries(output))
 
 
 def material_read_requests_from_output(output: Any) -> list[Any]:

@@ -9,6 +9,27 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-13
+
+### Added
+
+- Added explicit OpenAI-compatible Chat Completions reasoning-effort configuration for standard AI calls and an independent V2 generation override. Supported values are `none`, `low`, `medium`, `high`, `xhigh`, and `max`.
+
+### Changed
+
+- Refined the V2 Verifier into a lightweight, convergent quality gate: direct material evidence is prioritized, empty evidence requests are rejected, and truncated HTML previews no longer imply that the full artifact is missing.
+- Improved virtual-presentation guidance with responsive browser-width scenes and safe three-part previous / directory / next anchor navigation.
+- Clarified safety review so static fragment navigation and preserved source confidentiality, non-offer, and risk notices are treated appropriately without replacing approved content.
+- Updated AI configuration documentation to recommend `gpt-5.6-sol` with `medium` reasoning as the GPT-5.6 quality-first evaluation baseline.
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.2.0`.
+
+## [1.1.16] - 2026-07-10
+
+### Changed
+
+- Further refined AI generation layout prompts and skills to prefer content-led proportions, reduce premature text wrapping and empty-space imbalance, and improve report-level component grouping.
+- Updated package, app, PWA, demo cache, and provider user-agent versions to `1.1.16`.
+
 ## [1.1.15] - 2026-07-09
 
 ### Changed

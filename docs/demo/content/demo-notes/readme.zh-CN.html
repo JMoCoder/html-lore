@@ -205,7 +205,8 @@ html-lore serve-api --host 127.0.0.1 --port 8787</code></pre>
 <pre><code>HTML_LORE_AI_ENABLED=true
 HTML_LORE_AI_PROVIDER=openai-compatible
 HTML_LORE_AI_BASE_URL=https://your-newapi.example.com/v1
-HTML_LORE_AI_MODEL=gpt-5.5
+HTML_LORE_AI_MODEL=gpt-5.6-sol
+HTML_LORE_AI_REASONING_EFFORT=medium
 HTML_LORE_DOCUMENT_PARSER=markitdown
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key</code></pre>
 <p>安装可选 <code>agent</code> extra 会安装 AI 运行依赖，包括用于工作流编排的 LangGraph，以及用于 PDF / Word / PowerPoint / Excel 增强解析的 MarkItDown。<code>HTML_LORE_DOCUMENT_PARSER=markitdown</code> 是默认值；轻量部署或排查解析问题时可设置为 <code>basic</code>。</p>

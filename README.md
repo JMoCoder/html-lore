@@ -334,9 +334,13 @@ or read an API key. Configure the key through the deployment environment:
 HTML_LORE_AI_ENABLED=true
 HTML_LORE_AI_PROVIDER=openai-compatible
 HTML_LORE_AI_BASE_URL=https://your-newapi.example.com/v1
-HTML_LORE_AI_MODEL=gpt-5.5
+HTML_LORE_AI_MODEL=gpt-5.6-sol
+HTML_LORE_AI_REASONING_EFFORT=medium
 HTML_LORE_AI_EMBEDDING_MODEL=baai/bge-m3
 HTML_LORE_AI_RETRIEVAL_MODE=hybrid
+HTML_LORE_AI_GENERATION_ENGINE=v2
+HTML_LORE_AI_GENERATION_MODEL=gpt-5.6-sol
+HTML_LORE_AI_GENERATION_REASONING_EFFORT=medium
 HTML_LORE_DOCUMENT_PARSER=markitdown
 HTML_LORE_MAX_UPLOAD_BYTES=104857600
 HTML_LORE_MAX_UPLOAD_TOTAL_BYTES=524288000
@@ -351,6 +355,14 @@ Deployment notes:
   default Docker image does not install a browser binary.
 - `HTML_LORE_AI_API_KEY` is used by the server for chat and embedding calls; it
   must not be placed in frontend config files.
+- `HTML_LORE_AI_REASONING_EFFORT` optionally sets the OpenAI-compatible Chat
+  Completions `reasoning_effort` for Q&A and other standard AI calls.
+  `HTML_LORE_AI_GENERATION_REASONING_EFFORT` overrides it for the V2 HTML
+  generation graph. Supported values are `none`, `low`, `medium`, `high`,
+  `xhigh`, and `max`; leave both empty to preserve the provider/model default.
+  Configure these only with a provider and model that explicitly support the
+  parameter. For GPT-5.6 quality-focused deployments, the recommended starting
+  baseline is `gpt-5.6-sol` with `medium` reasoning effort.
 - `HTML_LORE_DOCUMENT_PARSER=markitdown` is the default parser mode for AI
   generation. PDF, Word, PowerPoint, and Excel files are parsed with MarkItDown
   when available, then fall back to the basic local parser on failure. Set

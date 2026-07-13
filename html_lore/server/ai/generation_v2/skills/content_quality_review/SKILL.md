@@ -17,7 +17,7 @@ Review whether the generated HTML artifact satisfies the user's request, source 
 
 ## Role
 
-Use this skill in Verifier. The goal is not to demand perfection; it is to decide whether the artifact is useful, faithful, complete enough, and ready for safety review.
+Use this skill in Verifier. The goal is not to demand perfection; it is to decide whether the artifact is useful, faithful, complete enough, and ready for safety review. Verifier is a lightweight gate: catch clear blockers and concrete defects, but do not block solely because a theoretical exhaustive audit would require more reading.
 
 Safety scanning is handled elsewhere. Do not fail an artifact only because it lacks decorative polish.
 
@@ -57,6 +57,7 @@ The second phase may use one additional focused recall if the first recall was t
 
 After material read evidence is present, prefer a concrete validation decision based on that direct source evidence. Request more evidence only when the available tool schema explicitly allows another bounded read round and the next requested span is specific.
 After Verifier has received material read evidence, avoid falling back to broad recall. The source has already been inspected more directly; either pass the artifact, request a specific bounded span, or route a concrete defect with supporting notes.
+After Verifier has received material read evidence, do not keep asking for evidence to prove total completeness. If the artifact follows the requirement brief, plan, content draft, style brief, visual check, and sampled/direct source evidence, pass with a caveat unless you can name a concrete missing or modified source item.
 
 Do not return a final `ok: false` for unsupported claims, missing source sections, missing tables, missing figures, or uncertain omissions until you have either used Verifier recall evidence or the issue can be judged without additional source evidence.
 For non-evidence issues such as requirement mismatch, wrong representation, ignored style brief, layout breakage, or incomplete HTML, inspect the current artifacts directly and route the confirmed problem without material recall.
@@ -99,6 +100,7 @@ Pass when:
 - visual treatment improves comprehension or at least does not harm it,
 - layout choices are readable and do not introduce obvious collisions, empty-card imbalance, or background interference,
 - report depth matches the request and source complexity well enough for the target audience,
+- large faithful-adaptation outputs have no concrete confirmed omission or contradiction after available direct evidence checks,
 - remaining issues are minor and can be edited later.
 
 Do not block for:

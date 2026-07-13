@@ -264,7 +264,8 @@ AI 認証情報はサーバー側に置きます。フロントエンド設定�
 HTML_LORE_AI_ENABLED=true
 HTML_LORE_AI_PROVIDER=openai-compatible
 HTML_LORE_AI_BASE_URL=https://your-newapi.example.com/v1
-HTML_LORE_AI_MODEL=gpt-5.5
+HTML_LORE_AI_MODEL=gpt-5.6-sol
+HTML_LORE_AI_REASONING_EFFORT=medium
 HTML_LORE_AI_EMBEDDING_MODEL=baai/bge-m3
 HTML_LORE_AI_RETRIEVAL_MODE=hybrid
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
@@ -273,6 +274,13 @@ HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 デプロイ時の注意:
 
 - `HTML_LORE_AI_API_KEY` はサーバー側の chat / embedding 呼び出しだけに使います。フロントエンド設定ファイルに書かないでください。
+- `HTML_LORE_AI_REASONING_EFFORT` は Q&A など通常の Chat Completions リクエストの
+  `reasoning_effort` を任意で設定します。V2 HTML 生成では
+  `HTML_LORE_AI_GENERATION_REASONING_EFFORT` で個別に上書きできます。使用できる値は
+  `none`、`low`、`medium`、`high`、`xhigh`、`max` です。空欄の場合はこのフィールドを
+  送信せず、provider / model の既定動作を維持します。対応を明示している provider と
+  model の組み合わせでのみ設定してください。GPT-5.6 を品質優先で導入する場合は、
+  `gpt-5.6-sol + medium` を評価の開始基準として推奨します。
 - `HTML_LORE_AI_EMBEDDING_MODEL` は vector / hybrid 検索を有効にします。embedding model または index が利用できない場合、HTMlore はキーワード検索へフォールバックします。
 - `HTML_LORE_AI_QA_ENGINE=auto` がデフォルトの Q&A engine mode です。
   LangGraph ワークフローを優先し、LangGraph が利用できない場合は

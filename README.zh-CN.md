@@ -264,12 +264,14 @@ AI 凭据必须放在服务端。前端设置页可以启用服务商、配置 b
 HTML_LORE_AI_ENABLED=true
 HTML_LORE_AI_PROVIDER=openai-compatible
 HTML_LORE_AI_BASE_URL=https://your-newapi.example.com/v1
-HTML_LORE_AI_MODEL=gpt-5.5
+HTML_LORE_AI_MODEL=gpt-5.6-sol
+HTML_LORE_AI_REASONING_EFFORT=medium
 HTML_LORE_AI_EMBEDDING_MODEL=baai/bge-m3
 HTML_LORE_AI_RETRIEVAL_MODE=hybrid
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 HTML_LORE_AI_GENERATION_ENGINE=v2
-HTML_LORE_AI_GENERATION_MODEL=gpt-5.5
+HTML_LORE_AI_GENERATION_MODEL=gpt-5.6-sol
+HTML_LORE_AI_GENERATION_REASONING_EFFORT=medium
 HTML_LORE_AI_GENERATION_MAX_TOKENS=12000
 HTML_LORE_AI_GENERATION_JSON_MAX_TOKENS=5000
 HTML_LORE_AI_GENERATION_HTML_MAX_TOKENS=12000
@@ -282,6 +284,11 @@ HTML_LORE_AI_EMBEDDING_TIMEOUT_SECONDS=45
 部署注意事项：
 
 - `HTML_LORE_AI_API_KEY` 只供服务端调用 chat 和 embedding，不要写入前端配置文件。
+- `HTML_LORE_AI_REASONING_EFFORT` 可选地为问答等通用 Chat Completions 请求设置
+  `reasoning_effort`；`HTML_LORE_AI_GENERATION_REASONING_EFFORT` 可单独覆盖 V2
+  HTML 生成工作流。可用值为 `none`、`low`、`medium`、`high`、`xhigh`、`max`；留空时
+  不发送该字段，保持服务商或模型默认行为。仅在所选服务商与模型明确支持该参数时设置。
+  GPT-5.6 的质量优先部署建议从 `gpt-5.6-sol + medium` 这一基线开始评测。
 - `HTML_LORE_AI_EMBEDDING_MODEL` 用于启用 vector / hybrid 检索；embedding 模型或索引不可用时，HTMlore 会回退到关键词检索。
 - `HTML_LORE_AI_QA_ENGINE=auto` 是默认问答引擎模式：优先使用 LangGraph
   工作流；如果 LangGraph 不可用，则回退到 `agent_runtime`。开发排查时可用

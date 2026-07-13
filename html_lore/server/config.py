@@ -5,6 +5,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 
+AI_REASONING_EFFORTS = frozenset({"none", "low", "medium", "high", "xhigh", "max"})
+
+
 @dataclass(frozen=True)
 class ServerSettings:
     content_dir: Path
@@ -27,6 +30,7 @@ class ServerSettings:
     ai_base_url: str = ""
     ai_api_key: str = ""
     ai_model: str = ""
+    ai_reasoning_effort: str = ""
     ai_embedding_model: str = ""
     ai_enabled: bool = False
     ai_external_search: str = ""
@@ -50,6 +54,7 @@ class ServerSettings:
     ai_qa_engine: str = "auto"
     ai_generation_engine: str = "legacy"
     ai_generation_model: str = "gpt-5.5"
+    ai_generation_reasoning_effort: str = ""
     ai_generation_max_tokens: int = 12000
     ai_generation_json_max_tokens: int = 5000
     ai_generation_html_max_tokens: int = 12000
@@ -108,6 +113,7 @@ def load_settings() -> ServerSettings:
     ai_base_url = get_env("AI_BASE_URL", "").strip()
     ai_api_key = get_env("AI_API_KEY", "")
     ai_model = get_env("AI_MODEL", "").strip()
+    ai_reasoning_effort = parse_choice(get_env("AI_REASONING_EFFORT", ""), set(AI_REASONING_EFFORTS), "")
     ai_embedding_model = get_env("AI_EMBEDDING_MODEL", "").strip()
     ai_enabled = parse_bool(get_env("AI_ENABLED", "false"))
     ai_external_search = get_env("AI_EXTERNAL_SEARCH", "").strip()
@@ -131,6 +137,11 @@ def load_settings() -> ServerSettings:
     ai_qa_engine = parse_choice(get_env("AI_QA_ENGINE", "auto"), {"auto", "agent_runtime", "langgraph"}, "auto")
     ai_generation_engine = parse_choice(get_env("AI_GENERATION_ENGINE", "legacy"), {"legacy", "v2"}, "legacy")
     ai_generation_model = get_env("AI_GENERATION_MODEL", "gpt-5.5").strip() or "gpt-5.5"
+    ai_generation_reasoning_effort = parse_choice(
+        get_env("AI_GENERATION_REASONING_EFFORT", ""),
+        set(AI_REASONING_EFFORTS),
+        "",
+    )
     ai_generation_max_tokens = parse_positive_int(get_env("AI_GENERATION_MAX_TOKENS", "12000"), 12000)
     ai_generation_json_max_tokens = parse_positive_int(get_env("AI_GENERATION_JSON_MAX_TOKENS", str(min(ai_generation_max_tokens, 5000))), min(ai_generation_max_tokens, 5000))
     ai_generation_html_max_tokens = parse_positive_int(get_env("AI_GENERATION_HTML_MAX_TOKENS", str(ai_generation_max_tokens)), ai_generation_max_tokens)
@@ -161,6 +172,7 @@ def load_settings() -> ServerSettings:
         ai_base_url=ai_base_url,
         ai_api_key=ai_api_key,
         ai_model=ai_model,
+        ai_reasoning_effort=ai_reasoning_effort,
         ai_embedding_model=ai_embedding_model,
         ai_enabled=ai_enabled,
         ai_external_search=ai_external_search,
@@ -184,6 +196,7 @@ def load_settings() -> ServerSettings:
         ai_qa_engine=ai_qa_engine,
         ai_generation_engine=ai_generation_engine,
         ai_generation_model=ai_generation_model,
+        ai_generation_reasoning_effort=ai_generation_reasoning_effort,
         ai_generation_max_tokens=ai_generation_max_tokens,
         ai_generation_json_max_tokens=ai_generation_json_max_tokens,
         ai_generation_html_max_tokens=ai_generation_html_max_tokens,

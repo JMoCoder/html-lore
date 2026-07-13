@@ -571,7 +571,11 @@ class AIConversationService:
         from dataclasses import replace
 
         base_config = self.provider_store.get()
-        config = replace(base_config, model=self.settings.ai_generation_model or base_config.model)
+        config = replace(
+            base_config,
+            model=self.settings.ai_generation_model or base_config.model,
+            reasoning_effort=self.settings.ai_generation_reasoning_effort or base_config.reasoning_effort,
+        )
         if config.provider == "fake":
             return FakeGenerationModelClient()
         generation_prompt_chars = max(self.settings.ai_max_prompt_chars, 48000)

@@ -276,7 +276,36 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
         "reference_file_name": state.input.reference_file_name,
         "target_collection": state.input.target_collection,
     }
-    if node in {"Verifier", "SafetyReviewer", "Finalizer"}:
+    if node == "Verifier":
+        state_view = {
+            "input": common_input,
+            "material_status": material_status,
+            "material_read_results": material_read_results,
+            "html_draft": compact_html_draft(state.html_draft),
+            "visual_check_report": public_value(state.visual_check_report),
+            "material_recall_results": material_recall_results,
+            "temporary_material_context": compact_temporary_material_context(material_context),
+            "requirement_brief": public_value(state.requirement_brief),
+            "plan_draft": compact_plan_draft(state.plan_draft),
+            "content_draft": compact_content_draft(state.content_draft),
+            "style_brief": compact_style_brief(state.style_brief),
+            "validation_report": public_value(state.validation_report),
+            "safety_report": public_value(state.safety_report),
+            "parsed_document": compact_parsed_document(parsed),
+            "execution_checklist": public_value(state.execution_checklist),
+            "revision_round": state.revision_round,
+        }
+        if state.same_node_retries.get("VerifierProtocol", 0) > 0:
+            state_view["verifier_protocol_feedback"] = {
+                "retry_count": state.same_node_retries.get("VerifierProtocol", 0),
+                "invalid_previous_output": (
+                    "The previous ValidationReport did not follow the verifier protocol. "
+                    "Do not return request_evidence without focused material_queries or material_read_requests. "
+                    "If Verifier material_read_results are already present, do not request evidence again; "
+                    "return pass, request_revision with a concrete route_back_to, or blocked."
+                ),
+            }
+    elif node in {"SafetyReviewer", "Finalizer"}:
         state_view = {
             "input": common_input,
             "html_draft": compact_html_draft(state.html_draft),
@@ -575,7 +604,11 @@ def compact_material_read_results(results: list[Any], *, node: str = "") -> list
         data = public_value(result)
         if not isinstance(data, dict) or str(data.get("agent") or "") not in visible_agents:
             continue
-        key = (str(data.get("agent") or ""), str(data.get("file_id") or data.get("filename") or ""), int(data.get("offset") or 0))
+        key = (
+            str(data.get("file_id") or data.get("filename") or ""),
+            int(data.get("offset") or 0),
+            int(data.get("end_offset") or 0),
+        )
         if key in seen:
             continue
         seen.add(key)

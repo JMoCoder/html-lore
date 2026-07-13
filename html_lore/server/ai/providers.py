@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from html_lore.server.config import ServerSettings
+from html_lore.server.config import AI_REASONING_EFFORTS, ServerSettings
 
 
 SUPPORTED_PROVIDERS = {"fake", "openai-compatible"}
@@ -28,6 +28,7 @@ class AIProviderConfig:
     provider: str = ""
     base_url: str = ""
     model: str = "gpt-5.5"
+    reasoning_effort: str = ""
     embedding_model: str = ""
     enabled: bool = False
     secret_ref: str = "env:HTML_LORE_AI_API_KEY"
@@ -48,6 +49,7 @@ class AIProviderConfig:
             "provider": self.provider,
             "base_url": self.base_url,
             "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
             "embedding_model": self.embedding_model,
             "enabled": self.enabled,
             "configured": self.configured,
@@ -67,6 +69,7 @@ class AIProviderConfigStore:
         provider = str(stored.get("provider") or "").strip()
         base_url = str(stored.get("base_url") or "").strip()
         model = str(stored.get("model") or "").strip()
+        reasoning_effort = normalize_reasoning_effort(stored.get("reasoning_effort"))
         embedding_model = str(stored.get("embedding_model") or "").strip()
         enabled = bool(stored.get("enabled", False))
 
@@ -76,6 +79,8 @@ class AIProviderConfigStore:
             base_url = self.settings.ai_base_url
         if self.settings.ai_model:
             model = self.settings.ai_model
+        if self.settings.ai_reasoning_effort:
+            reasoning_effort = self.settings.ai_reasoning_effort
         if self.settings.ai_embedding_model:
             embedding_model = self.settings.ai_embedding_model
         if self.settings.ai_enabled:
@@ -85,6 +90,7 @@ class AIProviderConfigStore:
             provider=provider,
             base_url=base_url,
             model=model or "gpt-5.5",
+            reasoning_effort=reasoning_effort,
             embedding_model=embedding_model,
             enabled=enabled,
             api_key=self.settings.ai_api_key,
@@ -99,6 +105,7 @@ class AIProviderConfigStore:
         provider = normalize_provider(values.get("provider", current.provider))
         base_url = normalize_text(values.get("base_url", current.base_url))
         model = normalize_text(values.get("model", current.model)) or "gpt-5.5"
+        reasoning_effort = normalize_reasoning_effort(values.get("reasoning_effort", current.reasoning_effort))
         embedding_model = normalize_text(values.get("embedding_model", current.embedding_model))
         enabled = bool(values.get("enabled", current.enabled))
         if "api_key" in values:
@@ -107,6 +114,7 @@ class AIProviderConfigStore:
             "provider": provider,
             "base_url": base_url,
             "model": model,
+            "reasoning_effort": reasoning_effort,
             "embedding_model": embedding_model,
             "enabled": enabled,
             "secret_ref": "env:HTML_LORE_AI_API_KEY",
@@ -163,6 +171,9 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
             "max_tokens": max_tokens,
             "stream": True,
         }
+        reasoning_effort = normalize_reasoning_effort(self.config.reasoning_effort)
+        if reasoning_effort:
+            payload["reasoning_effort"] = reasoning_effort
         body = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             chat_completions_url(self.config.base_url),
@@ -172,7 +183,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.1.16 curl-compatible",
+                "User-Agent": "HTMlore/1.2.0 curl-compatible",
                 "Accept": "application/json, text/event-stream",
             },
         )
@@ -210,7 +221,7 @@ class OpenAICompatibleHttpAdapter(ProviderAdapter):
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Content-Length": str(len(body)),
-                "User-Agent": "HTMlore/1.1.16 curl-compatible",
+                "User-Agent": "HTMlore/1.2.0 curl-compatible",
                 "Accept": "application/json",
             },
         )
@@ -254,6 +265,15 @@ def normalize_provider(value: Any) -> str:
 
 def normalize_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def normalize_reasoning_effort(value: Any) -> str:
+    effort = normalize_text(value).lower()
+    if not effort:
+        return ""
+    if effort not in AI_REASONING_EFFORTS:
+        raise AIProviderConfigError("Unsupported AI reasoning effort.")
+    return effort
 
 
 def build_adapter(config: AIProviderConfig) -> ProviderAdapter:
