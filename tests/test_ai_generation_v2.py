@@ -342,6 +342,8 @@ def test_generation_v2_skill_loader_uses_frontmatter_metadata_and_strips_it() ->
     assert registry_items["html_page_design"].version == "0.2.0"
     assert registry_items["safe_static_html"].title == "Safe static HTML"
     assert registry_items["content_quality_review"].description.startswith("Use when verifying")
+    assert registry_items["minimal_style_design"].planner_selectable is False
+    assert registry_items["magazine_style_design"].title == "Magazine style design"
 
 
 def test_generation_v2_planner_payload_exposes_registered_skills_and_tools() -> None:
@@ -355,6 +357,8 @@ def test_generation_v2_planner_payload_exposes_registered_skills_and_tools() -> 
     assert "architecture_explainer_design" in skill_ids
     assert "component_pattern_html" in skill_ids
     assert "source_extractive_conversion" not in skill_ids
+    assert "minimal_style_design" not in skill_ids
+    assert "business_style_design" not in skill_ids
     assert "material_read" in tool_ids
     assert "browser_visual_check" in tool_ids
     assert all(item["kind"] == "skill" and item["planner_selectable"] for item in catalog["skills"])
@@ -383,6 +387,11 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     presentation = load_skill_by_id("presentation_surface_design").content
     architecture = load_skill_by_id("architecture_explainer_design").content
     components = load_skill_by_id("component_pattern_html").content
+    minimal = load_skill_by_id("minimal_style_design").content
+    business = load_skill_by_id("business_style_design").content
+    tech = load_skill_by_id("tech_style_design").content
+    retro = load_skill_by_id("retro_style_design").content
+    magazine = load_skill_by_id("magazine_style_design").content
 
     assert "First Decide The Surface" in design
     assert "Layout Patterns" in design
@@ -428,6 +437,9 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
     assert "footer/page-number zone" in presentation
     assert "previous / directory / next" in presentation
     assert "`首页`, `目录`, `提示`, `末页`" in presentation
+    assert "Deck Grammar And Whole-Artifact Rhythm" in presentation
+    assert "content-led repertoire" in presentation
+    assert "safe static HTML" in presentation
 
     report = load_skill_by_id("report_surface_design").content
     assert "Report Surface Design Skill" in report
@@ -468,6 +480,26 @@ def test_generation_v2_default_skill_smoke_evals_cover_expected_contracts() -> N
 
     assert "Component Pattern HTML Skill" in components
     assert "process-flow" in components
+
+    assert "Minimal Style Design Skill" in minimal
+    assert "Treat whitespace as a relationship tool" in minimal
+    assert "unfinished" in minimal
+
+    assert "Business Style Design Skill" in business
+    assert "decision or scanning task" in business
+    assert "corporate color scheme" in business
+
+    assert "Tech Style Design Skill" in tech
+    assert "technical motifs" in tech
+    assert "Implying live system status" in tech
+
+    assert "Retro Style Design Skill" in retro
+    assert "period-inspired" in retro
+    assert "coherent visual language" in retro
+
+    assert "Magazine Style Design Skill" in magazine
+    assert "Create a reading rhythm" in magazine
+    assert "fake feature story" in magazine
     assert "responsive-table" in components
     assert "boundary-table" in components
     assert "selected layout system" in components
@@ -582,14 +614,22 @@ def test_generation_v2_skill_router_loads_optional_capability_skills() -> None:
 
 
 def test_generation_v2_skill_router_maps_explicit_generation_options() -> None:
-    state = GenerationState(input=GenerationInput(target_use="ppt", style_preference="magazine"))
+    for preference, style_skill in (
+        ("minimal", "minimal_style_design"),
+        ("business", "business_style_design"),
+        ("tech", "tech_style_design"),
+        ("retro", "retro_style_design"),
+        ("magazine", "magazine_style_design"),
+    ):
+        state = GenerationState(input=GenerationInput(target_use="ppt", style_preference=preference))
 
-    assert planned_skill_ids_for_agent("StyleDesigner", state) == ("presentation_surface_design", "magazine_style_design")
-    assert planned_skill_ids_for_agent("HTMLCoder", state) == ()
-    assert [skill.id for skill in resolve_skills_for_agent("StyleDesigner", state)] == [
-        "html_page_design",
-        "presentation_surface_design",
-    ]
+        assert planned_skill_ids_for_agent("StyleDesigner", state) == ("presentation_surface_design", style_skill)
+        assert planned_skill_ids_for_agent("HTMLCoder", state) == ()
+        assert [skill.id for skill in resolve_skills_for_agent("StyleDesigner", state)] == [
+            "html_page_design",
+            "presentation_surface_design",
+            style_skill,
+        ]
 
     report_state = GenerationState(input=GenerationInput(target_use="report"))
 

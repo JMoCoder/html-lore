@@ -81,6 +81,20 @@ The output is HTML, but each major presentation section should behave like a sta
 - Preserve content hierarchy when the viewport shrinks. Mobile should become a clean stacked talk track, not a broken slide.
 - Do not add visible presenter-only instructions. If speaker notes are generated later, they belong in hidden or clearly separated metadata, not on the audience-facing surface.
 
+## Deck Grammar And Whole-Artifact Rhythm
+
+Treat the deck as a coherent visual system before treating it as a sequence of individual scenes.
+
+- Define a small shared visual grammar: typography roles, color tokens, surface treatment, divider behavior, label style, and footer/page metadata. HTMLCoder should reuse that grammar rather than inventing a new visual system for each scene.
+- Build a content-led repertoire of scene roles, such as opening, chapter transition, central claim, evidence, comparison, process, architecture, summary, and appendix. Use only the roles the source needs; this is a repertoire, not a mandatory deck outline.
+- Let each scene select its composition from its message and density. Reuse the shared grammar while varying composition enough that a long deck does not become a repeated card grid.
+- Keep title, content, navigation, and footer zones stable enough for orientation. Let tables, diagrams, timelines, and high-density evidence widen or grow within the browser canvas when that improves comprehension.
+- Use content-aware layout rather than a fixed slide template. A focused claim may have generous space; a decision matrix may need a wider, denser scene; detailed source material may belong in an appendix-like section.
+- Carry visual consistency across the entire artifact: a scene should not introduce a new palette, type hierarchy, component radius, or decoration language without a content-based reason.
+- Before delivery, review the deck as a sequence: opening context, section transitions, repeated elements, visual variety, information density, and closing or handoff should all feel intentional.
+
+Do not import a deck runtime, theme catalog, external assets, or presenter framework merely to achieve this rhythm. The current output remains safe static HTML.
+
 ## Static Navigation
 
 For shareable HTML presentations, consider a lightweight global navigation aid:
@@ -190,3 +204,5 @@ StyleBrief should include:
 - Are titles, badges, numbers, arrows, and decorative marks free from collision?
 - Does mobile degrade into a readable talk track instead of broken slides?
 - Is the page visually strong without requiring unsupported runtime, controls, or animation?
+- Does the full artifact reuse one visual grammar while allowing composition to follow each scene's content density?
+- Are scene roles chosen from the material rather than copied from a default pitch-deck template?

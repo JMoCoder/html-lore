@@ -50,6 +50,51 @@
       "path": "webpage_surface_design/SKILL.md"
     },
     {
+      "id": "minimal_style_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["minimal", "restrained", "quiet", "clean", "calm"],
+      "source": "local",
+      "path": "minimal_style_design/SKILL.md"
+    },
+    {
+      "id": "business_style_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["business", "executive", "decision", "credible", "professional"],
+      "source": "local",
+      "path": "business_style_design/SKILL.md"
+    },
+    {
+      "id": "tech_style_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["tech", "technical", "system", "engineering", "developer"],
+      "source": "local",
+      "path": "tech_style_design/SKILL.md"
+    },
+    {
+      "id": "retro_style_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["retro", "vintage", "analogue", "archival", "nostalgic"],
+      "source": "local",
+      "path": "retro_style_design/SKILL.md"
+    },
+    {
+      "id": "magazine_style_design",
+      "applies_to_agents": ["StyleDesigner"],
+      "default_enabled": false,
+      "planner_selectable": false,
+      "trigger_keywords": ["magazine", "editorial", "publication", "feature", "article"],
+      "source": "local",
+      "path": "magazine_style_design/SKILL.md"
+    },
+    {
       "id": "architecture_explainer_design",
       "applies_to_agents": ["StyleDesigner", "HTMLCoder"],
       "default_enabled": false,

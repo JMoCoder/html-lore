@@ -54,6 +54,8 @@ def planned_skill_ids_for_agent(agent_name: str, state: GenerationState) -> tupl
     for item in iter_skill_registry_items():
         if item.default_enabled:
             continue
+        if not item.planner_selectable:
+            continue
         if agent_name not in item.applies_to_agents:
             continue
         if any(tool_need_matches_skill(need, item.id, item.trigger_keywords) for need in needs):
