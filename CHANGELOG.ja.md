@@ -12,6 +12,7 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 - Requirement analysis は generic material capability facts から continue、degraded、blocked を明示的に判断します。checkpoint は private workspace に structured workbook data を一度だけ保持し、resume 時に復元します。
 - Quality の基準を緩めず、Verifier が direct workbook / material evidence を得た後の判断を収束させました。
+- CI の browser check は Playwright 1.61.1 とその固定 Chromium を使うようにし、変動する system Chrome channel への依存をなくしました。
 
 ## [1.2.0] - 2026-07-13
 

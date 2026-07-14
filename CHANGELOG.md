@@ -17,6 +17,7 @@ versioning after the initial public release.
 
 - Requirement analysis now makes an explicit continue, degraded, or blocked decision from generic material capability facts; checkpoints retain structured workbook data once per private workspace and restore it for resumable jobs.
 - Tightened Verifier evidence convergence after direct workbook or material reads without relaxing quality requirements.
+- Stabilized CI browser checks by using Playwright 1.61.1 and its pinned Chromium instead of the mutable system Chrome channel.
 
 ## [1.2.0] - 2026-07-13
 
