@@ -36,6 +36,7 @@ class ContentWriterAgent(GenerationAgent):
             "material_queries": [] if any(result.agent == "ContentWriter" for result in state.material_recall_results) else [{"id": "content_evidence", "query": first_non_empty(goal, state.input.instruction, "source evidence for planned sections"), "purpose": "Collect evidence needed to write the planned sections."}],
             "material_read_requests": [],
             "evidence_used": [result.query for result in state.material_recall_results if result.agent in {"RequirementAnalyst", "ContentWriter"}],
+            "workbook_inspect_requests": [],
         }
 
     def apply_output(self, state, output):
@@ -89,4 +90,5 @@ def faithful_read_request_payload(goal: str, material, mode: str) -> dict:
             }
         ],
         "evidence_used": [],
+        "workbook_inspect_requests": [],
     }

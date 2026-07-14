@@ -70,6 +70,12 @@ class VerifierAction(TextEnum):
     BLOCKED = "blocked"
 
 
+class RequirementDecision(TextEnum):
+    CONTINUE = "continue"
+    DEGRADED = "degraded"
+    BLOCKED = "blocked"
+
+
 class ChecklistStatus(TextEnum):
     PENDING = "pending"
     RUNNING = "running"
@@ -179,6 +185,53 @@ class ParsedMaterialItem:
 
 
 @dataclass(frozen=True)
+class MaterialCapability:
+    id: str = ""
+    status: str = "unknown"
+    count: int = 0
+    detail: str = ""
+    file_id: str = ""
+    filename: str = ""
+    file_index: int = 0
+
+
+@dataclass(frozen=True)
+class SpreadsheetCell:
+    coordinate: str = ""
+    value: Any = None
+    formula: str = ""
+    cached_value: Any = None
+    data_type: str = ""
+    number_format: str = ""
+
+
+@dataclass(frozen=True)
+class SpreadsheetSheet:
+    title: str = ""
+    state: str = "visible"
+    max_row: int = 0
+    max_column: int = 0
+    merged_ranges: list[str] = field(default_factory=list)
+    hidden_rows: list[int] = field(default_factory=list)
+    hidden_columns: list[str] = field(default_factory=list)
+    cells: list[SpreadsheetCell] = field(default_factory=list)
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
+class SpreadsheetWorkbook:
+    file_id: str = ""
+    file_index: int = 0
+    filename: str = ""
+    sheets: list[SpreadsheetSheet] = field(default_factory=list)
+    defined_names: list[dict[str, Any]] = field(default_factory=list)
+    external_links: list[str] = field(default_factory=list)
+    cell_count: int = 0
+    formula_count: int = 0
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
 class ParsedDocument:
     source_files: list[SourceFile] = field(default_factory=list)
     plain_text: str = ""
@@ -189,6 +242,8 @@ class ParsedDocument:
     style_hints: list[StyleHint] = field(default_factory=list)
     warnings: list[ParseWarning] = field(default_factory=list)
     materials: list[ParsedMaterialItem] = field(default_factory=list)
+    capabilities: list[MaterialCapability] = field(default_factory=list)
+    workbooks: list[SpreadsheetWorkbook] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -283,6 +338,33 @@ class MaterialReadResult:
 
 
 @dataclass(frozen=True)
+class WorkbookInspectRequest:
+    id: str = ""
+    action: str = "list_sheets"
+    file_id: str = ""
+    filename: str = ""
+    sheet: str = ""
+    cell_range: str = ""
+    coordinate: str = ""
+    query: str = ""
+    limit: int = 200
+    purpose: str = ""
+
+
+@dataclass(frozen=True)
+class WorkbookInspectResult:
+    agent: str = ""
+    request_id: str = ""
+    action: str = ""
+    file_id: str = ""
+    filename: str = ""
+    sheet: str = ""
+    records: list[dict[str, Any]] = field(default_factory=list)
+    truncated: bool = False
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class RequirementBrief:
     user_goal: str = ""
     target_use: str = "default"
@@ -299,6 +381,11 @@ class RequirementBrief:
     uncertainty: list[str] = field(default_factory=list)
     material_queries: list[MaterialQuery] = field(default_factory=list)
     material_read_requests: list[MaterialReadRequest] = field(default_factory=list)
+    workbook_inspect_requests: list[WorkbookInspectRequest] = field(default_factory=list)
+    decision: RequirementDecision = RequirementDecision.CONTINUE
+    decision_reason: str = ""
+    capability_gaps: list[str] = field(default_factory=list)
+    accepted_degradations: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -383,6 +470,7 @@ class ContentDraft:
     material_queries: list[MaterialQuery] = field(default_factory=list)
     material_read_requests: list[MaterialReadRequest] = field(default_factory=list)
     evidence_used: list[str] = field(default_factory=list)
+    workbook_inspect_requests: list[WorkbookInspectRequest] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -493,6 +581,7 @@ class ValidationReport:
     retry_instruction: str = ""
     material_queries: list[MaterialQuery] = field(default_factory=list)
     material_read_requests: list[MaterialReadRequest] = field(default_factory=list)
+    workbook_inspect_requests: list[WorkbookInspectRequest] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -587,6 +676,7 @@ class GenerationState:
     temporary_material_context: TemporaryMaterialContext | None = None
     material_recall_results: list[MaterialRecallResult] = field(default_factory=list)
     material_read_results: list[MaterialReadResult] = field(default_factory=list)
+    workbook_inspect_results: list[WorkbookInspectResult] = field(default_factory=list)
     parsed_style_reference: ParsedDocument | None = None
     requirement_brief: RequirementBrief | None = None
     plan_draft: PlanDraft | None = None

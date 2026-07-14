@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .schemas import GenerationState, VerifierAction
+from .schemas import GenerationState, RequirementDecision, VerifierAction
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,8 @@ class GenerationOrchestrator:
             return OrchestratorDecision(next_node="ingest", reason="Document has not been parsed.")
         if state.requirement_brief is None:
             return OrchestratorDecision(next_node="requirement_analyst", reason="Requirement brief is missing.")
+        if state.requirement_brief.decision == RequirementDecision.BLOCKED:
+            return OrchestratorDecision(next_node="requirement_blocked", reason=state.requirement_brief.decision_reason or "Required source capabilities are unavailable.")
         if state.plan_draft is None:
             return OrchestratorDecision(next_node="planner", reason="Plan draft is missing.")
         if state.content_draft is None:
@@ -56,7 +58,15 @@ class GenerationOrchestrator:
         if action == VerifierAction.PASS:
             return "verifier"
         if action == VerifierAction.REQUEST_EVIDENCE:
-            has_evidence_request = bool(getattr(report, "material_queries", None) or getattr(report, "material_read_requests", None))
+            has_evidence_request = bool(getattr(report, "material_queries", None) or getattr(report, "material_read_requests", None) or getattr(report, "workbook_inspect_requests", None))
+            direct_evidence_exhausted = bool(
+                any(result.agent == "Verifier" for result in state.material_read_results)
+                or any(result.agent == "Verifier" for result in state.workbook_inspect_results)
+            )
+            if direct_evidence_exhausted:
+                if state.same_node_retries.get("VerifierProtocol", 0) < self.max_verifier_protocol_retries:
+                    return "verifier_protocol_retry"
+                return "verifier_invalid_output"
             if not has_evidence_request:
                 if state.same_node_retries.get("VerifierProtocol", 0) < self.max_verifier_protocol_retries:
                     return "verifier_protocol_retry"
@@ -89,7 +99,7 @@ def verifier_action(report) -> VerifierAction:
         action = VerifierAction(str(action or ""))
     except ValueError:
         action = None
-    has_evidence_request = bool(getattr(report, "material_queries", None) or getattr(report, "material_read_requests", None))
+    has_evidence_request = bool(getattr(report, "material_queries", None) or getattr(report, "material_read_requests", None) or getattr(report, "workbook_inspect_requests", None))
     if action is None:
         if report.ok:
             return VerifierAction.PASS

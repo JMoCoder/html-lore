@@ -9,6 +9,15 @@ versioning after the initial public release.
 
 ## [Unreleased]
 
+### Added
+
+- Added formula-aware `.xlsx` parsing that preserves workbook structure and exposes bounded read-only workbook inspection to the requirement, content, and verification agents.
+
+### Changed
+
+- Requirement analysis now makes an explicit continue, degraded, or blocked decision from generic material capability facts; checkpoints retain structured workbook data once per private workspace and restore it for resumable jobs.
+- Tightened Verifier evidence convergence after direct workbook or material reads without relaxing quality requirements.
+
 ## [1.2.0] - 2026-07-13
 
 ### Added

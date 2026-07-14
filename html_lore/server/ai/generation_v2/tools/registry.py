@@ -32,6 +32,14 @@ _TOOL_REGISTRY: tuple[ToolRegistryItem, ...] = (
         trigger_keywords=("full source", "faithful conversion", "exact wording", "outline", "span", "source completeness"),
     ),
     ToolRegistryItem(
+        id="workbook_inspect",
+        title="Workbook inspect",
+        description="Inspect task-local workbook sheets, ranges, formulas, cached values, and formula references without executing workbook code or external links.",
+        available_to_agents=("RequirementAnalyst", "ContentWriter", "Verifier"),
+        request_field="workbook_inspect_requests",
+        trigger_keywords=("workbook", "sheet", "cell", "range", "formula", "named range", "spreadsheet evidence"),
+    ),
+    ToolRegistryItem(
         id="document_parser",
         title="Document parser",
         description="Runtime ingest tool that parses uploaded material with MarkItDown or basic fallback before agents run.",

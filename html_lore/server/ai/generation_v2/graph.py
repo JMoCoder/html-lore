@@ -79,6 +79,10 @@ class HtmlGenerationV2Graph:
                 continue
             if decision.next_node in {"verifier_invalid_output", "verifier_blocked"}:
                 return replace(next_state, failed_steps=[*next_state.failed_steps, decision.next_node])
+            if decision.next_node == "requirement_blocked":
+                blocked_state = start_stage(next_state, GenerationStage.ANALYZING_REQUIREMENTS, agent="RequirementAnalyst", message="Requirement decision blocked generation.")
+                blocked_state = fail_stage(blocked_state, GenerationStage.ANALYZING_REQUIREMENTS, message=decision.reason, retryable=False, metadata={"requirement_decision": "blocked"})
+                return replace(blocked_state, current_step=GenerationStage.FAILED.value, failed_steps=[*blocked_state.failed_steps, decision.next_node])
             if decision.next_node == "ingest":
                 next_state = self.run_ingest(next_state)
                 self.emit_state(next_state)
@@ -237,6 +241,8 @@ def merge_parsed_documents(items: list[ParsedDocument]) -> ParsedDocument:
     style_hints = []
     warnings = []
     materials = []
+    capabilities = []
+    workbooks = []
     cursor = 0
     for index, item in enumerate(annotated_items, start=1):
         source_files.extend(item.source_files)
@@ -268,6 +274,8 @@ def merge_parsed_documents(items: list[ParsedDocument]) -> ParsedDocument:
         tables.extend(item.tables)
         style_hints.extend(item.style_hints)
         warnings.extend(item.warnings)
+        capabilities.extend(item.capabilities)
+        workbooks.extend(item.workbooks)
     warnings.append(ParseWarning(code="multiple_materials", message=f"Parsed {len(items)} uploaded material files.", severity="info"))
     return ParsedDocument(
         source_files=source_files,
@@ -279,6 +287,8 @@ def merge_parsed_documents(items: list[ParsedDocument]) -> ParsedDocument:
         style_hints=style_hints,
         warnings=warnings,
         materials=materials,
+        capabilities=capabilities,
+        workbooks=workbooks,
     )
 
 
@@ -299,6 +309,8 @@ def annotate_parsed_material(item: ParsedDocument, index: int) -> ParsedDocument
         images=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.images],
         links=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.links],
         tables=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.tables],
+        capabilities=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.capabilities],
+        workbooks=[replace(entry, file_id=entry.file_id or file_id, filename=entry.filename or filename, file_index=entry.file_index or index) for entry in item.workbooks],
         materials=[],
     )
 

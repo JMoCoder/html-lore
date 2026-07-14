@@ -4,6 +4,15 @@ Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](
 
 ## [Unreleased]
 
+### Added
+
+- 数式を意識した `.xlsx` parser を追加し、workbook structure を保持するとともに、requirement / content / verification agent に境界付き read-only workbook inspection を提供しました。
+
+### Changed
+
+- Requirement analysis は generic material capability facts から continue、degraded、blocked を明示的に判断します。checkpoint は private workspace に structured workbook data を一度だけ保持し、resume 時に復元します。
+- Quality の基準を緩めず、Verifier が direct workbook / material evidence を得た後の判断を収束させました。
+
 ## [1.2.0] - 2026-07-13
 
 ### 追加

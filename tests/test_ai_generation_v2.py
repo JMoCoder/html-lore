@@ -4,7 +4,11 @@ import json
 import os
 import time
 from dataclasses import fields
+from io import BytesIO
 from pathlib import Path
+
+from openpyxl import Workbook
+from openpyxl.workbook.defined_name import DefinedName
 
 from html_lore.server.ai.generation_v2.agents.requirement_analyst import RequirementAnalystAgent
 from html_lore.server.ai.generation_v2.agents.html_coder import HTMLCoderAgent
@@ -22,7 +26,7 @@ from html_lore.server.ai.generation_v2.model_client import ProviderGenerationMod
 from html_lore.server.ai.generation_v2.model_profile import DEFAULT_GENERATION_MODEL, GenerationModelProfile
 from html_lore.server.ai.generation_v2.orchestrator import GenerationOrchestrator
 from html_lore.server.ai.generation_v2.schema_loader import AgentOutputSchemaError, dataclass_from_dict
-from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, DocumentImage, DocumentLink, DocumentTable, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, MaterialReadRequest, MaterialReadResult, NoteMetadataProposal, OutlineItem, ParsedDocument, PlanDraft, RequirementBrief, SourceFile, SourceHandlingMode, SkillTraceEntry, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport, VerifierAction
+from html_lore.server.ai.generation_v2.schemas import ChecklistItem, ChecklistStatus, ContentDraft, ContentSection, CreateNoteProposal, DesignMode, DocumentImage, DocumentLink, DocumentTable, GenerationInput, GenerationJobStatus, GenerationStage, GenerationState, HtmlDraft, MaterialQuery, MaterialReadRequest, MaterialReadResult, NoteMetadataProposal, OutlineItem, ParsedDocument, PlanDraft, RequirementBrief, RequirementDecision, SourceFile, SourceHandlingMode, SkillTraceEntry, SpreadsheetCell, SpreadsheetSheet, SpreadsheetWorkbook, StageTraceEvent, StyleBrief, ToolNeed, ValidationReport, VerifierAction, WorkbookInspectRequest, WorkbookInspectResult
 from html_lore.server.ai.generation_v2.skill_router import planned_skill_ids_for_agent, resolve_skills_for_agent
 from html_lore.server.ai.generation_v2.skills.loader import iter_skill_registry_items, load_default_skills_for_agent, load_skill_by_id
 from html_lore.server.ai.generation_v2.state import complete_stage, start_stage
@@ -33,6 +37,7 @@ from html_lore.server.ai.generation_v2.tools.document_parser import parse_docume
 from html_lore.server.ai.generation_v2.tools.html_safety import scan_html_safety
 from html_lore.server.ai.generation_v2.tools.style_hint_extractor import extract_style_hints
 from html_lore.server.ai.generation_v2.tools.visual_check import run_visual_check
+from html_lore.server.ai.generation_v2.workbook_inspect import inspect_workbook
 from html_lore.server.ai.generation_v2.write_gateway import WriteGateway, WriteGatewayError
 from html_lore.server.ai.html_generation import GenerationSpec
 from html_lore.server.ai.jobs import AIJobStore
@@ -106,6 +111,38 @@ def test_generation_v2_checkpoint_roundtrip_omits_raw_upload_bytes(tmp_path: Pat
     assert retry_state.failed_steps == []
     assert retry_state.same_node_retries["ContentWriter"] == 0
     assert retry_state.run_id != restored.run_id
+
+
+def test_generation_v2_checkpoint_stores_workbook_once_and_restores_it(tmp_path: Path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    state = GenerationState(
+        job_id="ai_job_checkpoint_workbook",
+        parsed_document=ParsedDocument(
+            plain_text="Workbook source",
+            workbooks=[
+                SpreadsheetWorkbook(
+                    file_id="file-1",
+                    filename="model.xlsx",
+                    sheets=[SpreadsheetSheet(title="Model", cells=[SpreadsheetCell(coordinate="C1", formula="=B1*2")])],
+                )
+            ],
+        ),
+    )
+
+    checkpoint_path = write_state_checkpoint(settings, state, job_id=state.job_id)
+    checkpoint_text = (settings.meta_dir / checkpoint_path).read_text(encoding="utf-8")
+    restored = read_state_checkpoint(settings, checkpoint_path)
+
+    assert '"workbooks": []' in checkpoint_text
+    assert "=B1*2" not in checkpoint_text
+    assert restored.parsed_document is not None
+    assert restored.parsed_document.workbooks[0].sheets[0].cells[0].formula == "=B1*2"
 
 
 def test_generation_v2_retry_metadata_classifies_failure_layers() -> None:
@@ -822,6 +859,35 @@ def test_generation_v2_orchestrator_routes_verifier_material_queries_back_to_ver
     assert decision.next_node == "verifier"
 
 
+def test_generation_v2_orchestrator_stops_on_requirement_blocker() -> None:
+    state = GenerationState(
+        parsed_document=ParsedDocument(plain_text="source"),
+        requirement_brief=RequirementBrief(
+            user_goal="Create required output",
+            decision=RequirementDecision.BLOCKED,
+            decision_reason="A mandatory source capability is unavailable.",
+        ),
+    )
+
+    decision = GenerationOrchestrator().decide_next(state)
+
+    assert decision.next_node == "requirement_blocked"
+    assert "mandatory" in decision.reason
+
+
+def test_generation_v2_orchestrator_continues_degraded_requirement() -> None:
+    state = GenerationState(
+        parsed_document=ParsedDocument(plain_text="source"),
+        requirement_brief=RequirementBrief(
+            user_goal="Create useful output",
+            decision=RequirementDecision.DEGRADED,
+            accepted_degradations=["One optional capability is unavailable."],
+        ),
+    )
+
+    assert GenerationOrchestrator().decide_next(state).next_node == "planner"
+
+
 def test_generation_v2_orchestrator_rejects_empty_verifier_evidence_request() -> None:
     base = {
         "parsed_document": ParsedDocument(plain_text="source"),
@@ -843,6 +909,25 @@ def test_generation_v2_orchestrator_rejects_empty_verifier_evidence_request() ->
 
     assert first.next_node == "verifier_protocol_retry"
     assert second.next_node == "verifier_invalid_output"
+
+
+def test_generation_v2_orchestrator_rejects_more_evidence_after_workbook_inspection() -> None:
+    state = GenerationState(
+        parsed_document=ParsedDocument(plain_text="source"),
+        requirement_brief=RequirementBrief(user_goal="Convert source"),
+        plan_draft=PlanDraft(page_goal="Convert source"),
+        content_draft=ContentDraft(title="Source"),
+        style_brief=StyleBrief(style_goal="Light report"),
+        html_draft=HtmlDraft(html="<!doctype html><html><body>Source</body></html>"),
+        workbook_inspect_results=[WorkbookInspectResult(agent="Verifier", request_id="formula", action="find_formulas")],
+        validation_report=ValidationReport(
+            ok=False,
+            verifier_action=VerifierAction.REQUEST_EVIDENCE,
+            workbook_inspect_requests=[WorkbookInspectRequest(id="again", action="find_formulas")],
+        ),
+    )
+
+    assert GenerationOrchestrator().decide_next(state).next_node == "verifier_protocol_retry"
 
 
 def test_generation_v2_orchestrator_does_not_infer_verifier_revision_route() -> None:
@@ -2003,6 +2088,142 @@ def test_document_parser_uses_markitdown_for_excel(monkeypatch) -> None:
     assert any(warning.code == "markitdown_used" for warning in parsed.warnings)
 
 
+def test_document_parser_preserves_xlsx_formulas_and_structure() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Model"
+    sheet["A1"] = "Revenue"
+    sheet["B1"] = 120
+    sheet["C1"] = "=B1*2"
+    sheet["A3"] = "Merged heading"
+    sheet.merge_cells("A3:C3")
+    sheet.row_dimensions[4].hidden = True
+    sheet.column_dimensions["D"].hidden = True
+    hidden = workbook.create_sheet("Inputs")
+    hidden.sheet_state = "hidden"
+    hidden["A1"] = 60
+    workbook.defined_names.add(DefinedName("ModelRevenue", attr_text="'Model'!$B$1"))
+    payload = BytesIO()
+    workbook.save(payload)
+
+    parsed = parse_document(
+        filename="model.xlsx",
+        content=payload.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    assert parsed.workbooks[0].formula_count == 1
+    assert parsed.workbooks[0].sheets[0].cells[2].coordinate == "C1"
+    assert parsed.workbooks[0].sheets[0].cells[2].formula == "=B1*2"
+    assert parsed.workbooks[0].sheets[0].merged_ranges == ["A3:C3"]
+    assert parsed.workbooks[0].sheets[0].hidden_rows == [4]
+    assert parsed.workbooks[0].sheets[0].hidden_columns == ["D"]
+    assert parsed.workbooks[0].sheets[1].state == "hidden"
+    assert parsed.workbooks[0].defined_names[0]["name"] == "ModelRevenue"
+    assert next(item for item in parsed.capabilities if item.id == "spreadsheet_formulas").status == "available"
+    assert next(item for item in parsed.capabilities if item.id == "cached_formula_values").status == "unknown"
+    assert "C1: =B1*2 [formula: =B1*2]" in parsed.plain_text
+
+
+def test_document_parser_blocks_xlsx_before_loading_when_archive_exceeds_resource_boundary(monkeypatch) -> None:
+    workbook = Workbook()
+    workbook.active["A1"] = "source"
+    payload = BytesIO()
+    workbook.save(payload)
+    monkeypatch.setattr(document_parser, "MAX_XLSX_UNCOMPRESSED_BYTES", 1)
+
+    parsed = parse_document(filename="large.xlsx", content=payload.getvalue())
+
+    assert not parsed.plain_text
+    assert any(warning.code == "xlsx_resource_boundary" for warning in parsed.warnings)
+    assert "resource boundary" in document_parser.blocking_parse_failure_reason(parsed, filename="large.xlsx")
+
+
+def test_workbook_inspect_reads_ranges_formulas_and_references() -> None:
+    parsed = ParsedDocument(
+        workbooks=[
+            SpreadsheetWorkbook(
+                file_id="file-1",
+                filename="model.xlsx",
+                sheets=[
+                    SpreadsheetSheet(
+                        title="Model",
+                        cells=[
+                            SpreadsheetCell(coordinate="B1", value=120),
+                            SpreadsheetCell(coordinate="C1", value=240, formula="=B1*2", cached_value=240),
+                            SpreadsheetCell(coordinate="D1", value=241, formula="=C1+1", cached_value=241),
+                        ],
+                    )
+                ],
+                cell_count=3,
+                formula_count=2,
+            )
+        ]
+    )
+
+    results = inspect_workbook(
+        parsed,
+        [
+            WorkbookInspectRequest(id="range", action="read_range", file_id="file-1", sheet="Model", cell_range="B1:C1"),
+            WorkbookInspectRequest(id="formulas", action="find_formulas", file_id="file-1", query="B1"),
+            WorkbookInspectRequest(id="trace", action="trace_references", file_id="file-1", sheet="Model", coordinate="C1"),
+        ],
+        agent="Verifier",
+    )
+
+    assert [item["coordinate"] for item in results[0].records] == ["B1", "C1"]
+    assert results[1].records[0]["formula"] == "=B1*2"
+    assert any(item["relation"] == "references" and item["coordinate"] == "B1" for item in results[2].records)
+    assert any(item["relation"] == "referenced_by" and item["coordinate"] == "D1" for item in results[2].records)
+
+
+def test_requirement_analyst_can_inspect_workbook_before_deciding() -> None:
+    class WorkbookDecisionClient:
+        calls = 0
+
+        def complete_json(self, *, node, schema_name, payload, attempt=0):
+            self.calls += 1
+            inspected = payload["_state"].get("workbook_inspect_results") or []
+            return json.dumps(
+                {
+                    "user_goal": "Deliver source formulas",
+                    "source_summary": "Workbook source",
+                    "source_handling_mode": "faithful_adaptation",
+                    "success_criteria": ["Preserve formulas"],
+                    "material_queries": [],
+                    "material_read_requests": [],
+                    "workbook_inspect_requests": [] if inspected else [{"id": "formula-check", "action": "find_formulas", "file_id": "file-1"}],
+                    "decision": "blocked" if inspected else "continue",
+                    "decision_reason": "No formulas were available after direct workbook inspection." if inspected else "Inspecting workbook.",
+                    "capability_gaps": ["spreadsheet_formulas"] if inspected else [],
+                    "accepted_degradations": [],
+                }
+            )
+
+    client = WorkbookDecisionClient()
+    parsed = ParsedDocument(
+        plain_text="Workbook display values",
+        workbooks=[SpreadsheetWorkbook(file_id="file-1", filename="model.xlsx", sheets=[SpreadsheetSheet(title="Model")])],
+    )
+    state = GenerationState(input=GenerationInput(instruction="Preserve formulas"), parsed_document=parsed)
+
+    result = RequirementAnalystAgent(client).run(state).state
+
+    assert client.calls == 2
+    assert len(result.workbook_inspect_results) == 1
+    assert result.requirement_brief is not None
+    assert result.requirement_brief.decision == RequirementDecision.BLOCKED
+
+
+def test_merge_parsed_documents_preserves_workbook_file_identity() -> None:
+    first = ParsedDocument(source_files=[SourceFile(filename="A.xlsx")], plain_text="A", workbooks=[SpreadsheetWorkbook(filename="A.xlsx")])
+    second = ParsedDocument(source_files=[SourceFile(filename="B.xlsx")], plain_text="B", workbooks=[SpreadsheetWorkbook(filename="B.xlsx")])
+
+    merged = merge_parsed_documents([first, second])
+
+    assert [(item.file_id, item.filename, item.file_index) for item in merged.workbooks] == [("file-1", "A.xlsx", 1), ("file-2", "B.xlsx", 2)]
+
+
 def test_document_parser_uses_specialized_parser_before_markitdown(monkeypatch) -> None:
     def specialized_parser(**_kwargs):
         return ParsedDocument(plain_text="Specialized parser output")
@@ -2551,6 +2772,37 @@ def test_generation_v2_job_material_bundle_round_trips_from_reference(tmp_path) 
     assert restored is not None
     assert restored.merged_text == bundle.merged_text
     assert restored.manifest["job_id"] == "ai_job_test"
+
+
+def test_generation_v2_material_bundle_persists_structured_workbooks(tmp_path) -> None:
+    settings = ServerSettings(
+        content_dir=tmp_path / "content",
+        meta_dir=tmp_path / "meta",
+        public_dir=tmp_path / "public",
+        site_title="Test",
+        max_upload_bytes=1024 * 1024,
+    )
+    parsed = ParsedDocument(
+        plain_text="Model B1: 120 C1: =B1*2",
+        workbooks=[
+            SpreadsheetWorkbook(
+                file_id="file-1",
+                filename="model.xlsx",
+                sheets=[SpreadsheetSheet(title="Model", cells=[SpreadsheetCell(coordinate="C1", formula="=B1*2")])],
+                cell_count=1,
+                formula_count=1,
+            )
+        ],
+    )
+
+    bundle = build_material_bundle(parsed, run_id="run-workbook")
+    assert bundle is not None
+    reference = write_job_material_bundle(settings, bundle, job_id="ai_job_workbook")
+    restored = read_material_bundle_reference(settings, reference)
+
+    assert reference.workbooks_path.endswith("materials/workbooks.json")
+    assert restored is not None
+    assert restored.workbooks[0]["sheets"][0]["cells"][0]["formula"] == "=B1*2"
 
 
 def test_generation_v2_expired_job_workspace_cleanup_keeps_recent_failures(tmp_path) -> None:

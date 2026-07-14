@@ -18,6 +18,7 @@ class MaterialBundle:
     bundle_id: str = ""
     merged_text: str = ""
     manifest: dict[str, Any] = field(default_factory=dict)
+    workbooks: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class MaterialBundleReference:
     workspace_path: str = ""
     merged_path: str = ""
     manifest_path: str = ""
+    workbooks_path: str = ""
 
 
 def build_material_bundle(parsed: ParsedDocument | None, *, run_id: str = "") -> MaterialBundle | None:
@@ -51,8 +53,10 @@ def build_material_bundle(parsed: ParsedDocument | None, *, run_id: str = "") ->
         "materials": materials,
         "source_files": normalize_for_json(asdict(parsed).get("source_files", [])),
         "warnings": normalize_for_json(asdict(parsed).get("warnings", [])),
+        "capabilities": normalize_for_json(asdict(parsed).get("capabilities", [])),
+        "workbook_count": len(parsed.workbooks),
     }
-    return MaterialBundle(bundle_id=bundle_id, merged_text=parsed.plain_text, manifest=manifest)
+    return MaterialBundle(bundle_id=bundle_id, merged_text=parsed.plain_text, manifest=manifest, workbooks=normalize_for_json(asdict(parsed).get("workbooks", [])))
 
 
 def write_job_material_bundle(settings: ServerSettings, bundle: MaterialBundle, *, job_id: str) -> MaterialBundleReference:
@@ -64,15 +68,19 @@ def write_job_material_bundle(settings: ServerSettings, bundle: MaterialBundle, 
     bundle_dir.mkdir(parents=True, exist_ok=True)
     merged_path = bundle_dir / "merged.md"
     manifest_path = bundle_dir / "manifest.json"
+    workbooks_path = bundle_dir / "workbooks.json"
     merged_path.write_text(bundle.merged_text, encoding="utf-8")
     manifest = {**bundle.manifest, "job_id": job_id}
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    if bundle.workbooks:
+        workbooks_path.write_text(json.dumps(bundle.workbooks, ensure_ascii=False, indent=2), encoding="utf-8")
     return MaterialBundleReference(
         bundle_id=bundle.bundle_id,
         job_id=job_id,
         workspace_path=internal_meta_relative_path(settings, workspace),
         merged_path=internal_meta_relative_path(settings, merged_path),
         manifest_path=internal_meta_relative_path(settings, manifest_path),
+        workbooks_path=internal_meta_relative_path(settings, workbooks_path) if bundle.workbooks else "",
     )
 
 
@@ -89,7 +97,17 @@ def read_material_bundle_reference(settings: ServerSettings, reference: Material
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         manifest = {}
-    return MaterialBundle(bundle_id=reference.bundle_id or str(manifest.get("bundle_id") or ""), merged_text=merged_path.read_text(encoding="utf-8"), manifest=manifest if isinstance(manifest, dict) else {})
+    workbooks: list[dict[str, Any]] = []
+    if reference.workbooks_path:
+        workbooks_path = settings.meta_dir / reference.workbooks_path
+        ensure_within(workbooks_path, settings.meta_dir)
+        if workbooks_path.is_file():
+            try:
+                decoded = json.loads(workbooks_path.read_text(encoding="utf-8"))
+                workbooks = decoded if isinstance(decoded, list) else []
+            except json.JSONDecodeError:
+                workbooks = []
+    return MaterialBundle(bundle_id=reference.bundle_id or str(manifest.get("bundle_id") or ""), merged_text=merged_path.read_text(encoding="utf-8"), manifest=manifest if isinstance(manifest, dict) else {}, workbooks=workbooks)
 
 
 def write_job_workspace_jsonl(settings: ServerSettings, job_id: str, relative_path: str, records: list[Any]) -> str:

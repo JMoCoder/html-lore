@@ -113,8 +113,9 @@ def generate_note_from_material_v2(
     if state.failed_steps or state.create_note_proposal is None:
         cleanup_expired_failed_job_workspaces(settings, keep_days=7)
         completed_at = datetime.now(timezone.utc)
-        message = ", ".join(state.failed_steps) or "Generation v2 did not produce a note proposal."
-        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="generation_v2_failed", error_message=message)
+        message = terminal_failure_message(state)
+        error_code = "requirement_blocked" if "requirement_blocked" in state.failed_steps else "generation_v2_failed"
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code=error_code, error_message=message)
         raise MaterialGenerationError(message, run=run)
     try:
         if material_bundle_reference is None:
@@ -209,8 +210,9 @@ def run_material_v2_state(
     if state.failed_steps or state.create_note_proposal is None:
         cleanup_expired_failed_job_workspaces(settings, keep_days=7)
         completed_at = datetime.now(timezone.utc)
-        message = ", ".join(state.failed_steps) or "Generation v2 did not produce a note proposal."
-        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code="generation_v2_failed", error_message=message)
+        message = terminal_failure_message(state)
+        error_code = "requirement_blocked" if "requirement_blocked" in state.failed_steps else "generation_v2_failed"
+        run = public_material_v2_run(state, started_at=started_at, completed_at=completed_at, status="failed", error_code=error_code, error_message=message)
         raise MaterialGenerationError(message, run=run)
     try:
         bundle = build_material_bundle(state.parsed_document, run_id=state.run_id)
@@ -262,6 +264,15 @@ def public_material_v2_run(
     }
     data.update(generation_v2_retry_metadata(data, state))
     return data
+
+
+def terminal_failure_message(state: GenerationState) -> str:
+    for event in reversed(state.stage_trace):
+        if str(event.status or "").lower() == "failed":
+            message = str(event.error_summary or event.message or "").strip()
+            if message:
+                return message
+    return ", ".join(state.failed_steps) or "Generation v2 did not produce a note proposal."
 
 
 def public_generation_input(state: GenerationState) -> dict[str, Any]:

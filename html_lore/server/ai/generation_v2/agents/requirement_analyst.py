@@ -42,6 +42,11 @@ class RequirementAnalystAgent(GenerationAgent):
             "success_criteria": ["Preserve source intent.", "Produce readable static HTML.", "Avoid unsupported claims."],
             "material_queries": [] if state.material_recall_results else [{"id": "source_overview", "query": first_non_empty(state.input.instruction, state.input.filename, "uploaded material overview"), "purpose": "Confirm the most relevant uploaded material evidence before finalizing requirements."}],
             "material_read_requests": [],
+            "workbook_inspect_requests": [],
+            "decision": "continue",
+            "decision_reason": "Uploaded material provides enough capability for the requested output.",
+            "capability_gaps": [],
+            "accepted_degradations": [],
         }
 
     def apply_output(self, state, output):

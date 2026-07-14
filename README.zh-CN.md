@@ -212,6 +212,8 @@ HTML_LORE_PUBLIC=public \
 html-lore serve-api --host 127.0.0.1 --port 8787
 ```
 
+AI 生成默认使用 `HTML_LORE_DOCUMENT_PARSER=markitdown` 的三级解析链。`.xlsx` 会优先由 OpenPyXL 专用解析器静态保留工作表、单元格坐标、原始公式、文件中已有的缓存值、命名范围和隐藏结构；它不会计算公式、执行宏或访问外部链接。其他增强格式使用 MarkItDown，失败后再回退到本地 basic parser。
+
 已实现接口：
 
 - `GET /api/health`

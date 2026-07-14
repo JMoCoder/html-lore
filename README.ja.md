@@ -212,6 +212,8 @@ HTML_LORE_PUBLIC=public \
 html-lore serve-api --host 127.0.0.1 --port 8787
 ```
 
+AI generation は既定で `HTML_LORE_DOCUMENT_PARSER=markitdown` の 3 段 parser chain を使います。`.xlsx` は最初に OpenPyXL 専用 parser で worksheet、cell coordinate、raw formula、保存済み cached value、defined name、hidden structure を静的に保持します。formula の計算、macro の実行、external link へのアクセスは行いません。他の enhanced format は MarkItDown を使い、失敗時は local basic parser に fallback します。
+
 実装済みエンドポイント:
 
 - `GET /api/health`

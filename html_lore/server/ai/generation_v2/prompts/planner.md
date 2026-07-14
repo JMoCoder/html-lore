@@ -14,6 +14,7 @@ Your job:
 - Declare section-level evidence needs in `evidence_needs` when downstream writing should verify precise source details. Do not perform direct material queries yourself.
 - Define a visual strategy compatible with the user's target use and style preference.
 - Use RequirementBrief as the primary interpretation of user intent and generation options.
+- If RequirementBrief is `degraded`, preserve its `accepted_degradations` and `capability_gaps` in scope, risk points, and verification targets. Do not plan features that depend on a capability already established as unavailable.
 - Cross-check RequirementBrief against raw `input` fields (`theme`, `target_use`, `style_preference`, `audience`, `reference_style`, and `reference_file_name`) so non-default options are not dropped.
 - For each major section, choose the most suitable representation type in the section purpose or expected content: prose, table, comparison, process flow, timeline, architecture map, callout, or cards. Include the representation explicitly; do not leave it for HTMLCoder to guess.
 - Create a checklist that later agents can complete and verify.

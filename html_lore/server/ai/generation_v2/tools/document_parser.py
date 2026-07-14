@@ -4,15 +4,22 @@ import re
 import tempfile
 from dataclasses import replace
 from html.parser import HTMLParser
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from zipfile import BadZipFile, ZipFile
 
-from ..schemas import DocumentLink, OutlineItem, ParsedDocument, ParseWarning, SourceFile, StyleHint
+from ..schemas import MaterialCapability, OutlineItem, DocumentLink, ParsedDocument, ParseWarning, SourceFile, SpreadsheetCell, SpreadsheetSheet, SpreadsheetWorkbook, StyleHint
 
 try:  # pragma: no cover - optional dependency
     from markitdown import MarkItDown  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover - import guard
     MarkItDown = None
+
+try:  # pragma: no cover - optional dependency
+    from openpyxl import load_workbook  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - import guard
+    load_workbook = None
 
 
 class _TextExtractor(HTMLParser):
@@ -82,6 +89,11 @@ MARKITDOWN_SUFFIXES = {
 PARSER_MARKITDOWN = "markitdown"
 PARSER_BASIC = "basic"
 PARSER_RETRY_ATTEMPTS = 2
+MAX_WORKBOOK_SHEETS = 200
+MAX_WORKBOOK_CELLS = 250_000
+MAX_XLSX_ARCHIVE_ENTRIES = 20_000
+MAX_XLSX_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024
+MAX_XLSX_COMPRESSION_RATIO = 250
 
 
 def parse_document(
@@ -112,7 +124,7 @@ def parse_document(
         return replace(fallback, warnings=[*fallback.warnings, warning])
 
     parsed = parse_with_specialized_parser(filename=filename, content=content, content_type=content_type, reference_role=reference_role)
-    if parsed is not None and parsed.plain_text:
+    if parsed is not None and (parsed.plain_text or any(warning.code == "xlsx_resource_boundary" for warning in parsed.warnings)):
         return with_source_file(parsed, filename=filename, content_type=content_type, size=len(content), reference_role=reference_role)
 
     parsed = parse_with_markitdown(filename, content)
@@ -134,13 +146,159 @@ def parse_document(
 
 
 def parse_with_specialized_parser(*, filename: str, content: bytes, content_type: str, reference_role: str) -> ParsedDocument | None:
-    """Reserved extension point for format-specific parsers before MarkItDown.
-
-    Future OCR, DOCX, PDF, spreadsheet, or presentation parsers should plug in
-    here and return ParsedDocument on success. Returning None lets the generic
-    MarkItDown layer run next.
-    """
+    """Run safe, format-specific parsers before the generic MarkItDown layer."""
+    if Path(filename).suffix.lower() == ".xlsx":
+        return parse_xlsx_document(filename=filename, content=content)
     return None
+
+
+def parse_xlsx_document(*, filename: str, content: bytes) -> ParsedDocument | None:
+    if load_workbook is None:
+        return None
+    boundary_reason = xlsx_archive_boundary_reason(content)
+    if boundary_reason:
+        return ParsedDocument(warnings=[ParseWarning(code="xlsx_resource_boundary", message=boundary_reason, severity="error")])
+    try:
+        formula_book = load_workbook(BytesIO(content), data_only=False, read_only=False, keep_links=True)
+        value_book = load_workbook(BytesIO(content), data_only=True, read_only=False, keep_links=True)
+    except Exception:
+        return None
+
+    sheets: list[SpreadsheetSheet] = []
+    text_parts: list[str] = []
+    warnings: list[ParseWarning] = []
+    total_cells = 0
+    formula_count = 0
+    truncated = False
+    for sheet_index, sheet in enumerate(formula_book.worksheets):
+        if sheet_index >= MAX_WORKBOOK_SHEETS or total_cells >= MAX_WORKBOOK_CELLS:
+            truncated = True
+            break
+        cached_sheet = value_book[sheet.title] if sheet.title in value_book.sheetnames else None
+        cells: list[SpreadsheetCell] = []
+        text_parts.append(f"## Sheet: {sheet.title} ({sheet.sheet_state})")
+        materialized_cells = sorted(getattr(sheet, "_cells", {}).values(), key=lambda cell: (cell.row, cell.column))
+        for cell in materialized_cells:
+            if total_cells >= MAX_WORKBOOK_CELLS:
+                truncated = True
+                break
+            raw_value = cell.value
+            if raw_value is None:
+                continue
+            formula = str(raw_value) if cell.data_type == "f" or (isinstance(raw_value, str) and raw_value.startswith("=")) else ""
+            cached_value = cached_sheet[cell.coordinate].value if cached_sheet is not None else None
+            display_value = cached_value if formula and cached_value is not None else raw_value
+            cells.append(
+                SpreadsheetCell(
+                    coordinate=cell.coordinate,
+                    value=display_value,
+                    formula=formula,
+                    cached_value=cached_value if formula else None,
+                    data_type=str(cell.data_type or ""),
+                    number_format=str(cell.number_format or ""),
+                )
+            )
+            total_cells += 1
+            formula_count += int(bool(formula))
+            rendered = f"{cell.coordinate}: {display_value}"
+            if formula:
+                rendered += f" [formula: {formula}]"
+                if cached_value is not None:
+                    rendered += f" [cached: {cached_value}]"
+            text_parts.append(rendered)
+        hidden_rows = [index for index, dimension in sheet.row_dimensions.items() if dimension.hidden]
+        hidden_columns = [index for index, dimension in sheet.column_dimensions.items() if dimension.hidden]
+        sheets.append(
+            SpreadsheetSheet(
+                title=sheet.title,
+                state=sheet.sheet_state,
+                max_row=int(sheet.max_row or 0),
+                max_column=int(sheet.max_column or 0),
+                merged_ranges=[str(item) for item in sheet.merged_cells.ranges],
+                hidden_rows=hidden_rows,
+                hidden_columns=hidden_columns,
+                cells=cells,
+                truncated=truncated and total_cells >= MAX_WORKBOOK_CELLS,
+            )
+        )
+    defined_names = workbook_defined_names(formula_book)
+    external_links = workbook_external_links(formula_book)
+    if truncated:
+        warnings.append(ParseWarning(code="xlsx_structure_truncated", message="Workbook structure exceeded the safe parser resource boundary and was partially retained.", severity="warning"))
+    workbook = SpreadsheetWorkbook(
+        filename=filename,
+        sheets=sheets,
+        defined_names=defined_names,
+        external_links=external_links,
+        cell_count=total_cells,
+        formula_count=formula_count,
+        truncated=truncated,
+    )
+    capabilities = workbook_capabilities(workbook)
+    return ParsedDocument(
+        plain_text="\n".join(text_parts),
+        outline=[OutlineItem(level=2, title=sheet.title, text=sheet.title) for sheet in sheets],
+        warnings=warnings,
+        capabilities=capabilities,
+        workbooks=[workbook],
+    )
+
+
+def xlsx_archive_boundary_reason(content: bytes) -> str:
+    try:
+        with ZipFile(BytesIO(content)) as archive:
+            entries = archive.infolist()
+    except BadZipFile:
+        return ""
+    if len(entries) > MAX_XLSX_ARCHIVE_ENTRIES:
+        return "Workbook archive contains too many entries to parse safely."
+    uncompressed = sum(max(0, int(entry.file_size or 0)) for entry in entries)
+    compressed = sum(max(0, int(entry.compress_size or 0)) for entry in entries)
+    if uncompressed > MAX_XLSX_UNCOMPRESSED_BYTES:
+        return "Workbook expanded content exceeds the safe parser resource boundary."
+    if compressed > 0 and uncompressed / compressed > MAX_XLSX_COMPRESSION_RATIO:
+        return "Workbook archive compression ratio exceeds the safe parser resource boundary."
+    return ""
+
+
+def workbook_defined_names(workbook: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    values = getattr(getattr(workbook, "defined_names", None), "values", None)
+    names = list(values()) if callable(values) else list(getattr(getattr(workbook, "defined_names", None), "definedName", []) or [])
+    for item in names:
+        result.append(
+            {
+                "name": str(getattr(item, "name", "") or ""),
+                "value": str(getattr(item, "attr_text", "") or ""),
+                "hidden": bool(getattr(item, "hidden", False)),
+                "local_sheet_id": getattr(item, "localSheetId", None),
+            }
+        )
+    return result
+
+
+def workbook_external_links(workbook: Any) -> list[str]:
+    links: list[str] = []
+    for index, item in enumerate(getattr(workbook, "_external_links", []) or [], start=1):
+        target = str(getattr(getattr(item, "file_link", None), "Target", "") or "")
+        links.append(target or f"external-link-{index}")
+    return links
+
+
+def workbook_capabilities(workbook: SpreadsheetWorkbook) -> list[MaterialCapability]:
+    hidden_count = sum(len(sheet.hidden_rows) + len(sheet.hidden_columns) for sheet in workbook.sheets)
+    cached_count = sum(1 for sheet in workbook.sheets for cell in sheet.cells if cell.formula and cell.cached_value is not None)
+    return [
+        MaterialCapability(id="text", status="partial" if workbook.truncated else "available", count=workbook.cell_count, detail="Cell values are represented with stable coordinates."),
+        MaterialCapability(id="tables", status="unknown", detail="Workbook ranges are available; semantic table boundaries are not inferred."),
+        MaterialCapability(id="sheet_structure", status="partial" if workbook.truncated else "available", count=len(workbook.sheets)),
+        MaterialCapability(id="cell_coordinates", status="partial" if workbook.truncated else "available", count=workbook.cell_count),
+        MaterialCapability(id="spreadsheet_formulas", status="partial" if workbook.truncated else "available", count=workbook.formula_count, detail="Raw formulas are preserved but never executed."),
+        MaterialCapability(id="cached_formula_values", status="available" if cached_count else "unknown", count=cached_count, detail="Cached values are present only when stored by the source workbook."),
+        MaterialCapability(id="defined_names", status="available", count=len(workbook.defined_names)),
+        MaterialCapability(id="hidden_structure", status="available", count=hidden_count),
+        MaterialCapability(id="external_links", status="available", count=len(workbook.external_links), detail="External links are identified but never accessed."),
+    ]
 
 
 def parse_document_basic(
@@ -167,13 +325,36 @@ def parse_document_basic(
             plain_text=normalize_text(text),
             warnings=[ParseWarning(code="unsupported_basic_parser", message=f"Unsupported file type for basic parser: {filename}", severity="warning")],
         )
-        return parsed
+        return replace(parsed, capabilities=generic_document_capabilities(parsed, filename=filename))
 
-    return replace(parsed, source_files=source_files, warnings=[*parsed.warnings, *warnings])
+    parsed = replace(parsed, source_files=source_files, warnings=[*parsed.warnings, *warnings])
+    return replace(parsed, capabilities=generic_document_capabilities(parsed, filename=filename))
 
 
 def with_source_file(parsed: ParsedDocument, *, filename: str, content_type: str, size: int, reference_role: str) -> ParsedDocument:
-    return replace(parsed, source_files=[SourceFile(filename=filename, content_type=content_type, size=size, role=reference_role)])
+    capabilities = parsed.capabilities or generic_document_capabilities(parsed, filename=filename)
+    return replace(parsed, source_files=[SourceFile(filename=filename, content_type=content_type, size=size, role=reference_role)], capabilities=capabilities)
+
+
+def generic_document_capabilities(parsed: ParsedDocument, *, filename: str) -> list[MaterialCapability]:
+    suffix = Path(filename).suffix.lower()
+    capabilities = [
+        MaterialCapability(id="text", status="available" if parsed.plain_text else "unavailable", count=len(parsed.plain_text)),
+        MaterialCapability(id="tables", status="available" if parsed.tables else "unknown", count=len(parsed.tables)),
+    ]
+    if suffix in {".xlsx", ".xls"}:
+        capabilities.extend(
+            [
+                MaterialCapability(id="sheet_structure", status="partial", detail="Generic extraction may preserve sheet labels but not complete workbook structure."),
+                MaterialCapability(id="cell_coordinates", status="unavailable", detail="The generic parser does not preserve stable cell coordinates."),
+                MaterialCapability(id="spreadsheet_formulas", status="unavailable", detail="The generic parser exposes display text, not raw workbook formulas."),
+                MaterialCapability(id="cached_formula_values", status="unknown"),
+                MaterialCapability(id="defined_names", status="unavailable"),
+                MaterialCapability(id="hidden_structure", status="unavailable"),
+                MaterialCapability(id="external_links", status="unknown"),
+            ]
+        )
+    return capabilities
 
 
 def parse_html_text(text: str) -> ParsedDocument:
@@ -266,6 +447,9 @@ def normalize_parser_mode(value: str) -> str:
 
 
 def blocking_parse_failure_reason(parsed: ParsedDocument, *, filename: str = "", content_type: str = "") -> str:
+    resource_warning = next((warning.message for warning in parsed.warnings if warning.code == "xlsx_resource_boundary"), "")
+    if resource_warning:
+        return resource_warning
     if not requires_enhanced_parser(filename=filename, content_type=content_type):
         return ""
     codes = {warning.code for warning in parsed.warnings}

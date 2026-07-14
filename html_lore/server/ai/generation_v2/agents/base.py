@@ -8,6 +8,7 @@ from html_lore.server.ai.providers import ProviderCallError
 from ..fake_model import FakeGenerationModelClient
 from ..material_context import recall_material
 from ..material_read import read_material
+from ..workbook_inspect import inspect_workbook
 from ..model_client import GenerationJsonModelClient, agent_payload
 from ..schema_loader import AgentOutputSchemaError, parse_dataclass_json
 from ..schemas import AgentArtifact, ChecklistStatus, GenerationStage, GenerationState, SkillTraceEntry, normalize_for_json
@@ -24,6 +25,9 @@ MATERIAL_RECALL_CHAR_LIMITS = {"RequirementAnalyst": 9000, "ContentWriter": 1200
 MATERIAL_READ_AGENTS = {"RequirementAnalyst", "ContentWriter", "Verifier"}
 MATERIAL_READ_REQUEST_LIMITS = {"RequirementAnalyst": 2, "ContentWriter": 4, "Verifier": 3}
 MATERIAL_READ_CHAR_LIMITS = {"RequirementAnalyst": 48000, "ContentWriter": 96000, "Verifier": 96000}
+WORKBOOK_INSPECT_AGENTS = {"RequirementAnalyst", "ContentWriter", "Verifier"}
+WORKBOOK_INSPECT_REQUEST_LIMITS = {"RequirementAnalyst": 3, "ContentWriter": 5, "Verifier": 4}
+WORKBOOK_INSPECT_RECORD_LIMITS = {"RequirementAnalyst": 400, "ContentWriter": 500, "Verifier": 500}
 
 
 @dataclass(frozen=True)
@@ -99,8 +103,33 @@ class GenerationAgent:
         raise NotImplementedError
 
     def apply_material_access_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...]) -> tuple[GenerationState, Any]:
-        read_state, read_output = self.apply_material_read_if_needed(state, output, skills=skills)
+        workbook_state, workbook_output = self.apply_workbook_inspect_if_needed(state, output, skills=skills)
+        read_state, read_output = self.apply_material_read_if_needed(workbook_state, workbook_output, skills=skills)
         return self.apply_material_recall_if_needed(read_state, read_output, skills=skills)
+
+    def apply_workbook_inspect_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...], depth: int = 0) -> tuple[GenerationState, Any]:
+        if self.name not in WORKBOOK_INSPECT_AGENTS or state.parsed_document is None or not state.parsed_document.workbooks:
+            return state, output
+        if self.name == "Verifier" and any(result.agent == self.name for result in state.workbook_inspect_results):
+            return state, strip_pending_workbook_requests(output)
+        if depth >= 2:
+            return state, strip_pending_workbook_requests(output)
+        requests = workbook_inspect_requests_from_output(output)
+        if not requests:
+            return state, output
+        results = inspect_workbook(
+            state.parsed_document,
+            requests,
+            agent=self.name,
+            max_requests=WORKBOOK_INSPECT_REQUEST_LIMITS.get(self.name, 3),
+            max_records=WORKBOOK_INSPECT_RECORD_LIMITS.get(self.name, 400),
+        )
+        if not results:
+            return state, output
+        inspect_state = replace(state, workbook_inspect_results=[*state.workbook_inspect_results, *results])
+        self.persist_workspace_records(inspect_state, "evidence/workbook_inspections.jsonl", results)
+        final_output = self.invoke_structured(inspect_state, skills=skills, material_recall_phase="final")
+        return self.apply_workbook_inspect_if_needed(inspect_state, final_output, skills=skills, depth=depth + 1)
 
     def apply_material_read_if_needed(self, state: GenerationState, output: Any, *, skills: tuple[LoadedSkill, ...], depth: int = 0) -> tuple[GenerationState, Any]:
         if self.name not in MATERIAL_READ_AGENTS or state.parsed_document is None:
@@ -250,6 +279,10 @@ class GenerationAgent:
                 "audience": short_text(getattr(output, "audience", ""), 160),
                 "output_type": str(getattr(output, "output_type", "") or ""),
                 "source_handling_mode": str(getattr(output, "source_handling_mode", "") or ""),
+                "decision": str(getattr(output, "decision", "") or ""),
+                "decision_reason": short_text(getattr(output, "decision_reason", ""), 500),
+                "capability_gaps": safe_string_list(getattr(output, "capability_gaps", []), limit=8),
+                "accepted_degradations": safe_string_list(getattr(output, "accepted_degradations", []), limit=8),
                 "must_include": safe_string_list(getattr(output, "must_include", []), limit=8),
                 "constraints": safe_string_list(getattr(output, "constraints", []), limit=8),
                 "style_preferences": safe_string_list(getattr(output, "style_preferences", []), limit=6),
@@ -549,6 +582,10 @@ def build_usage_summary(agent_name: str, state: GenerationState, output: Any) ->
     if read_results:
         usage["material_read_count"] = len(read_results)
         usage["material_read_chars"] = sum(result.char_count for result in read_results)
+    workbook_results = [result for result in state.workbook_inspect_results if result.agent == agent_name]
+    if workbook_results:
+        usage["workbook_inspect_count"] = len(workbook_results)
+        usage["workbook_inspect_records"] = sum(len(result.records) for result in workbook_results)
     recall_results = [result for result in state.material_recall_results if result.agent == agent_name]
     if recall_results:
         usage["material_recall_count"] = len(recall_results)
@@ -948,7 +985,22 @@ def strip_pending_material_read_requests(output: Any) -> Any:
 
 
 def strip_pending_material_evidence(output: Any) -> Any:
-    return strip_pending_material_read_requests(strip_pending_material_queries(output))
+    return strip_pending_workbook_requests(strip_pending_material_read_requests(strip_pending_material_queries(output)))
+
+
+def strip_pending_workbook_requests(output: Any) -> Any:
+    requests = workbook_inspect_requests_from_output(output)
+    if not requests:
+        return output
+    try:
+        return replace(output, workbook_inspect_requests=[])
+    except TypeError:
+        return output
+
+
+def workbook_inspect_requests_from_output(output: Any) -> list[Any]:
+    requests = getattr(output, "workbook_inspect_requests", [])
+    return requests if isinstance(requests, list) else []
 
 
 def material_read_requests_from_output(output: Any) -> list[Any]:

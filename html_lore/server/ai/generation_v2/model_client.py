@@ -263,6 +263,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
     material_status = public_material_status(state)
     material_recall_results = compact_material_recall_results(state.material_recall_results, node=node)
     material_read_results = compact_material_read_results(state.material_read_results, node=node)
+    workbook_inspect_results = compact_workbook_inspect_results(state.workbook_inspect_results, node=node)
     common_input = {
         "instruction": state.input.instruction,
         "filename": state.input.filename,
@@ -281,6 +282,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "input": common_input,
             "material_status": material_status,
             "material_read_results": material_read_results,
+            "workbook_inspect_results": workbook_inspect_results,
             "html_draft": compact_html_draft(state.html_draft),
             "visual_check_report": public_value(state.visual_check_report),
             "material_recall_results": material_recall_results,
@@ -300,8 +302,8 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
                 "retry_count": state.same_node_retries.get("VerifierProtocol", 0),
                 "invalid_previous_output": (
                     "The previous ValidationReport did not follow the verifier protocol. "
-                    "Do not return request_evidence without focused material_queries or material_read_requests. "
-                    "If Verifier material_read_results are already present, do not request evidence again; "
+                    "Do not return request_evidence without focused material_queries, material_read_requests, or workbook_inspect_requests. "
+                    "If Verifier material_read_results or workbook_inspect_results are already present, do not request evidence again; "
                     "return pass, request_revision with a concrete route_back_to, or blocked."
                 ),
             }
@@ -321,6 +323,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "temporary_material_context": compact_temporary_material_context(material_context),
             "material_recall_results": material_recall_results,
             "material_read_results": material_read_results,
+            "workbook_inspect_results": workbook_inspect_results,
             "execution_checklist": public_value(state.execution_checklist),
             "revision_round": state.revision_round,
         }
@@ -340,6 +343,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "temporary_material_context": compact_temporary_material_context(material_context),
             "material_recall_results": material_recall_results,
             "material_read_results": material_read_results,
+            "workbook_inspect_results": workbook_inspect_results,
             "parsed_style_reference": compact_parsed_document(style_ref),
             "revision_round": state.revision_round,
         }
@@ -352,6 +356,7 @@ def public_generation_state_for_agent(state: GenerationState, *, node: str = "")
             "temporary_material_context": task_material_context,
             "material_recall_results": material_recall_results,
             "material_read_results": material_read_results,
+            "workbook_inspect_results": workbook_inspect_results,
             "parsed_style_reference": public_parsed_document(style_ref),
             "requirement_brief": public_value(state.requirement_brief),
             "plan_draft": public_value(state.plan_draft),
@@ -449,7 +454,7 @@ def available_material_tools(node: str) -> list[dict[str, Any]]:
         return []
     tool = get_tool_registry_item("material_read")
     description = tool.description if tool else "Read task-local uploaded material from the normalized merged source using file_id or filename."
-    return [
+    tools = [
         {
             "name": "MaterialReadTool",
             "id": "material_read",
@@ -460,6 +465,18 @@ def available_material_tools(node: str) -> list[dict[str, Any]]:
             "offset_units": "characters relative to the selected file content span",
         }
     ]
+    workbook_tool = get_tool_registry_item("workbook_inspect")
+    tools.append(
+        {
+            "name": "WorkbookInspectTool",
+            "id": "workbook_inspect",
+            "description": workbook_tool.description if workbook_tool else "Inspect structured workbook evidence without executing formulas or external links.",
+            "request_field": workbook_tool.request_field if workbook_tool else "workbook_inspect_requests",
+            "actions": ["list_sheets", "read_range", "find_formulas", "trace_references"],
+            "limits": {"max_requests": 3 if node == "RequirementAnalyst" else 5, "max_records": 500},
+        }
+    )
+    return tools
 
 
 def public_value(value: Any) -> Any:
@@ -476,6 +493,7 @@ def public_parsed_document(parsed: Any) -> dict[str, Any]:
     data = public_value(parsed)
     data["plain_text"] = trim_text(str(data.get("plain_text") or ""), 9000)
     data["materials"] = compact_parsed_materials(data, text_limit=1800)
+    data["workbooks"] = compact_workbooks(data.get("workbooks"))
     return data
 
 
@@ -485,7 +503,44 @@ def compact_parsed_document(parsed: Any) -> dict[str, Any]:
     data = public_value(parsed)
     data["plain_text"] = trim_text(str(data.get("plain_text") or ""), 1200)
     data["materials"] = compact_parsed_materials(public_value(parsed), text_limit=500)
+    data["workbooks"] = compact_workbooks(data.get("workbooks"))
     return data
+
+
+def compact_workbooks(workbooks: Any) -> list[dict[str, Any]]:
+    if not isinstance(workbooks, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for workbook in workbooks[:8]:
+        if not isinstance(workbook, dict):
+            continue
+        sheets = workbook.get("sheets") if isinstance(workbook.get("sheets"), list) else []
+        result.append(
+            {
+                "file_id": str(workbook.get("file_id") or ""),
+                "file_index": int(workbook.get("file_index") or 0),
+                "filename": str(workbook.get("filename") or ""),
+                "cell_count": int(workbook.get("cell_count") or 0),
+                "formula_count": int(workbook.get("formula_count") or 0),
+                "defined_name_count": len(workbook.get("defined_names") or []),
+                "external_link_count": len(workbook.get("external_links") or []),
+                "truncated": bool(workbook.get("truncated")),
+                "sheets": [
+                    {
+                        "title": str(sheet.get("title") or ""),
+                        "state": str(sheet.get("state") or ""),
+                        "max_row": int(sheet.get("max_row") or 0),
+                        "max_column": int(sheet.get("max_column") or 0),
+                        "cell_count": len(sheet.get("cells") or []),
+                        "formula_count": sum(1 for cell in sheet.get("cells", []) if isinstance(cell, dict) and cell.get("formula")),
+                        "truncated": bool(sheet.get("truncated")),
+                    }
+                    for sheet in sheets[:40]
+                    if isinstance(sheet, dict)
+                ],
+            }
+        )
+    return result
 
 
 def compact_parsed_materials(parsed_data: Any, *, text_limit: int) -> list[dict[str, Any]]:
@@ -618,6 +673,31 @@ def compact_material_read_results(results: list[Any], *, node: str = "") -> list
         text = trim_text(str(data.get("text") or ""), min(text_limit, remaining))
         data["text"] = text
         used_chars += len(text)
+        compact.append(data)
+    return compact[-10:]
+
+
+def compact_workbook_inspect_results(results: list[Any], *, node: str = "") -> list[dict[str, Any]]:
+    if not results:
+        return []
+    visible_agents = {
+        "RequirementAnalyst": {"RequirementAnalyst"},
+        "Planner": {"RequirementAnalyst"},
+        "ContentWriter": {"RequirementAnalyst", "ContentWriter"},
+        "StyleDesigner": {"RequirementAnalyst", "ContentWriter"},
+        "HTMLCoder": {"RequirementAnalyst", "ContentWriter"},
+        "Verifier": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+        "SafetyReviewer": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+        "Finalizer": {"RequirementAnalyst", "ContentWriter", "Verifier"},
+    }.get(node, {"RequirementAnalyst", "ContentWriter", "Verifier"})
+    record_limit = 500 if node in {"RequirementAnalyst", "ContentWriter", "Verifier"} else 40
+    compact: list[dict[str, Any]] = []
+    for result in results:
+        data = public_value(result)
+        if not isinstance(data, dict) or str(data.get("agent") or "") not in visible_agents:
+            continue
+        records = data.get("records") if isinstance(data.get("records"), list) else []
+        data["records"] = records[:record_limit]
         compact.append(data)
     return compact[-10:]
 

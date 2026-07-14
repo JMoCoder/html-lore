@@ -364,8 +364,11 @@ Deployment notes:
   parameter. For GPT-5.6 quality-focused deployments, the recommended starting
   baseline is `gpt-5.6-sol` with `medium` reasoning effort.
 - `HTML_LORE_DOCUMENT_PARSER=markitdown` is the default parser mode for AI
-  generation. PDF, Word, PowerPoint, and Excel files are parsed with MarkItDown
-  when available, then fall back to the basic local parser on failure. Set
+  generation. `.xlsx` files first use a formula-aware OpenPyXL parser that
+  preserves sheets, coordinates, raw formulas, cached values when present,
+  named ranges, and hidden structure. It never calculates formulas, runs
+  macros, or accesses external links. Other enhanced formats use MarkItDown;
+  parser failures fall back to the basic local parser. Set
   `HTML_LORE_DOCUMENT_PARSER=basic` for lightweight deployments or parser
   troubleshooting.
 - `HTML_LORE_AI_EMBEDDING_MODEL` enables vector / hybrid retrieval. If the

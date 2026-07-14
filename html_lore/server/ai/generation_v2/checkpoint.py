@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import fields, is_dataclass, replace
+from dataclasses import asdict, fields, is_dataclass, replace
 from enum import Enum
 from pathlib import Path
 from types import UnionType
@@ -11,7 +11,7 @@ from uuid import uuid4
 from html_lore.server.config import ServerSettings
 
 from .material_bundle import ensure_within, internal_meta_relative_path, job_workspace_dir, job_workspace_root
-from .schemas import GenerationState, StageTraceEvent, normalize_for_json
+from .schemas import GenerationState, SpreadsheetWorkbook, StageTraceEvent, normalize_for_json
 
 
 MANUAL_CHECKPOINT_RETRY_LIMIT = 2
@@ -24,10 +24,11 @@ def write_state_checkpoint(settings: ServerSettings, state: GenerationState, *, 
         return ""
     workspace = job_workspace_dir(settings, job_id)
     ensure_within(workspace, job_workspace_root(settings))
+    persist_checkpoint_workbooks(workspace, state)
     checkpoint_path = workspace / "checkpoints" / "latest.json"
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_path.write_text(
-        json.dumps(checkpoint_state_payload(state), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        json.dumps(checkpoint_state_payload(state, omit_workbooks=True), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     return internal_meta_relative_path(settings, checkpoint_path)
@@ -46,10 +47,11 @@ def read_state_checkpoint(settings: ServerSettings, checkpoint_path: str) -> Gen
         raise ValueError("Generation checkpoint is not valid JSON.") from exc
     if not isinstance(data, dict):
         raise ValueError("Generation checkpoint must be a JSON object.")
-    return dataclass_from_dict(GenerationState, data)
+    state = dataclass_from_dict(GenerationState, data)
+    return restore_checkpoint_workbooks(path.parent.parent, state)
 
 
-def checkpoint_state_payload(state: GenerationState) -> dict[str, Any]:
+def checkpoint_state_payload(state: GenerationState, *, omit_workbooks: bool = False) -> dict[str, Any]:
     payload = state.as_dict()
     input_data = payload.get("input") if isinstance(payload.get("input"), dict) else {}
     input_data["content"] = ""
@@ -67,7 +69,40 @@ def checkpoint_state_payload(state: GenerationState) -> dict[str, Any]:
         )
     input_data["materials"] = materials
     payload["input"] = input_data
+    if omit_workbooks:
+        parsed = payload.get("parsed_document") if isinstance(payload.get("parsed_document"), dict) else None
+        if parsed is not None:
+            parsed["workbooks"] = []
     return normalize_for_json(payload)
+
+
+def persist_checkpoint_workbooks(workspace: Path, state: GenerationState) -> None:
+    parsed = state.parsed_document
+    if parsed is None or not parsed.workbooks:
+        return
+    target = workspace / "materials" / "workbooks.json"
+    ensure_within(target, workspace)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file():
+        return
+    target.write_text(json.dumps(normalize_for_json([asdict(item) for item in parsed.workbooks]), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def restore_checkpoint_workbooks(workspace: Path, state: GenerationState) -> GenerationState:
+    if state.parsed_document is None or state.parsed_document.workbooks:
+        return state
+    source = workspace / "materials" / "workbooks.json"
+    ensure_within(source, workspace)
+    if not source.is_file():
+        return state
+    try:
+        decoded = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return state
+    if not isinstance(decoded, list):
+        return state
+    workbooks = [dataclass_from_dict(SpreadsheetWorkbook, item) for item in decoded if isinstance(item, dict)]
+    return replace(state, parsed_document=replace(state.parsed_document, workbooks=workbooks))
 
 
 def prepare_state_for_manual_retry(state: GenerationState) -> GenerationState:
