@@ -7,17 +7,20 @@ All notable changes to HTMlore will be documented in this file.
 The format is based on Keep a Changelog, and this project uses semantic
 versioning after the initial public release.
 
-## [Unreleased]
+## [1.2.3] - 2026-07-15
 
 ### Added
 
 - Added formula-aware `.xlsx` parsing that preserves workbook structure and exposes bounded read-only workbook inspection to the requirement, content, and verification agents.
+- Added two public sharing policies: default safe static sharing with deterministic safety copies, and an explicit sandboxed interactive mode for trusted content.
 
 ### Changed
 
 - Requirement analysis now makes an explicit continue, degraded, or blocked decision from generic material capability facts; checkpoints retain structured workbook data once per private workspace and restore it for resumable jobs.
 - Tightened Verifier evidence convergence after direct workbook or material reads without relaxing quality requirements.
 - Stabilized CI browser checks by using Playwright 1.61.1 and its pinned Chromium instead of the mutable system Chrome channel.
+- Safe sharing now creates a traceable same-directory copy when source HTML needs scripts, controls, charts, unsafe resources, or local references removed; original notes remain unchanged.
+- Added `HTML_LORE_SHARE_INTERACTIVE_ENABLED` so hosted deployments can disable interactive sharing without changing the safe default.
 
 ## [1.2.0] - 2026-07-13
 

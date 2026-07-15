@@ -245,7 +245,7 @@ def test_shared_page_isolates_source_global_styles(tmp_path: Path) -> None:
         server.close()
 
 
-def test_share_creation_blocks_scripted_html(tmp_path: Path) -> None:
+def test_safe_share_creation_creates_static_copy_for_scripted_html(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = copy_fixture_tree(tmp_path)
     unsafe = content_dir / "imported" / "unsafe.html"
     unsafe.parent.mkdir(parents=True, exist_ok=True)
@@ -255,11 +255,19 @@ def test_share_creation_blocks_scripted_html(tmp_path: Path) -> None:
     )
     server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Share Test")
     try:
-        status, error = server.json_error("POST", "/api/shares", {"item_id": "imported/unsafe.html", "duration": "1d"})
+        created = server.json("POST", "/api/shares", {"item_id": "imported/unsafe.html", "duration": "1d"})
+        share = created["share"]
+        copied_path = content_dir / share["content_item_id"]
+        public = urllib.request.urlopen(f"http://127.0.0.1:{server.port}{created['url_path']}", timeout=5).read().decode("utf-8")
 
-        assert status == 400
-        assert error["detail"]["safety"]["shareable"] is False
-        assert "blocked-tag:script" in error["detail"]["safety"]["reasons"]
+        assert share["mode"] == "safe"
+        assert share["item_id"] == "imported/unsafe.html"
+        assert share["content_item_id"].startswith("imported/unsafe--safe-share")
+        assert share["repair"]["engine"] == "deterministic"
+        assert copied_path.exists()
+        assert "<script" not in copied_path.read_text(encoding="utf-8")
+        assert "<script>alert(1)</script>" in unsafe.read_text(encoding="utf-8")
+        assert "alert(1)" not in public
     finally:
         server.close()
 
@@ -325,10 +333,105 @@ def test_share_still_blocks_unsafe_inline_handlers(tmp_path: Path) -> None:
     unsafe.write_text("<html><body><div onclick=\"fetch('/api/items')\">bad</div></body></html>", encoding="utf-8")
     server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Share Test")
     try:
-        status, error = server.json_error("POST", "/api/shares", {"item_id": "imported/unsafe-handler.html", "duration": "1d"})
+        created = server.json("POST", "/api/shares", {"item_id": "imported/unsafe-handler.html", "duration": "1d"})
+        copied = (content_dir / created["share"]["content_item_id"]).read_text(encoding="utf-8")
 
+        assert created["share"]["repair"]["created"] is True
+        assert "onclick=" not in copied
+        assert "fetch('/api/items')" not in copied
+    finally:
+        server.close()
+
+
+def test_interactive_share_preserves_trusted_html_inside_isolated_frame(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = copy_fixture_tree(tmp_path)
+    interactive = content_dir / "imported" / "interactive.html"
+    interactive.parent.mkdir(parents=True, exist_ok=True)
+    interactive.write_text(
+        """<!doctype html><html><head>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">
+</head><body><canvas id="chart"></canvas><button onclick="draw()">Draw</button>
+<script>function draw() { new Chart(document.getElementById('chart'), {}); }</script>
+</body></html>""",
+        encoding="utf-8",
+    )
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Share Test")
+    try:
+        created = server.json(
+            "POST",
+            "/api/shares",
+            {"item_id": "imported/interactive.html", "duration": "1d", "mode": "interactive"},
+        )
+        public_data = server.request("GET", f"/api/public/shares/{created['token']}")
+        public_page = urllib.request.urlopen(
+            f"http://127.0.0.1:{server.port}{created['url_path']}", timeout=5,
+        ).read().decode("utf-8")
+
+        assert created["share"]["mode"] == "interactive"
+        assert public_data["share"]["mode"] == "interactive"
+        assert "cdn.jsdelivr.net/npm/chart.js" in public_data["html"]
+        assert "onclick=\"draw()\"" in public_data["html"]
+        assert "sandbox=\"allow-scripts\"" in public_page
+        assert "allow-same-origin" not in public_page
+        assert "allow-forms" not in public_page
+        assert "allow-popups" not in public_page
+    finally:
+        server.close()
+
+
+def test_interactive_share_requires_confirmation_for_private_reference(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = copy_fixture_tree(tmp_path)
+    interactive = content_dir / "imported" / "internal-dashboard.html"
+    interactive.parent.mkdir(parents=True, exist_ok=True)
+    interactive.write_text(
+        '<html><body><script src="http://192.168.1.12/chart.js"></script><div>Dashboard</div></body></html>',
+        encoding="utf-8",
+    )
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Share Test")
+    try:
+        status, error = server.json_error(
+            "POST",
+            "/api/shares",
+            {"item_id": "imported/internal-dashboard.html", "duration": "1d", "mode": "interactive"},
+        )
+        assert status == 409
+        assert error["detail"]["requires_confirmation"] is True
+        assert "private-local-reference" in error["detail"]["safety"]["warnings"]
+
+        created = server.json(
+            "POST",
+            "/api/shares",
+            {
+                "item_id": "imported/internal-dashboard.html",
+                "duration": "1d",
+                "mode": "interactive",
+                "confirm_private_references": True,
+            },
+        )
+        assert created["share"]["active"] is True
+    finally:
+        server.close()
+
+
+def test_interactive_share_still_blocks_secrets_and_navigation_escape_tags(tmp_path: Path) -> None:
+    content_dir, meta_dir, public_dir = copy_fixture_tree(tmp_path)
+    unsafe = content_dir / "imported" / "secret.html"
+    unsafe.parent.mkdir(parents=True, exist_ok=True)
+    unsafe.write_text(
+        '<html><head><base href="https://evil.example/"></head><body>api_key=super-secret-value<script>alert(1)</script></body></html>',
+        encoding="utf-8",
+    )
+    server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Share Test")
+    try:
+        status, error = server.json_error(
+            "POST",
+            "/api/shares",
+            {"item_id": "imported/secret.html", "duration": "1d", "mode": "interactive"},
+        )
         assert status == 400
-        assert "inline-event-handler" in error["detail"]["safety"]["reasons"]
+        assert "blocked-tag:base" in error["detail"]["safety"]["reasons"]
+        assert "sensitive-secret" in error["detail"]["safety"]["reasons"]
     finally:
         server.close()
 
@@ -436,7 +539,7 @@ def test_shared_page_preserves_safe_styles_and_fragment_links(tmp_path: Path) ->
         server.close()
 
 
-def test_share_blocks_unsafe_css_resources(tmp_path: Path) -> None:
+def test_safe_share_removes_unsafe_css_resources(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = copy_fixture_tree(tmp_path)
     unsafe = content_dir / "imported" / "unsafe-css.html"
     unsafe.parent.mkdir(parents=True, exist_ok=True)
@@ -446,17 +549,17 @@ def test_share_blocks_unsafe_css_resources(tmp_path: Path) -> None:
     )
     server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Share Test")
     try:
-        status, error = server.json_error("POST", "/api/shares", {"item_id": "imported/unsafe-css.html", "duration": "1d"})
+        created = server.json("POST", "/api/shares", {"item_id": "imported/unsafe-css.html", "duration": "1d"})
+        copied = (content_dir / created["share"]["content_item_id"]).read_text(encoding="utf-8")
 
-        assert status == 400
-        reasons = error["detail"]["safety"]["reasons"]
-        assert "css-import" in reasons
-        assert "css-url" in reasons
+        assert created["share"]["repair"]["created"] is True
+        assert "@import" not in copied
+        assert "file:///tmp/x" not in copied
     finally:
         server.close()
 
 
-def test_share_identifies_chart_notes_as_static_export_required(tmp_path: Path) -> None:
+def test_safe_share_replaces_chart_with_static_notice(tmp_path: Path) -> None:
     content_dir, meta_dir, public_dir = copy_fixture_tree(tmp_path)
     chart = content_dir / "imported" / "chart.html"
     chart.parent.mkdir(parents=True, exist_ok=True)
@@ -469,12 +572,12 @@ def test_share_identifies_chart_notes_as_static_export_required(tmp_path: Path) 
     )
     server = run_api_server(content_dir=content_dir, meta_dir=meta_dir, public_dir=public_dir, site_title="Share Test")
     try:
-        status, error = server.json_error("POST", "/api/shares", {"item_id": "imported/chart.html", "duration": "1d"})
+        created = server.json("POST", "/api/shares", {"item_id": "imported/chart.html", "duration": "1d"})
+        copied = (content_dir / created["share"]["content_item_id"]).read_text(encoding="utf-8")
 
-        assert status == 400
-        reasons = error["detail"]["safety"]["reasons"]
-        assert "blocked-tag:script" in reasons
-        assert "requires-static-export:chart" in reasons
+        assert created["share"]["repair"]["created"] is True
+        assert "Interactive content was removed" in copied
+        assert "<canvas" not in copied
     finally:
         server.close()
 

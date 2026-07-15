@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600;900&family=Noto+Serif+JP:wght@600;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.2.0">
+  <link rel="stylesheet" href="style.css?v=1.2.3">
 </head>
 <body>
   <a class="demo-home-link" href="../" aria-label="HTMlore homepage" title="HTMlore homepage">
@@ -979,6 +979,14 @@
         </div>
         <p class="security-note" data-i18n="shareSecurityNote"></p>
         <label>
+          <span data-i18n="shareMode"></span>
+          <select id="share-mode">
+            <option value="safe" data-i18n="shareModeSafe"></option>
+            <option value="interactive" data-i18n="shareModeInteractive"></option>
+          </select>
+        </label>
+        <p class="security-note" id="share-mode-note"></p>
+        <label>
           <span data-i18n="shareDuration"></span>
           <select id="share-duration">
             <option value="1h" data-i18n="shareDuration1h"></option>
@@ -1058,6 +1066,6 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=1.2.0" type="module"></script>
+  <script src="app.js?v=1.2.3" type="module"></script>
 </body>
 </html>

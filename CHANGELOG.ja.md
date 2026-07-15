@@ -2,17 +2,20 @@
 
 Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](CHANGELOG.ja.md)
 
-## [Unreleased]
+## [1.2.3] - 2026-07-15
 
 ### Added
 
 - 数式を意識した `.xlsx` parser を追加し、workbook structure を保持するとともに、requirement / content / verification agent に境界付き read-only workbook inspection を提供しました。
+- 既定の safe static sharing と、信頼済みコンテンツ向けの隔離された interactive sharing という 2 つの公開共有ポリシーを追加しました。
 
 ### Changed
 
 - Requirement analysis は generic material capability facts から continue、degraded、blocked を明示的に判断します。checkpoint は private workspace に structured workbook data を一度だけ保持し、resume 時に復元します。
 - Quality の基準を緩めず、Verifier が direct workbook / material evidence を得た後の判断を収束させました。
 - CI の browser check は Playwright 1.61.1 とその固定 Chromium を使うようにし、変動する system Chrome channel への依存をなくしました。
+- Safe sharing は script、control、chart、安全でない resource、local reference の除去が必要な場合、元ファイルと同じ場所に追跡可能な安全コピーを作成します。元ノートは変更されません。
+- `HTML_LORE_SHARE_INTERACTIVE_ENABLED` を追加し、ホスト型デプロイで safe default を変えずに interactive sharing を無効化できるようにしました。
 
 ## [1.2.0] - 2026-07-13
 

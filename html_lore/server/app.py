@@ -44,7 +44,7 @@ from .ai.rate_limit import AIRateLimitError, ai_rate_limiter
 from .items import ItemContentError, ItemContentUpdateError, ItemDeleteError, ItemMetadataError, ItemService, ItemStateError, normalize_query
 from .jobs import JobError, JobService
 from .navigation import NavigationConfigError, NavigationConfigService
-from .shares import ShareError, ShareSafetyError, ShareService, scan_share_content, settings_for_share_token
+from .shares import ShareError, ShareSafetyConfirmationError, ShareSafetyError, ShareService, scan_for_share_mode, settings_for_share_token
 from .uploads import UploadError, UploadService, ensure_within
 
 
@@ -795,7 +795,10 @@ def create_app() -> FastAPI:
         content = values.get("content")
         if not isinstance(content, str):
             raise HTTPException(status_code=400, detail="Content must be a string.")
-        return scan_share_content(content)
+        try:
+            return scan_for_share_mode(content, str(values.get("mode") or "safe"))
+        except ShareError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/navigation")
     def navigation(_: ApiAuth, service: Annotated[NavigationConfigService, Depends(get_navigation_service)]) -> dict:
@@ -862,7 +865,7 @@ def create_app() -> FastAPI:
     @app.get("/api/shares")
     def shares(_: ApiAuth, service: Annotated[ShareService, Depends(get_share_service)]) -> dict:
         items = service.list_shares()
-        return {"shares": items, "count": len(items)}
+        return {"shares": items, "count": len(items), "interactive_enabled": service.settings.share_interactive_enabled}
 
     @app.post("/api/shares")
     def create_share(values: dict, _: ApiAuth, service: Annotated[ShareService, Depends(get_share_service)]) -> dict:
@@ -870,7 +873,11 @@ def create_app() -> FastAPI:
             result = service.create_share(
                 item_id=str(values.get("item_id") or ""),
                 duration=str(values.get("duration") or "1d"),
+                mode=str(values.get("mode") or "safe"),
+                confirm_private_references=values.get("confirm_private_references") is True,
             )
+        except ShareSafetyConfirmationError as exc:
+            raise HTTPException(status_code=409, detail={"message": str(exc), "safety": exc.scan, "requires_confirmation": True}) from exc
         except ShareSafetyError as exc:
             raise HTTPException(status_code=400, detail={"message": str(exc), "safety": exc.scan}) from exc
         except ShareError as exc:
@@ -1114,6 +1121,9 @@ def render_share_page(data: dict) -> str:
 
 
 def render_share_srcdoc(data: dict) -> str:
+    share = data.get("share") if isinstance(data.get("share"), dict) else {}
+    if share.get("mode") == "interactive":
+        return render_interactive_share_srcdoc(str(data.get("html") or ""))
     body = data.get("html") or ""
     styles = data.get("styles") or ""
     return f"""<!doctype html>
@@ -1170,6 +1180,35 @@ def render_share_srcdoc(data: dict) -> str:
   </script>
 </body>
 </html>"""
+
+
+def render_interactive_share_srcdoc(content: str) -> str:
+    helper = """
+<script>
+  function reportHeight() {
+    const doc = document.documentElement;
+    const height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
+    parent.postMessage({ type: "html-lore-share-height", height }, "*");
+  }
+  function reportAnchor(hash) {
+    if (!hash || hash === "#") return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (!target) return;
+    parent.postMessage({ type: "html-lore-share-anchor", top: target.getBoundingClientRect().top }, "*");
+    reportHeight();
+  }
+  document.addEventListener("click", (event) => {
+    const anchor = event.target.closest('a[href^="#"]');
+    if (anchor) setTimeout(() => reportAnchor(anchor.getAttribute("href")), 0);
+  });
+  window.addEventListener("load", reportHeight);
+  if ("ResizeObserver" in window) new ResizeObserver(reportHeight).observe(document.documentElement);
+  setTimeout(reportHeight, 0);
+</script>
+"""
+    if re.search(r"</body\\s*>", content, flags=re.I):
+        return re.sub(r"</body\\s*>", lambda _: f"{helper}</body>", content, count=1, flags=re.I)
+    return f"{content}{helper}"
 
 
 def escape_html(value: object) -> str:

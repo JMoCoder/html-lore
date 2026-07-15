@@ -25,6 +25,7 @@ class ServerSettings:
     session_cookie_name: str = "html_lore_session"
     session_max_age_seconds: int = 7 * 24 * 60 * 60
     session_secure: bool = False
+    share_interactive_enabled: bool = True
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:8080", "http://localhost:8080")
     ai_provider: str = ""
     ai_base_url: str = ""
@@ -108,6 +109,7 @@ def load_settings() -> ServerSettings:
     session_cookie_name = get_env("SESSION_COOKIE_NAME", "html_lore_session").strip() or "html_lore_session"
     session_max_age_seconds = int(get_env("SESSION_MAX_AGE_SECONDS", str(7 * 24 * 60 * 60)))
     session_secure = parse_bool(get_env("SESSION_SECURE", "false"))
+    share_interactive_enabled = parse_bool(get_env("SHARE_INTERACTIVE_ENABLED", "true"))
     cors_origins = parse_csv(get_env("CORS_ORIGINS", "http://127.0.0.1:8080,http://localhost:8080"))
     ai_provider = get_env("AI_PROVIDER", "").strip()
     ai_base_url = get_env("AI_BASE_URL", "").strip()
@@ -167,6 +169,7 @@ def load_settings() -> ServerSettings:
         session_cookie_name=session_cookie_name,
         session_max_age_seconds=session_max_age_seconds,
         session_secure=session_secure,
+        share_interactive_enabled=share_interactive_enabled,
         cors_origins=cors_origins,
         ai_provider=ai_provider,
         ai_base_url=ai_base_url,

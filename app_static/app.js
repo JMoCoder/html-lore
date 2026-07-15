@@ -264,7 +264,13 @@ const i18n = {
     shareManagement: "Share links",
     shareManagementIntro: "Review active public note links and revoke access when a note should no longer be shared.",
     shareDialog: "Share note",
-    shareSecurityNote: "Shared notes are public read-only pages. HTMlore blocks sharing when a note contains executable HTML, dangerous links, or likely secrets. External links are disabled in the shared page.",
+    shareSecurityNote: "Shared notes are public read-only pages. Choose a safety policy appropriate for the recipients and source content.",
+    shareMode: "Sharing mode",
+    shareModeSafe: "Safe static sharing",
+    shareModeInteractive: "Interactive sharing (trusted content)",
+    shareModeSafeNote: "The default public mode. If the source fails the safety scan, HTMlore creates a static safety copy beside the original and shares that copy instead.",
+    shareModeInteractiveNote: "For content you control. Scripts and remote resources are preserved inside an isolated iframe without same-origin access.",
+    shareInteractiveConfirm: "Interactive sharing allows recipient-visible scripts and remote resources from this note to run inside an isolated iframe. Only use it for content you trust. Continue?",
     shareDuration: "Duration",
     shareDuration1h: "1 hour",
     shareDuration1d: "1 day",
@@ -280,6 +286,7 @@ const i18n = {
     revokeShare: "Revoke share",
     shareNeedsAgent: "Sharing requires the backend server.",
     shareCreated: "Share link created.",
+    shareCreatedSafeCopy: "A static safety copy was created beside the original and is now shared.",
     shareUpdated: "Share settings updated.",
     shareRevoked: "Share revoked.",
     shareCopied: "Share link copied.",
@@ -775,7 +782,13 @@ const i18n = {
     shareManagement: "分享链接管理",
     shareManagementIntro: "查看当前公开分享链接，并在不再需要公开访问时取消分享。",
     shareDialog: "分享笔记",
-    shareSecurityNote: "分享笔记是公开只读页面。若笔记包含可执行 HTML、危险链接或疑似密钥，HTMlore 会禁止分享；分享页中的外部链接会被禁用。",
+    shareSecurityNote: "分享笔记是公开只读页面。请根据接收者和内容来源选择合适的安全策略。",
+    shareMode: "分享模式",
+    shareModeSafe: "安全静态分享",
+    shareModeInteractive: "互动分享（受信内容）",
+    shareModeSafeNote: "默认公开模式。若原文件未通过安全扫描，HTMlore 会在原文件同级生成静态安全副本，并分享该副本。",
+    shareModeInteractiveNote: "适用于你可控的内容。脚本和远程资源会被保留，但仅在无同源权限的隔离 iframe 中运行。",
+    shareInteractiveConfirm: "互动分享会允许该笔记中的脚本和远程资源在访问者可见的隔离 iframe 中运行。仅应对受信内容使用。是否继续？",
     shareDuration: "有效期",
     shareDuration1h: "1小时",
     shareDuration1d: "1天",
@@ -791,6 +804,7 @@ const i18n = {
     revokeShare: "取消分享",
     shareNeedsAgent: "分享功能需要连接后端服务。",
     shareCreated: "分享链接已创建。",
+    shareCreatedSafeCopy: "已在原文件同级生成静态安全副本，并创建了该副本的分享链接。",
     shareUpdated: "分享设置已更新。",
     shareRevoked: "分享已取消。",
     shareCopied: "分享链接已复制。",
@@ -1286,7 +1300,13 @@ const i18n = {
     shareManagement: "共有リンク管理",
     shareManagementIntro: "公開共有リンクを確認し、不要になったノートの共有を取り消します。",
     shareDialog: "ノートを共有",
-    shareSecurityNote: "共有ノートは公開の読み取り専用ページです。実行可能 HTML、危険なリンク、疑わしい secret が含まれる場合、HTMlore は共有を禁止します。共有ページ内の外部リンクは無効化されます。",
+    shareSecurityNote: "共有ノートは公開の読み取り専用ページです。受信者とコンテンツの出所に応じて安全ポリシーを選択してください。",
+    shareMode: "共有モード",
+    shareModeSafe: "安全な静的共有",
+    shareModeInteractive: "インタラクティブ共有（信頼済みコンテンツ）",
+    shareModeSafeNote: "標準の公開モードです。安全スキャンに失敗した場合、HTMlore は元ファイルと同じ場所に静的な安全コピーを作成して共有します。",
+    shareModeInteractiveNote: "管理下のコンテンツ向けです。スクリプトとリモートリソースは保持されますが、同一オリジン権限のない分離 iframe 内でのみ実行されます。",
+    shareInteractiveConfirm: "インタラクティブ共有では、このノートのスクリプトとリモートリソースが閲覧者に見える分離 iframe 内で実行されます。信頼できるコンテンツにのみ使用してください。続行しますか？",
     shareDuration: "有効期限",
     shareDuration1h: "1時間",
     shareDuration1d: "1日",
@@ -1302,6 +1322,7 @@ const i18n = {
     revokeShare: "共有を取り消す",
     shareNeedsAgent: "共有にはバックエンドサーバー接続が必要です。",
     shareCreated: "共有リンクを作成しました。",
+    shareCreatedSafeCopy: "元ファイルと同じ場所に静的な安全コピーを作成し、その共有リンクを作成しました。",
     shareUpdated: "共有設定を更新しました。",
     shareRevoked: "共有を取り消しました。",
     shareCopied: "共有リンクをコピーしました。",
@@ -1602,7 +1623,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.2.0",
+  currentVersion: "1.2.3",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1685,6 +1706,7 @@ const state = {
   materialUpload: { status: "idle", progress: 0, message: "" },
   referenceUpload: { status: "idle", progress: 0, message: "" },
   shares: [],
+  shareInteractiveEnabled: true,
   sharingItemId: "",
 };
 
@@ -1846,6 +1868,8 @@ const elements = {
   shareManagementFeedback: document.querySelector("#share-management-feedback"),
   shareDialog: document.querySelector("#share-dialog"),
   shareForm: document.querySelector("#share-form"),
+  shareMode: document.querySelector("#share-mode"),
+  shareModeNote: document.querySelector("#share-mode-note"),
   shareDuration: document.querySelector("#share-duration"),
   shareLink: document.querySelector("#share-link"),
   shareExpiry: document.querySelector("#share-expiry"),
@@ -2038,6 +2062,7 @@ function getSharedHtmlDownloadFilename(title) {
 }
 
 function renderShareSrcdoc(data) {
+  if (data?.share?.mode === "interactive") return renderInteractiveShareSrcdoc(String(data.html || ""));
   const body = data.html || "";
   const styles = data.styles || "";
   return `<!doctype html>
@@ -2094,6 +2119,32 @@ function renderShareSrcdoc(data) {
   <\/script>
 </body>
 </html>`;
+}
+
+function renderInteractiveShareSrcdoc(content) {
+  const helper = `
+<script>
+  function reportHeight() {
+    const doc = document.documentElement;
+    const height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
+    parent.postMessage({ type: "html-lore-share-height", height }, "*");
+  }
+  function reportAnchor(hash) {
+    if (!hash || hash === "#") return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (!target) return;
+    parent.postMessage({ type: "html-lore-share-anchor", top: target.getBoundingClientRect().top }, "*");
+    reportHeight();
+  }
+  document.addEventListener("click", (event) => {
+    const anchor = event.target.closest('a[href^="#"]');
+    if (anchor) setTimeout(() => reportAnchor(anchor.getAttribute("href")), 0);
+  });
+  window.addEventListener("load", reportHeight);
+  if ("ResizeObserver" in window) new ResizeObserver(reportHeight).observe(document.documentElement);
+  setTimeout(reportHeight, 0);
+<\/script>`;
+  return /<\/body\s*>/i.test(content) ? content.replace(/<\/body\s*>/i, `${helper}</body>`) : `${content}${helper}`;
 }
 
 async function checkAuthStatus() {
@@ -3462,8 +3513,10 @@ async function loadShares() {
     if (!response.ok) throw new Error(`Agent returned ${response.status}`);
     const data = await response.json();
     state.shares = Array.isArray(data.shares) ? data.shares : [];
+    state.shareInteractiveEnabled = data.interactive_enabled !== false;
   } catch (error) {
     state.shares = [];
+    state.shareInteractiveEnabled = false;
     console.warn("Share list unavailable.", error);
   }
 }
@@ -3481,6 +3534,9 @@ function openShareDialog(itemId) {
   if (!item) return;
   state.sharingItemId = itemId;
   const activeShare = getActiveShareForItem(itemId);
+  const interactiveOption = elements.shareMode.querySelector('option[value="interactive"]');
+  if (interactiveOption) interactiveOption.hidden = !state.shareInteractiveEnabled;
+  elements.shareMode.value = activeShare?.mode || "safe";
   elements.shareDuration.value = activeShare?.duration || "1d";
   elements.shareLink.value = activeShare ? getShareUrl(activeShare) : "";
   elements.shareCreate.textContent = t(activeShare ? "updateShare" : "createShare");
@@ -3488,6 +3544,7 @@ function openShareDialog(itemId) {
   elements.shareRevoke.hidden = !activeShare;
   renderShareExpiry(activeShare);
   elements.shareFeedback.textContent = state.agentUrl ? (activeShare && !elements.shareLink.value ? t("shareLinkOneTime") : "") : t("shareNeedsAgent");
+  renderShareModeNote();
   elements.shareDialog.hidden = false;
   elements.shareDuration.focus();
 }
@@ -3497,6 +3554,8 @@ function closeShareDialog() {
   elements.shareDialog.hidden = true;
   elements.shareFeedback.textContent = "";
   elements.shareLink.value = "";
+  elements.shareMode.value = "safe";
+  renderShareModeNote();
   renderShareExpiry(null);
 }
 
@@ -3508,9 +3567,11 @@ async function submitShareDialog(event) {
   }
   const itemId = state.sharingItemId;
   const activeShare = getActiveShareForItem(itemId);
+  const mode = elements.shareMode.value || "safe";
+  if (mode === "interactive" && !window.confirm(t("shareInteractiveConfirm"))) return;
   try {
     let share;
-    if (activeShare) {
+    if (activeShare && activeShare.mode === mode) {
       const response = await apiFetch(`/api/shares/${encodeURIComponent(activeShare.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -3526,14 +3587,20 @@ async function submitShareDialog(event) {
       const response = await apiFetch("/api/shares", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_id: itemId, duration: elements.shareDuration.value }),
+        body: JSON.stringify({
+          item_id: itemId,
+          duration: elements.shareDuration.value,
+          mode,
+          confirm_private_references: mode === "interactive",
+        }),
       });
       if (!response.ok) throw await buildShareError(response);
       const data = await response.json();
       share = { ...data.share, url_path: data.url_path };
+      if (activeShare) replaceShare({ ...activeShare, active: false, revoked: true });
       replaceShare(share);
       elements.shareLink.value = new URL(data.url_path, window.location.origin).href;
-      elements.shareFeedback.textContent = t("shareCreated");
+      elements.shareFeedback.textContent = share?.repair?.created ? t("shareCreatedSafeCopy") : t("shareCreated");
     }
     renderReaderShareState();
     renderGrid();
@@ -3546,6 +3613,11 @@ async function submitShareDialog(event) {
     elements.shareFeedback.textContent = error?.code === "safety" ? t("shareBlocked") : t("shareFailed");
     console.error(error);
   }
+}
+
+function renderShareModeNote() {
+  if (!elements.shareModeNote) return;
+  elements.shareModeNote.textContent = t(elements.shareMode?.value === "interactive" ? "shareModeInteractiveNote" : "shareModeSafeNote");
 }
 
 async function buildShareError(response) {
@@ -8030,7 +8102,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.2.0-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.2.3-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });
@@ -8276,6 +8348,7 @@ elements.readerAiPanelOpen?.addEventListener("click", () => {
 });
 elements.readerFrame.addEventListener("load", bindReaderFrameScroll);
 elements.shareForm.addEventListener("submit", submitShareDialog);
+elements.shareMode.addEventListener("change", renderShareModeNote);
 elements.shareCopy.addEventListener("click", copyCurrentShareLink);
 elements.shareRevoke.addEventListener("click", revokeCurrentShare);
 elements.shareCancel.addEventListener("click", closeShareDialog);

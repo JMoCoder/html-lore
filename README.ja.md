@@ -323,6 +323,14 @@ html-lore ai-vector-index smoke-test
 
 開発テストでは `HTML_LORE_AI_PROVIDER=fake` を使い、実際のモデルリクエストなしで UI と会話フローを確認できます。公開ステータスは `has_api_key` のみを返し、秘密値は返しません。
 
+## Sharing Policies
+
+公開共有の既定は **safe static sharing** です。サーバーは最初にソースを検査し、修復可能なスクリプト、対話コントロール、chart、安全でない resource、ローカル参照がある場合は、元ファイルと同じ場所に静的な安全コピーを作成して共有します。このコピーは元ノートとの関連を記録し、AI provider には送信しません。
+
+管理下のコンテンツでは、明示的な **interactive sharing** により script と remote resource を保持できます。`allow-scripts` のみを持つ iframe sandbox で実行され、same-origin access、form、popup、top-level navigation は許可しません。埋め込み secret、`<base>`、refresh redirect、危険な URL scheme、危険な download、`object`、`embed` は引き続き block され、private/local reference は再確認が必要です。
+
+ホスト型またはマルチテナント環境では、`HTML_LORE_SHARE_INTERACTIVE_ENABLED=false` を設定して interactive option を無効化できます。safe static sharing は引き続き利用できます。
+
 ## Security Model
 
 既定の Docker モードはローカル、LAN、プライベートセルフホスト向けです。既定のローカル/テストログインは `admin` / `test-password` で、開発用 session secret を使用します。ブラウザーは最初にログイン画面を表示し、ログイン後は HttpOnly session Cookie を使用します。登録は無効です。公開デプロイでは既定のユーザー名、パスワード、session secret を必ず変更してください。セルフホストユーザーは `data/users.json` に保存され、追加ユーザーごとのノートブックデータは `data/users/<data_id>/` に分離保存されます。

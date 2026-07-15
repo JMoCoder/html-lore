@@ -10,11 +10,15 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
+from html_lore.builder import build_site
+from html_lore.manifest import build_item
+from html_lore.metadata import MetadataStore, dump_simple_yaml
+
 from .config import ServerSettings
-from .items import ItemContentError, ItemService, ensure_within
+from .items import ItemContentError, ItemService, ensure_within, metadata_path_for_item
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 APP_INDEX = PROJECT_ROOT / "app_static" / "index.html"
@@ -26,6 +30,10 @@ SHARE_DURATIONS = {
     "30d": timedelta(days=30),
     "forever": None,
 }
+
+SAFE_SHARE_MODE = "safe"
+INTERACTIVE_SHARE_MODE = "interactive"
+SHARE_MODES = {SAFE_SHARE_MODE, INTERACTIVE_SHARE_MODE}
 
 DANGEROUS_TAGS = {"iframe", "object", "embed", "form", "input", "button", "textarea", "select", "base"}
 SANITIZER_BLOCK_TAGS = DANGEROUS_TAGS | {"script", "meta", "link"}
@@ -65,20 +73,48 @@ class ShareCreateResult:
     url_path: str
 
 
+class ShareRepairer(Protocol):
+    """Extension point for a future offline or AI-assisted safety-copy repairer."""
+
+    name: str
+
+    def repair(self, content: str) -> str: ...
+
+
+class DeterministicShareRepairer:
+    name = "deterministic"
+
+    def repair(self, content: str) -> str:
+        return build_safe_share_copy(content)
+
+
 class ShareService:
-    def __init__(self, settings: ServerSettings, root_settings: ServerSettings | None = None) -> None:
+    def __init__(
+        self,
+        settings: ServerSettings,
+        root_settings: ServerSettings | None = None,
+        repairer: ShareRepairer | None = None,
+    ) -> None:
         self.settings = settings
         self.root_settings = root_settings or settings
         self.item_service = ItemService(settings)
+        self.repairer = repairer or DeterministicShareRepairer()
 
     def list_shares(self) -> list[dict[str, Any]]:
         data = self._read_store()
         self._ensure_static_share_shells(data)
         return [public_share(record) for record in data.get("shares", []) if not record.get("deleted")]
 
-    def create_share(self, item_id: str, duration: str) -> ShareCreateResult:
+    def create_share(
+        self,
+        item_id: str,
+        duration: str,
+        mode: str = SAFE_SHARE_MODE,
+        confirm_private_references: bool = False,
+    ) -> ShareCreateResult:
         if duration not in SHARE_DURATIONS:
             raise ShareError("Invalid share duration.")
+        mode = normalize_share_mode(mode)
         item = self.item_service.get_item(item_id)
         if not item:
             raise ShareError("Item not found.")
@@ -89,9 +125,25 @@ class ShareService:
         except ItemContentError as exc:
             raise ShareError(str(exc)) from exc
 
-        scan = scan_share_content(content)
-        if not scan["shareable"]:
-            raise ShareSafetyError(scan)
+        content_item_id = item_id
+        repair: dict[str, Any] = {}
+        if mode == SAFE_SHARE_MODE:
+            original_scan = scan_share_content(content)
+            if original_scan["shareable"]:
+                scan = original_scan
+            else:
+                repaired = self._create_safe_share_copy(item, content, original_scan)
+                content_item_id = repaired["item_id"]
+                scan = repaired["safety"]
+                repair = repaired["repair"]
+        else:
+            if not self.settings.share_interactive_enabled:
+                raise ShareError("Interactive sharing is disabled by this deployment.")
+            scan = scan_interactive_share_content(content)
+            if not scan["shareable"]:
+                raise ShareSafetyError(scan)
+            if scan.get("requires_confirmation") and not confirm_private_references:
+                raise ShareSafetyConfirmationError(scan)
 
         token = secrets.token_urlsafe(32)
         token_hash = hash_token(token)
@@ -109,6 +161,8 @@ class ShareService:
             "token_hash": token_hash,
             "url_path": url_path,
             "item_id": item_id,
+            "content_item_id": content_item_id,
+            "mode": mode,
             "duration": duration,
             "created_at": now,
             "updated_at": now,
@@ -117,6 +171,7 @@ class ShareService:
             "access_count": 0,
             "last_accessed_at": "",
             "safety": scan,
+            "repair": repair,
         }
         data.setdefault("shares", []).append(record)
         self._write_store(data)
@@ -168,15 +223,22 @@ class ShareService:
             raise ShareError("Share not found.")
         if bool(item.get("archived")):
             raise ShareError("Share not found.")
-        content = self.item_service.read_item_content(str(record["item_id"]))
-        scan = scan_share_content(content)
+        content_item_id = str(record.get("content_item_id") or record["item_id"])
+        mode = share_mode_for_record(record)
+        if mode == INTERACTIVE_SHARE_MODE and not self.settings.share_interactive_enabled:
+            raise ShareError("Share not found.")
+        try:
+            content = self.item_service.read_item_content(content_item_id)
+        except ItemContentError as exc:
+            raise ShareError("Share not found.") from exc
+        scan = scan_for_share_mode(content, mode)
         if not scan["shareable"]:
             record["revoked"] = True
             record["updated_at"] = utc_now()
             record["safety"] = scan
             self._update_record(record)
             raise ShareError("Share not found.")
-        rendered = sanitize_shared_html(content)
+        rendered = sanitize_shared_html(content) if mode == SAFE_SHARE_MODE else {"body_html": content, "styles": ""}
         record["access_count"] = int(record.get("access_count") or 0) + 1
         record["last_accessed_at"] = utc_now()
         self._update_record(record)
@@ -189,6 +251,73 @@ class ShareService:
             },
             "html": rendered["body_html"],
             "styles": rendered["styles"],
+        }
+
+    def _create_safe_share_copy(self, item: dict[str, Any], content: str, original_scan: dict[str, Any]) -> dict[str, Any]:
+        repaired_content = self.repairer.repair(content)
+        repaired_scan = scan_share_content(repaired_content)
+        if not repaired_scan["shareable"]:
+            raise ShareSafetyError(
+                {
+                    "shareable": False,
+                    "reasons": sorted(set([*original_scan.get("reasons", []), *repaired_scan.get("reasons", []), "safe-copy-failed"])),
+                },
+            )
+
+        source_path = Path(str(item.get("id") or ""))
+        if not source_path.name:
+            raise ShareError("Item content path is invalid.")
+        relative_path = next_safe_share_copy_path(self.settings.content_dir, source_path)
+        content_path = self.settings.content_dir / relative_path
+        ensure_within(content_path, self.settings.content_dir)
+        content_path.parent.mkdir(parents=True, exist_ok=True)
+        content_path.write_text(repaired_content, encoding="utf-8")
+
+        now = utc_now()
+        source_metadata = MetadataStore.load(self.settings.meta_dir).for_item(str(item.get("id") or ""))
+        metadata = {
+            **source_metadata,
+            "id": relative_path.as_posix(),
+            "title": f"{str(item.get('title') or 'Untitled')} - Safe share copy",
+            "summary": str(item.get("summary") or ""),
+            "source_type": "share-safety-copy",
+            "status": "ready",
+            "favorite": False,
+            "archived": False,
+            "pinned": False,
+            "open_mode": "iframe",
+            "created": now,
+            "updated": now,
+            "share_safety": {
+                "source_item_id": str(item.get("id") or ""),
+                "repair_engine": self.repairer.name,
+                "original_reasons": list(original_scan.get("reasons") or []),
+            },
+        }
+        metadata.pop("path", None)
+        if self.settings.meta_dir is not None:
+            metadata_path = metadata_path_for_item(self.settings.meta_dir, relative_path.as_posix())
+            if metadata_path is not None:
+                ensure_within(metadata_path, self.settings.meta_dir)
+                metadata_path.parent.mkdir(parents=True, exist_ok=True)
+                metadata_path.write_text(dump_simple_yaml(metadata), encoding="utf-8")
+        copied_item = build_item(content_path, self.settings.content_dir, MetadataStore.load(self.settings.meta_dir))
+        build_site(
+            content_dir=self.settings.content_dir,
+            meta_dir=self.settings.meta_dir,
+            output_dir=self.settings.public_dir,
+            site_title=self.settings.site_title,
+        )
+        return {
+            "item_id": copied_item["id"],
+            "safety": repaired_scan,
+            "repair": {
+                "created": True,
+                "engine": self.repairer.name,
+                "source_item_id": str(item.get("id") or ""),
+                "copy_item_id": copied_item["id"],
+                "original_reasons": list(original_scan.get("reasons") or []),
+            },
         }
 
     def _find_by_token_hash(self, token_hash: str) -> dict[str, Any] | None:
@@ -276,10 +405,18 @@ class ShareSafetyError(ShareError):
         self.scan = scan
 
 
+class ShareSafetyConfirmationError(ShareSafetyError):
+    def __init__(self, scan: dict[str, Any]) -> None:
+        super().__init__(scan)
+        self.args = ("Interactive share requires confirmation for private or local references.",)
+
+
 def public_share(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": record.get("id"),
         "item_id": record.get("item_id"),
+        "content_item_id": record.get("content_item_id") or record.get("item_id"),
+        "mode": share_mode_for_record(record),
         "duration": record.get("duration"),
         "created_at": record.get("created_at"),
         "updated_at": record.get("updated_at"),
@@ -290,6 +427,7 @@ def public_share(record: dict[str, Any]) -> dict[str, Any]:
         "access_count": int(record.get("access_count") or 0),
         "last_accessed_at": record.get("last_accessed_at") or "",
         "safety": record.get("safety") or {"shareable": True, "reasons": []},
+        "repair": record.get("repair") or {},
     }
 
 
@@ -297,6 +435,7 @@ def public_share_read(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "active": is_share_active(record),
         "expires_at": record.get("expires_at") or "",
+        "mode": share_mode_for_record(record),
     }
 
 
@@ -389,6 +528,22 @@ def is_share_active(record: dict[str, Any]) -> bool:
     return expires_at >= datetime.now(timezone.utc)
 
 
+def normalize_share_mode(value: Any) -> str:
+    mode = str(value or SAFE_SHARE_MODE).strip().lower()
+    if mode not in SHARE_MODES:
+        raise ShareError("Invalid share mode.")
+    return mode
+
+
+def share_mode_for_record(record: dict[str, Any]) -> str:
+    return str(record.get("mode") or SAFE_SHARE_MODE) if str(record.get("mode") or SAFE_SHARE_MODE) in SHARE_MODES else SAFE_SHARE_MODE
+
+
+def scan_for_share_mode(content: str, mode: str) -> dict[str, Any]:
+    normalized = normalize_share_mode(mode)
+    return scan_share_content(content) if normalized == SAFE_SHARE_MODE else scan_interactive_share_content(content)
+
+
 def scan_share_content(content: str) -> dict[str, Any]:
     scanner = SafetyScanner()
     scanner.feed(content)
@@ -409,6 +564,128 @@ def scan_share_content(content: str) -> dict[str, Any]:
             reasons.append("private-local-reference")
             break
     return {"shareable": not reasons, "reasons": sorted(set(reasons))}
+
+
+def scan_interactive_share_content(content: str) -> dict[str, Any]:
+    """Keep trusted interactive shares permissive while retaining hard isolation gates."""
+    scanner = InteractiveSafetyScanner()
+    scanner.feed(content)
+    reasons = list(scanner.reasons)
+    for reason in unsafe_css_reasons("\n".join(scanner.style_parts)):
+        if reason not in {"css-import", "css-url"}:
+            reasons.append(reason)
+    text = html.unescape(strip_tags(content))
+    for pattern in SECRET_PATTERNS:
+        if pattern.search(text):
+            reasons.append("sensitive-secret")
+            break
+    warnings: list[str] = []
+    for pattern in LOCAL_PATTERNS:
+        if pattern.search(content):
+            warnings.append("private-local-reference")
+            break
+    return {
+        "shareable": not reasons,
+        "reasons": sorted(set(reasons)),
+        "warnings": sorted(set(warnings)),
+        "requires_confirmation": bool(warnings),
+    }
+
+
+class InteractiveSafetyScanner(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.reasons: list[str] = []
+        self.style_stack = 0
+        self.style_parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        name = tag.lower()
+        if name in {"base", "object", "embed"}:
+            self.reasons.append(f"blocked-tag:{name}")
+        if name == "meta" and is_meta_refresh(attrs):
+            self.reasons.append("meta-refresh")
+        if name == "style":
+            self.style_stack += 1
+        for attr_name, attr_value in attrs:
+            attr = attr_name.lower()
+            if attr not in {"href", "src", "action", "formaction"}:
+                continue
+            reason = unsafe_url_reason((attr_value or "").strip())
+            if reason in {"dangerous-url", "dangerous-download"}:
+                self.reasons.append(reason)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "style" and self.style_stack > 0:
+            self.style_stack -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self.style_stack > 0:
+            self.style_parts.append(data)
+
+
+def build_safe_share_copy(content: str) -> str:
+    """Create a static, auditable copy without sending third-party source to a model."""
+    redacted = redact_share_sensitive_values(content)
+    prepared = replace_removed_interactive_components(redacted)
+    rendered = sanitize_shared_html(prepared)
+    body = redact_share_private_references(rendered["body_html"])
+    styles = rendered["styles"]
+    if not strip_tags(body).strip():
+        body = '<div class="html-lore-share-notice">No static content could be preserved. The original interactive components were removed for safe public sharing.</div>'
+    return f"""<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+  <style>
+    html {{ min-height: 100%; }}
+    body {{ margin: 0; overflow-wrap: anywhere; }}
+    .html-lore-share-notice {{ margin: 1rem; padding: .75rem 1rem; border: 1px solid #d7b66b; background: #fff8df; color: #5f4612; font: 14px/1.5 system-ui, sans-serif; }}
+    img, video, svg {{ max-width: 100%; height: auto; }}
+  </style>
+  {styles}
+</head>
+<body>
+  {body}
+</body>
+</html>"""
+
+
+def redact_share_sensitive_values(content: str) -> str:
+    value = content
+    for pattern in SECRET_PATTERNS:
+        value = pattern.sub("[redacted sensitive value]", value)
+    return value
+
+
+def redact_share_private_references(content: str) -> str:
+    value = content
+    for pattern in LOCAL_PATTERNS:
+        value = pattern.sub("[removed private reference]", value)
+    return value
+
+
+def replace_removed_interactive_components(content: str) -> str:
+    notice = '<div class="html-lore-share-notice">Interactive content was removed from this safety copy.</div>'
+    value = re.sub(r"<canvas\b[^>]*>.*?</canvas\s*>", notice, content, flags=re.I | re.S)
+    value = re.sub(r"<canvas\b[^>]*/?\s*>", notice, value, flags=re.I)
+    value = re.sub(r"<(?:iframe|object|embed)\b[^>]*>.*?</(?:iframe|object)\s*>", notice, value, flags=re.I | re.S)
+    value = re.sub(r"<(?:iframe|object|embed)\b[^>]*/?\s*>", notice, value, flags=re.I)
+    value = re.sub(r"<form\b[^>]*>", '<div class="html-lore-share-form">', value, flags=re.I)
+    value = re.sub(r"</form\s*>", "</div>", value, flags=re.I)
+    return value
+
+
+def next_safe_share_copy_path(content_dir: Path, source_path: Path) -> Path:
+    suffix = source_path.suffix or ".html"
+    stem = source_path.stem or "shared-note"
+    candidate = source_path.with_name(f"{stem}--safe-share{suffix}")
+    index = 2
+    while (content_dir / candidate).exists():
+        candidate = source_path.with_name(f"{stem}--safe-share-{index}{suffix}")
+        index += 1
+    return candidate
 
 
 class SafetyScanner(HTMLParser):

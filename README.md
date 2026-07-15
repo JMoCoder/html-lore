@@ -344,6 +344,7 @@ HTML_LORE_AI_GENERATION_REASONING_EFFORT=medium
 HTML_LORE_DOCUMENT_PARSER=markitdown
 HTML_LORE_MAX_UPLOAD_BYTES=104857600
 HTML_LORE_MAX_UPLOAD_TOTAL_BYTES=524288000
+HTML_LORE_SHARE_INTERACTIVE_ENABLED=true
 HTML_LORE_AI_API_KEY=replace-with-your-server-side-key
 ```
 
@@ -434,6 +435,25 @@ Deployment notes:
 For development tests, `HTML_LORE_AI_PROVIDER=fake` can exercise the UI and
 conversation flow without sending model requests. Public provider status only
 returns `has_api_key`, never the secret value.
+
+## Sharing Policies
+
+Public sharing defaults to **safe static sharing**. The server scans the source
+first; clean notes share directly. When a reparable note contains scripts,
+interactive controls, charts, unsafe resources, or local references, HTMlore
+creates a static safety copy beside the original file and shares that copy. The
+copy is recorded with its source note and is never sent to an AI provider.
+
+For self-controlled content, an explicit **interactive sharing** option keeps
+scripts and remote resources. It is rendered in an iframe sandbox with
+`allow-scripts` only: no same-origin access, forms, popups, or top-level
+navigation. Embedded secrets, `<base>`, refresh redirects, dangerous URL
+schemes, downloads, `object`, and `embed` remain blocked. Local/private
+references require a second confirmation.
+
+Set `HTML_LORE_SHARE_INTERACTIVE_ENABLED=false` to disable the interactive
+option at deployment time, for example in a hosted or multi-tenant environment.
+Safe static sharing remains available.
 
 External expansion mode can use Tavily, Brave, or a Tavily-to-Brave fallback chain as a controlled web-search provider:
 
