@@ -31,12 +31,12 @@ Markdown-first authoring. HTMlore takes a different path:
   the UI architecture for AI-assisted workflows, while credentials and model
   calls are kept out of the static frontend.
 
-## 1.0.0 Current Scope
+## Current Scope (v1.2.3)
 
-The current `1.0.0` line focuses on real local, private-network, and
+The current `v1.2.x` line supports real local, private-network, and
 self-hosted use: Docker deployment, built-in login, HTML import, persistent
-metadata, filtering, reading, archiving, public sharing, and the first
-server-side AI workflows.
+metadata, filtering, reading, archiving, public sharing, knowledge-base Q&A,
+and the V2 multi-agent HTML generation workflow.
 
 Implemented today:
 
@@ -102,8 +102,10 @@ Implemented today:
 
 Still limited or not implemented yet:
 
-- AI generation, modification, and knowledge-management workflows remain beta;
-  knowledge-base Q&A is the formal 1.0.0 delivered AI workflow.
+- Knowledge-base Q&A is a stable delivered workflow. HTML generation,
+  modification, and knowledge-management workflows remain beta while their
+  multi-agent routing, material handling, and visual quality checks continue
+  to evolve.
 - External web search is adapter-scaffolded but not bundled with a default
   provider.
 - Vector / hybrid retrieval requires a server-side embedding model

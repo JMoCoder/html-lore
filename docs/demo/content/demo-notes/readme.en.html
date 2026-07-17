@@ -35,8 +35,8 @@
 <li><strong>AI is treated as an optional service layer.</strong> The current app already has</li>
 <p>the UI architecture for AI-assisted workflows, while credentials and model calls are kept out of the static frontend.</p>
 </ul>
-<h2>1.0.0 Current Scope</h2>
-<p>The current <code>1.0.0</code> line focuses on real local, private-network, and self-hosted use: Docker deployment, built-in login, HTML import, persistent metadata, filtering, reading, archiving, public sharing, and the first server-side AI workflows.</p>
+<h2>Current Scope (v1.2.3)</h2>
+<p>The current <code>v1.2.x</code> line supports real local, private-network, and self-hosted use: Docker deployment, built-in login, HTML import, persistent metadata, filtering, reading, archiving, public sharing, knowledge-base Q&amp;A, and the V2 multi-agent HTML generation workflow.</p>
 <p>Implemented today:</p>
 <ul>
 <li>Single-container Docker deployment with <code>docker compose up -d --build</code>.</li>
@@ -87,7 +87,7 @@
 </ul>
 <p>Still limited or not implemented yet:</p>
 <ul>
-<li>AI generation, modification, and knowledge-management workflows remain beta; knowledge-base Q&amp;A is the formal 1.0.0 delivered AI workflow.</li>
+<li>Knowledge-base Q&amp;A is a stable delivered workflow. HTML generation, modification, and knowledge-management workflows remain beta while their multi-agent routing, material handling, and visual quality checks continue to evolve.</li>
 <li>External web search is adapter-scaffolded but not bundled with a default</li>
 <p>provider.</p>
 <li>Vector store / embedding retrieval is scaffolded and falls back to keyword</li>

@@ -31,8 +31,8 @@
 <li><strong>Web アプリを主クライアントにします。</strong> 別のデスクトップアプリではなく、ブラウザーとモバイル PWA を主な利用形態にします。</li>
 <li><strong>AI は任意のサービス層です。</strong> 現在のアプリには AI ワークフロー用 UI とコンテキスト設計がありますが、認証情報とモデル呼び出しは静的フロントエンドには保存しません。</li>
 </ul>
-<h2>1.0.0 Current Scope</h2>
-<p>現在の <code>1.0.0</code> ラインは、ローカル、プライベートネットワーク、セルフホストでの実運用を対象にしています。Docker デプロイ、内蔵ログイン、HTML インポート、メタデータ永続化、フィルター、読書、アーカイブ、公開共有に加え、最初のサーバー側 AI ワークフローを含みます。</p>
+<h2>Current Scope (v1.2.3)</h2>
+<p>現在の <code>v1.2.x</code> ラインは、ローカル、プライベートネットワーク、セルフホストでの実運用を対象にしています。Docker デプロイ、内蔵ログイン、HTML インポート、メタデータ永続化、フィルター、読書、アーカイブ、公開共有、ナレッジベース Q&amp;A、V2 マルチエージェント HTML 生成 workflow を含みます。</p>
 <p>現在実装済み:</p>
 <ul>
 <li><code>docker compose up -d --build</code> による単一コンテナ Docker デプロイ。</li>
@@ -71,7 +71,7 @@
 </ul>
 <p>現在の制限または未実装:</p>
 <ul>
-<li>AI 生成、修正、ナレッジ管理 workflow はまだ beta です。ナレッジベース Q&amp;A は 1.0.0 で正式に提供する AI workflow です。</li>
+<li>ナレッジベース Q&amp;A は安定して提供済みの workflow です。HTML 生成、修正、ナレッジ管理 workflow は beta 段階であり、マルチエージェント routing、material handling、visual quality check を継続的に改善しています。</li>
 <li>外部 Web 検索はアダプターを用意していますが、既定プロバイダーは同梱していません。</li>
 <li>vector store / embedding 検索はスキャフォールド済みで、将来の vector backend が設定されるまではキーワード検索へフォールバックします。</li>
 <li>PDF 資料解析は意図的に後回しにしています。</li>
