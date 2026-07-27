@@ -2,6 +2,13 @@
 
 Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](CHANGELOG.ja.md)
 
+## [1.2.5] - 2026-07-27
+
+### 修正
+
+- Interactive public share の fragment navigation を修正しました。reader が document 内の chapter link を使っても、sandboxed `srcdoc` iframe の content が失われません。
+- Long shared document では、target の scroll 後の visible position を基準に iframe と host page の scroll を連携し、chapter navigation が render 済み iframe の外へ移動しないようにしました。
+
 ## [1.2.4] - 2026-07-27
 
 ### 修正

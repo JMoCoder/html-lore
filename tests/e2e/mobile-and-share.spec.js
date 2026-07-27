@@ -199,7 +199,7 @@ test("static share fallback renders public shared content instead of the workspa
     .toBe(true);
 });
 
-test("static share fallback keeps fragment navigation inside the shared document", async ({ page }) => {
+test("interactive shares keep long-document fragment navigation inside a capped frame", async ({ page }) => {
   await page.route("**/share/anchor-token", async (route) => {
     const html = fs.readFileSync(path.join(__dirname, "../../app_static/index.html"), "utf8");
     await route.fulfill({ contentType: "text/html", body: html });
@@ -229,9 +229,11 @@ test("static share fallback keeps fragment navigation inside the shared document
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        share: { active: true, expires_at: "" },
+        share: { active: true, expires_at: "", mode: "interactive" },
         item: { title: "Anchor Note", summary: "Public summary" },
-        html: '<nav><a href="#sec-target">Jump</a></nav><div style="height:1200px"></div><section id="sec-target"><h2>Target</h2></section>',
+        html: `<!doctype html>
+          <html><head><style>html { scroll-behavior: smooth; }</style></head>
+          <body><nav><a href="#sec-target">Jump</a></nav><div style="height:22000px"></div><section id="sec-target"><h2>Target</h2></section></body></html>`,
         styles: "",
       }),
     });
@@ -247,11 +249,13 @@ test("static share fallback keeps fragment navigation inside the shared document
     .toBeLessThan(40);
   await frame.getByRole("link", { name: "Jump" }).click();
   await expect(page).toHaveURL(/\/share\/anchor-token$/);
+  await page.waitForTimeout(1000);
   await expect
     .poll(async () => {
-      return page.evaluate(() => window.scrollY);
+      const box = await frame.locator("#sec-target").boundingBox();
+      return Boolean(box && box.y >= 0 && box.y < 720);
     })
-    .toBeGreaterThan(700);
+    .toBe(true);
 });
 
 test("archiving the only note for a tag hides that zero-count tag until restored", async ({ page }) => {

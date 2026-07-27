@@ -1623,7 +1623,7 @@ const state = {
   currentUser: { username: "", dataId: "" },
   profile: loadProfile(),
   loginSubmitting: false,
-  currentVersion: "1.2.4",
+  currentVersion: "1.2.5",
   latestVersion: "",
   updateAvailable: false,
   versionCheckComplete: false,
@@ -1985,6 +1985,15 @@ function isStaticShareRoute() {
   return /^\/share\/[^/]+\/?$/.test(window.location.pathname);
 }
 
+function scrollShareAnchor(frame, payload) {
+  const top = Number(payload?.top);
+  if (!frame || !Number.isFinite(top)) return;
+  const frameHeight = frame.getBoundingClientRect().height;
+  const offset = Math.min(Math.max(top, 0), Math.max(frameHeight - 1, 0));
+  const frameTop = frame.getBoundingClientRect().top + window.scrollY;
+  window.scrollTo({ top: Math.max(frameTop + offset - 12, 0), behavior: "smooth" });
+}
+
 async function renderStaticShareFallback() {
   const token = window.location.pathname.split("/").filter(Boolean)[1] || "";
   document.documentElement.lang = "en";
@@ -2027,11 +2036,7 @@ async function renderStaticShareFallback() {
         }
       }
       if (event.data.type === "html-lore-share-anchor") {
-        const top = Number(event.data.top);
-        if (Number.isFinite(top)) {
-          const frameTop = frame.getBoundingClientRect().top + window.scrollY;
-          window.scrollTo({ top: Math.max(frameTop + top - 12, 0), behavior: "smooth" });
-        }
+        scrollShareAnchor(frame, event.data);
       }
     });
   } catch (error) {
@@ -2087,16 +2092,22 @@ function renderShareSrcdoc(data) {
       const doc = document.documentElement;
       const height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
       parent.postMessage({ type: "html-lore-share-height", height }, "*");
+      return height;
+    }
+    function reportAnchor(target) {
+      parent.postMessage({
+        type: "html-lore-share-anchor",
+        top: target.getBoundingClientRect().top,
+      }, "*");
+      reportHeight();
     }
     function scrollToFragment(hash) {
       if (!hash || hash === "#") return;
       const id = decodeURIComponent(hash.slice(1));
       const target = document.getElementById(id);
       if (!target) return;
-      const top = target.getBoundingClientRect().top;
-      parent.postMessage({ type: "html-lore-share-anchor", top }, "*");
-      target.scrollIntoView({ block: "start", behavior: "smooth" });
-      reportHeight();
+      target.scrollIntoView({ block: "start", behavior: "auto" });
+      window.requestAnimationFrame(() => reportAnchor(target));
     }
     document.addEventListener("click", (event) => {
       const anchor = event.target.closest('a[href^="#"]');
@@ -2128,18 +2139,31 @@ function renderInteractiveShareSrcdoc(content) {
     const doc = document.documentElement;
     const height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
     parent.postMessage({ type: "html-lore-share-height", height }, "*");
+    return height;
   }
-  function reportAnchor(hash) {
-    if (!hash || hash === "#") return;
-    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+  function findAnchorTarget(anchor) {
+    const hash = anchor?.getAttribute("href");
+    if (!hash || hash === "#") return null;
+    return document.getElementById(decodeURIComponent(hash.slice(1)));
+  }
+  function reportAnchor(target) {
     if (!target) return;
-    parent.postMessage({ type: "html-lore-share-anchor", top: target.getBoundingClientRect().top }, "*");
+    parent.postMessage({
+      type: "html-lore-share-anchor",
+      top: target.getBoundingClientRect().top,
+    }, "*");
     reportHeight();
   }
   document.addEventListener("click", (event) => {
     const anchor = event.target.closest('a[href^="#"]');
-    if (anchor) setTimeout(() => reportAnchor(anchor.getAttribute("href")), 0);
-  });
+    const target = findAnchorTarget(anchor);
+    if (!target) return;
+    event.preventDefault();
+    window.setTimeout(() => {
+      target.scrollIntoView({ block: "start", behavior: "auto" });
+      window.requestAnimationFrame(() => reportAnchor(target));
+    }, 0);
+  }, true);
   window.addEventListener("load", reportHeight);
   if ("ResizeObserver" in window) new ResizeObserver(reportHeight).observe(document.documentElement);
   setTimeout(reportHeight, 0);
@@ -8102,7 +8126,7 @@ function setIconButtonLabel(button, key) {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.2.4-demo" : "sw.js";
+    const swPath = hasRuntimeConfig("STATIC_DEMO") ? "sw.js?v=1.2.5-demo" : "sw.js";
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn("Service worker registration failed", error);
     });

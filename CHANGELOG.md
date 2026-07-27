@@ -7,6 +7,13 @@ All notable changes to HTMlore will be documented in this file.
 The format is based on Keep a Changelog, and this project uses semantic
 versioning after the initial public release.
 
+## [1.2.5] - 2026-07-27
+
+### Fixed
+
+- Fixed fragment navigation in interactive public shares: sandboxed `srcdoc` frames now retain their content when readers use in-document chapter links.
+- Long shared documents now coordinate iframe and host-page scrolling from the target's post-scroll visible position, preventing chapter navigation from landing outside the rendered frame.
+
 ## [1.2.4] - 2026-07-27
 
 ### Fixed

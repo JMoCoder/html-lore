@@ -353,7 +353,7 @@ def test_interactive_share_preserves_trusted_html_inside_isolated_frame(tmp_path
         """<!doctype html><html><head>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">
-</head><body><canvas id="chart"></canvas><button onclick="draw()">Draw</button>
+</head><body><nav><a href="#chart">Chart</a></nav><canvas id="chart"></canvas><button onclick="draw()">Draw</button>
 <script>function draw() { new Chart(document.getElementById('chart'), {}); }</script>
 </body></html>""",
         encoding="utf-8",
@@ -374,7 +374,10 @@ def test_interactive_share_preserves_trusted_html_inside_isolated_frame(tmp_path
         assert public_data["share"]["mode"] == "interactive"
         assert "cdn.jsdelivr.net/npm/chart.js" in public_data["html"]
         assert "onclick=\"draw()\"" in public_data["html"]
+        assert 'href="#chart"' in public_data["html"]
         assert "sandbox=\"allow-scripts\"" in public_page
+        assert "findAnchorTarget" in public_page
+        assert "event.preventDefault()" in public_page
         assert "allow-same-origin" not in public_page
         assert "allow-forms" not in public_page
         assert "allow-popups" not in public_page

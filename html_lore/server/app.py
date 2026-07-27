@@ -1078,6 +1078,14 @@ def render_share_page(data: dict) -> str:
   <script>
     const frame = document.querySelector(".share-frame");
     const downloadButton = document.querySelector(".share-download-button");
+    function scrollShareAnchor(payload) {{
+      const top = Number(payload?.top);
+      if (!frame || !Number.isFinite(top)) return;
+      const frameHeight = frame.getBoundingClientRect().height;
+      const offset = Math.min(Math.max(top, 0), Math.max(frameHeight - 1, 0));
+      const frameTop = frame.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({{ top: Math.max(frameTop + offset - 12, 0), behavior: "smooth" }});
+    }}
     function shareDownloadFilename() {{
       const title = (document.querySelector(".share-title")?.textContent || "html-lore-shared-note").trim();
       let filename = title.replace(/[\\\\/:*?"<>|\\u0000-\\u001f]+/g, "-").replace(/\\s+/g, " ").trim().replace(/[. ]+$/g, "").slice(0, 120);
@@ -1108,11 +1116,7 @@ def render_share_page(data: dict) -> str:
         }}
       }}
       if (event.data.type === "html-lore-share-anchor") {{
-        const top = Number(event.data.top);
-        if (Number.isFinite(top)) {{
-          const frameTop = frame.getBoundingClientRect().top + window.scrollY;
-          window.scrollTo({{ top: Math.max(frameTop + top - 12, 0), behavior: "smooth" }});
-        }}
+        scrollShareAnchor(event.data);
       }}
     }});
   </script>
@@ -1148,16 +1152,22 @@ def render_share_srcdoc(data: dict) -> str:
       const doc = document.documentElement;
       const height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
       parent.postMessage({{ type: "html-lore-share-height", height }}, "*");
+      return height;
+    }}
+    function reportAnchor(target) {{
+      parent.postMessage({{
+        type: "html-lore-share-anchor",
+        top: target.getBoundingClientRect().top,
+      }}, "*");
+      reportHeight();
     }}
     function scrollToFragment(hash) {{
       if (!hash || hash === "#") return;
       const id = decodeURIComponent(hash.slice(1));
       const target = document.getElementById(id);
       if (!target) return;
-      const top = target.getBoundingClientRect().top;
-      parent.postMessage({{ type: "html-lore-share-anchor", top }}, "*");
-      target.scrollIntoView({{ block: "start", behavior: "smooth" }});
-      reportHeight();
+      target.scrollIntoView({{ block: "start", behavior: "auto" }});
+      window.requestAnimationFrame(() => reportAnchor(target));
     }}
     document.addEventListener("click", (event) => {{
       const anchor = event.target.closest('a[href^="#"]');
@@ -1189,18 +1199,31 @@ def render_interactive_share_srcdoc(content: str) -> str:
     const doc = document.documentElement;
     const height = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
     parent.postMessage({ type: "html-lore-share-height", height }, "*");
+    return height;
   }
-  function reportAnchor(hash) {
-    if (!hash || hash === "#") return;
-    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+  function findAnchorTarget(anchor) {
+    const hash = anchor?.getAttribute("href");
+    if (!hash || hash === "#") return null;
+    return document.getElementById(decodeURIComponent(hash.slice(1)));
+  }
+  function reportAnchor(target) {
     if (!target) return;
-    parent.postMessage({ type: "html-lore-share-anchor", top: target.getBoundingClientRect().top }, "*");
+    parent.postMessage({
+      type: "html-lore-share-anchor",
+      top: target.getBoundingClientRect().top,
+    }, "*");
     reportHeight();
   }
   document.addEventListener("click", (event) => {
     const anchor = event.target.closest('a[href^="#"]');
-    if (anchor) setTimeout(() => reportAnchor(anchor.getAttribute("href")), 0);
-  });
+    const target = findAnchorTarget(anchor);
+    if (!target) return;
+    event.preventDefault();
+    window.setTimeout(() => {
+      target.scrollIntoView({ block: "start", behavior: "auto" });
+      window.requestAnimationFrame(() => reportAnchor(target));
+    }, 0);
+  }, true);
   window.addEventListener("load", reportHeight);
   if ("ResizeObserver" in window) new ResizeObserver(reportHeight).observe(document.documentElement);
   setTimeout(reportHeight, 0);
