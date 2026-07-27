@@ -7,6 +7,13 @@ All notable changes to HTMlore will be documented in this file.
 The format is based on Keep a Changelog, and this project uses semantic
 versioning after the initial public release.
 
+## [1.2.4] - 2026-07-27
+
+### Fixed
+
+- Public share pages now use the available browser width instead of a fixed centered document frame, so generated reports, dashboards, and virtual presentations retain their intended canvas on wide screens.
+- Kept server-rendered shares and the static-share fallback visually consistent, while preserving existing share URLs, download behavior, and iframe sandbox isolation.
+
 ## [1.2.3] - 2026-07-15
 
 ### Added

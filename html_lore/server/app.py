@@ -1015,8 +1015,8 @@ def render_share_page(data: dict) -> str:
   <style>
     :root {{ color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
     body {{ margin: 0; background: #f8fafc; color: #172033; }}
-    .share-shell {{ padding: 18px 20px 56px; }}
-    .share-banner {{ max-width: 1100px; margin: 0 auto 18px; border-bottom: 1px solid #d9e2ec; padding-bottom: 14px; }}
+    .share-shell {{ padding: 14px 0 40px; }}
+    .share-banner {{ margin: 0 clamp(12px, 2vw, 28px) 14px; border-bottom: 1px solid #d9e2ec; padding-bottom: 14px; }}
     .share-banner-top {{ display: flex; align-items: center; justify-content: space-between; gap: 14px; }}
     .share-brand {{ color: #0f766e; font-size: 0.8rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }}
     .share-download-button {{
@@ -1045,7 +1045,7 @@ def render_share_page(data: dict) -> str:
     .share-download-button svg {{ width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }}
     .share-title {{ margin: 8px 0; font-size: clamp(1.45rem, 3vw, 2.25rem); line-height: 1.15; }}
     .share-summary {{ color: #607086; font-size: 0.95rem; line-height: 1.55; }}
-    .share-frame {{ display: block; width: min(1100px, 100%); min-height: 70vh; margin: 0 auto; border: 0; border-radius: 12px; background: white; }}
+    .share-frame {{ display: block; width: 100%; min-height: 70vh; margin: 0; border: 0; border-radius: 0; background: transparent; }}
     @media (prefers-color-scheme: dark) {{
       body {{ background: #101820; color: #e6edf3; }}
       .share-banner {{ border-color: #334155; }}
@@ -1053,7 +1053,7 @@ def render_share_page(data: dict) -> str:
       .share-download-button {{ background: rgba(15, 23, 42, 0.48); border-color: rgba(148, 163, 184, 0.22); color: #99f6e4; }}
       .share-download-button:hover,
       .share-download-button:focus-visible {{ background: rgba(15, 23, 42, 0.74); border-color: rgba(153, 246, 228, 0.42); }}
-      .share-frame {{ background: #111827; }}
+      .share-frame {{ background: transparent; }}
     }}
   </style>
 </head>

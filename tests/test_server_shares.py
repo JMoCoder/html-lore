@@ -87,6 +87,8 @@ def test_share_link_allows_public_sanitized_note_without_login(tmp_path: Path) -
         assert public_page.count("<body") == 1
         assert "<iframe" in public_page
         assert "srcdoc=" in public_page
+        assert "width: 100%; min-height: 70vh; margin: 0;" in public_page
+        assert "width: min(1100px, 100%)" not in public_page
 
         shares = server.request("GET", "/api/shares")
         assert shares["shares"][0]["url_path"] == created["url_path"]

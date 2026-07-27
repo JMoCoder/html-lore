@@ -189,6 +189,14 @@ test("static share fallback renders public shared content instead of the workspa
   await expect(page.locator(".share-fallback-download")).toHaveCSS("opacity", "0.22");
   await expect(page.locator(".shell")).toHaveCount(0);
   await expect(page.frameLocator(".share-fallback-frame").locator("h1")).toHaveText("Rendered shared HTML");
+  await expect
+    .poll(() =>
+      page.locator(".share-fallback-frame").evaluate((node) => {
+        const frame = node.getBoundingClientRect();
+        return frame.left === 0 && window.innerWidth - frame.width <= 16;
+      }),
+    )
+    .toBe(true);
 });
 
 test("static share fallback keeps fragment navigation inside the shared document", async ({ page }) => {

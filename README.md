@@ -31,7 +31,7 @@ Markdown-first authoring. HTMlore takes a different path:
   the UI architecture for AI-assisted workflows, while credentials and model
   calls are kept out of the static frontend.
 
-## Current Scope (v1.2.3)
+## Current Scope (v1.2.4)
 
 The current `v1.2.x` line supports real local, private-network, and
 self-hosted use: Docker deployment, built-in login, HTML import, persistent

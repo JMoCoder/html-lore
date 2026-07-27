@@ -224,12 +224,11 @@ textarea {
 }
 
 .share-fallback-shell {
-  padding: 18px 20px 56px;
+  padding: 14px 0 40px;
 }
 
 .share-fallback-banner {
-  max-width: 1100px;
-  margin: 0 auto 18px;
+  margin: 0 clamp(12px, 2vw, 28px) 14px;
   border-bottom: 1px solid #d9e2ec;
   padding-bottom: 14px;
 }
@@ -294,11 +293,11 @@ textarea {
 
 .share-fallback-frame {
   display: block;
-  width: min(1100px, 100%);
+  width: 100%;
   min-height: 70vh;
-  margin: 0 auto;
+  margin: 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: 0;
   background: #ffffff;
 }
 
@@ -5374,7 +5373,7 @@ a.icon-action {
   }
 
   .share-fallback-frame {
-    background: #111827;
+    background: transparent;
   }
 }
 

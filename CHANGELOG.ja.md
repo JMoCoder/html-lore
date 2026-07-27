@@ -2,6 +2,13 @@
 
 Languages: [English](CHANGELOG.md) | [中文](CHANGELOG.zh-CN.md) | [日本語](CHANGELOG.ja.md)
 
+## [1.2.4] - 2026-07-27
+
+### 修正
+
+- 公開共有ページが固定幅で中央寄せされた document frame ではなく、browser の利用可能な全幅 canvas を使うようになりました。wide screen でも生成済み report、dashboard、virtual presentation の意図した layout を保持できます。
+- Server-rendered share と static-share fallback の見た目を統一し、既存の share URL、download 動作、iframe sandbox isolation を維持しました。
+
 ## [1.2.3] - 2026-07-15
 
 ### Added
