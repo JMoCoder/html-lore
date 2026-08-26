@@ -56,8 +56,8 @@ test("topbar keeps settings, generation queue, and AI actions grouped on the rig
   await expect(page.locator(".topbar-control-group #settings-open")).toHaveCount(0);
   await expect(page.locator(".topbar-search-group #settings-open")).toHaveCount(1);
   await expect(page.locator(".topbar-search-group #ai-job-toggle")).toHaveCount(1);
-  await expect(page.locator(".project-link")).toHaveAttribute("href", /html_lore\/$/);
-  await expect(page.locator(".github-link")).toHaveAttribute("href", /github\.com\/JMoCoder\/html_lore/);
+  await expect(page.locator(".project-link")).toHaveAttribute("href", /html-lore\/$/);
+  await expect(page.locator(".github-link")).toHaveAttribute("href", /github\.com\/JMoCoder\/html-lore/);
 
   await expect
     .poll(async () => {

@@ -1603,7 +1603,7 @@ function getDefaultAgentUrl() {
 
 function getPagesHomeUrl() {
   if (hasRuntimeConfig("STATIC_DEMO")) return "../";
-  return getRuntimeConfig("PAGES_URL") || "https://jmocoder.github.io/html_lore/";
+  return getRuntimeConfig("PAGES_URL") || "https://jmocoder.github.io/html-lore/";
 }
 
 function getDefaultAgentToken() {
