@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { BrandMark } from "@/components/ui/brand-mark";
-import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/ui/logo";
 
 export function LoginPanel() {
   const router = useRouter();
@@ -14,39 +13,44 @@ export function LoginPanel() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center px-5">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-[380px] rounded-3xl border border-line bg-card p-8 shadow-[var(--shadow)]"
-      >
-        <BrandMark />
-        <p className="mt-5 text-sm leading-relaxed text-ink-soft">
-          自托管 HTML 知识工作台。这一版只做阅读、筛选、修改和分享。
-        </p>
-        <label className="mt-7 block text-xs tracking-wide text-ink-faint">
-          用户名
-          <input
-            name="username"
-            defaultValue="admin"
-            autoComplete="username"
-            className="mt-1.5 h-10 w-full rounded-xl border border-line bg-paper px-3 text-sm text-ink outline-none focus:border-accent"
-          />
-        </label>
-        <label className="mt-4 block text-xs tracking-wide text-ink-faint">
-          密码
-          <input
-            name="password"
-            type="password"
-            defaultValue="test-password"
-            autoComplete="current-password"
-            className="mt-1.5 h-10 w-full rounded-xl border border-line bg-paper px-3 text-sm text-ink outline-none focus:border-accent"
-          />
-        </label>
-        <Button type="submit" className="mt-6 w-full">
-          进入工作台
-        </Button>
-        <p className="mt-4 text-center text-[11px] text-ink-faint">原型：不会校验账号</p>
-      </form>
+    <main className="grid min-h-dvh place-items-center bg-bg px-5">
+      <div className="w-full max-w-[360px]">
+        <div className="flex justify-center">
+          <Logo size={26} />
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="mt-6 rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-sm)]"
+        >
+          <h1 className="text-[15px] font-semibold tracking-tight">登录到你的资料库</h1>
+          <label className="mt-5 block text-xs text-ink-soft">
+            用户名
+            <input
+              name="username"
+              autoComplete="username"
+              defaultValue="admin"
+              className="mt-1.5 h-9 w-full rounded-[var(--radius-control)] border border-line bg-panel-raised px-3 text-[13px] outline-none focus:border-accent/60"
+            />
+          </label>
+          <label className="mt-3 block text-xs text-ink-soft">
+            密码
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              defaultValue="test-password"
+              className="mt-1.5 h-9 w-full rounded-[var(--radius-control)] border border-line bg-panel-raised px-3 text-[13px] outline-none focus:border-accent/60"
+            />
+          </label>
+          <button
+            type="submit"
+            className="mt-5 h-9 w-full rounded-[var(--radius-control)] bg-accent text-[13px] font-medium text-white transition-colors hover:bg-accent-strong"
+          >
+            登录
+          </button>
+          <p className="mt-3 text-center text-[11px] text-ink-faint">原型 · 不校验账号</p>
+        </form>
+      </div>
     </main>
   );
 }

@@ -1,16 +1,11 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeScript } from "@/components/ui/theme";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
 });
 
 const mono = JetBrains_Mono({
@@ -25,10 +20,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="zh-CN"
-      className={`${inter.variable} ${fraunces.variable} ${mono.variable} h-full`}
-    >
+    <html lang="zh-CN" className={`${inter.variable} ${mono.variable} h-full`}>
       <head>
         <ThemeScript />
       </head>

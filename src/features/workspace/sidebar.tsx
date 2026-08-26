@@ -1,16 +1,18 @@
 "use client";
 
-import Link from "next/link";
-import { BrandMark } from "@/components/ui/brand-mark";
+import { HomeLink } from "@/components/ui/logo";
 import type { LibraryFilter } from "@/fixtures/notes";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const libraryItems: { id: LibraryFilter; label: string }[] = [
-  { id: "all", label: "全部" },
+  { id: "all", label: "全部笔记" },
   { id: "recent", label: "最近" },
   { id: "favorites", label: "收藏" },
-  { id: "imported", label: "导入" },
-  { id: "archived", label: "归档" },
+  { id: "imported", label: "已导入" },
+  { id: "archived", label: "已归档" },
 ];
+
+type Entry = { name: string; count: number };
 
 type Props = {
   collapsed: boolean;
@@ -21,91 +23,101 @@ type Props = {
   onCollection: (value: string) => void;
   tags: string[];
   onToggleTag: (tag: string) => void;
-  collections: string[];
-  allTags: string[];
-  counts: Record<"all" | "favorites" | "imported" | "archived", number>;
+  collections: Entry[];
+  allTags: Entry[];
+  counts: Record<LibraryFilter, number>;
 };
 
 export function Sidebar(props: Props) {
-  const width = props.collapsed ? "w-[72px]" : "w-[248px]";
-
   return (
     <aside
-      className={`${width} sticky top-0 flex h-dvh shrink-0 flex-col border-r border-line bg-sidebar text-ink transition-[width] duration-200`}
+      className={`flex h-full shrink-0 flex-col border-r border-line bg-sidebar transition-[width] duration-200 ${
+        props.collapsed ? "w-[64px]" : "w-[252px]"
+      }`}
     >
-      <div className="flex h-14 items-center justify-between px-3">
-        <Link href="/" aria-label="HTMlore 工作台" className="min-w-0 truncate">
-          <BrandMark compact={props.collapsed} />
-        </Link>
-        <button
-          type="button"
-          onClick={props.onToggle}
-          className="size-8 rounded-full text-ink-faint transition-colors hover:bg-accent-soft hover:text-ink"
-          aria-label={props.collapsed ? "展开侧栏" : "收起侧栏"}
-        >
-          {props.collapsed ? "›" : "‹"}
-        </button>
+      <div className="flex h-14 items-center justify-between border-b border-line px-3">
+        {props.collapsed ? (
+          <button
+            type="button"
+            onClick={props.onToggle}
+            className="mx-auto rounded-lg p-1.5 hover:bg-panel-raised"
+            aria-label="展开侧栏"
+          >
+            <HomeLink />
+          </button>
+        ) : (
+          <>
+            <HomeLink />
+            <button
+              type="button"
+              onClick={props.onToggle}
+              className="size-7 rounded-lg text-ink-faint hover:bg-panel-raised hover:text-ink"
+              aria-label="收起侧栏"
+            >
+              ‹
+            </button>
+          </>
+        )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-8">
-        <NavLabel collapsed={props.collapsed}>资料库</NavLabel>
+      <nav className="scroll-thin flex-1 overflow-y-auto px-2 py-3">
+        <Section collapsed={props.collapsed} label="资料库" />
         {libraryItems.map((item) => (
-          <NavButton
+          <Row
             key={item.id}
             collapsed={props.collapsed}
-            active={props.library === item.id}
+            active={props.library === item.id && !props.collection}
             label={item.label}
-            count={item.id === "recent" ? undefined : props.counts[item.id === "all" ? "all" : item.id]}
-            onClick={() => {
-              props.onLibrary(item.id);
-              props.onCollection("");
-            }}
+            count={props.counts[item.id]}
+            onClick={() => props.onLibrary(item.id)}
           />
         ))}
 
-        <NavLabel collapsed={props.collapsed}>集合</NavLabel>
-        {props.collections.map((name) => (
-          <NavButton
-            key={name}
+        <Section collapsed={props.collapsed} label="集合" />
+        {props.collections.map((entry) => (
+          <Row
+            key={entry.name}
             collapsed={props.collapsed}
-            active={props.collection === name}
-            label={name}
-            onClick={() => props.onCollection(props.collection === name ? "" : name)}
+            active={props.collection === entry.name}
+            label={entry.name}
+            count={entry.count}
+            onClick={() => props.onCollection(props.collection === entry.name ? "" : entry.name)}
           />
         ))}
 
-        <NavLabel collapsed={props.collapsed}>标签</NavLabel>
-        {props.allTags.map((tag) => (
-          <NavButton
-            key={tag}
+        <Section collapsed={props.collapsed} label="标签" />
+        {props.allTags.map((entry) => (
+          <Row
+            key={entry.name}
             collapsed={props.collapsed}
-            active={props.tags.includes(tag)}
-            label={`#${tag}`}
-            onClick={() => props.onToggleTag(tag)}
+            active={props.tags.includes(entry.name)}
+            label={`#${entry.name}`}
+            count={entry.count}
+            onClick={() => props.onToggleTag(entry.name)}
           />
         ))}
       </nav>
 
-      <p className={`px-3 pb-4 text-[11px] tracking-wide text-ink-faint ${props.collapsed ? "hidden" : ""}`}>
-        2.0 原型 · 无 AI
-        <Link href="/login" className="mt-1 block text-ink-soft hover:text-ink">
-          登录页
-        </Link>
-      </p>
+      <div className="flex items-center justify-between border-t border-line px-3 py-2.5">
+        {props.collapsed ? null : (
+          <span className="text-[11px] text-ink-faint">2.0 原型 · 无 AI</span>
+        )}
+        <ThemeToggle />
+      </div>
     </aside>
   );
 }
 
-function NavLabel({ collapsed, children }: { collapsed: boolean; children: string }) {
-  if (collapsed) return <div className="mt-4 mb-1 h-px bg-line" />;
+function Section({ collapsed, label }: { collapsed: boolean; label: string }) {
+  if (collapsed) return <div className="my-3 h-px bg-line" />;
   return (
-    <p className="mt-5 mb-1 px-2 text-[11px] font-medium tracking-[0.14em] text-ink-faint uppercase">
-      {children}
+    <p className="mt-4 mb-1 px-2 text-[11px] font-medium tracking-[0.08em] text-ink-faint first:mt-1">
+      {label}
     </p>
   );
 }
 
-function NavButton({
+function Row({
   collapsed,
   active,
   label,
@@ -123,15 +135,15 @@ function NavButton({
       type="button"
       title={label}
       onClick={onClick}
-      className={`mb-0.5 flex h-8 w-full items-center rounded-lg px-2 text-left text-[13px] transition-colors duration-150 ${
-        active ? "bg-accent-soft text-ink" : "text-ink-soft hover:bg-accent-soft/60 hover:text-ink"
+      className={`mb-0.5 flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] transition-colors ${
+        active ? "bg-panel-raised font-medium text-ink shadow-[var(--shadow-sm)]" : "text-ink-soft hover:bg-panel-raised/70 hover:text-ink"
       }`}
     >
-      <span className={`truncate ${collapsed ? "mx-auto text-center" : ""}`}>
-        {collapsed ? label.slice(0, 1) : label}
+      <span className={`truncate ${collapsed ? "mx-auto" : ""}`}>
+        {collapsed ? label.replace(/^#/, "").slice(0, 2) : label}
       </span>
       {collapsed || count == null ? null : (
-        <span className="ml-auto text-[11px] text-ink-faint">{count}</span>
+        <span className="ml-auto text-[11px] tabular-nums text-ink-faint">{count}</span>
       )}
     </button>
   );
