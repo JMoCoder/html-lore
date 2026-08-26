@@ -50,6 +50,9 @@ export const Icon = {
   chevronDown: () => (
     <Svg><path d="m4 6 4 4 4-4" /></Svg>
   ),
+  chevronLeft: () => (
+    <Svg><path d="m10 3-5 5 5 5" /></Svg>
+  ),
   x: () => (
     <Svg><path d="m4 4 8 8M12 4l-8 8" /></Svg>
   ),

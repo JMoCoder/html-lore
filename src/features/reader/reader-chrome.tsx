@@ -9,6 +9,8 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { formatDate, noteReadingTime, shareUrl } from "@/features/workspace/note-meta";
 import type { Note } from "@/fixtures/notes";
 
+const PANEL_WIDTH = 320;
+
 export function ReaderChrome({ note }: { note: Note }) {
   const params = useSearchParams();
   const [panelOpen, setPanelOpen] = useState(params.get("edit") === "1");
@@ -19,11 +21,14 @@ export function ReaderChrome({ note }: { note: Note }) {
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-3">
         <Link
           href="/"
-          className="rounded-lg px-2 py-1 text-[13px] text-ink-soft hover:bg-panel hover:text-ink"
+          className="group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] text-ink-soft transition-colors hover:bg-panel hover:text-ink"
         >
-          ← 工作台
+          <span className="inline-flex transition-transform duration-150 group-hover:-translate-x-0.5">
+            <Icon.chevronLeft />
+          </span>
+          工作台
         </Link>
-        <div className="mx-auto flex min-w-0 max-w-xl flex-1 items-center gap-2">
+        <div className="mx-auto flex min-w-0 max-w-xl flex-1 items-center justify-center gap-2">
           <h1 className="truncate text-[14px] font-semibold tracking-tight text-ink">
             {note.title}
           </h1>
@@ -44,7 +49,6 @@ export function ReaderChrome({ note }: { note: Note }) {
           <IconButton label="打开原文" onClick={() => window.open(`/raw/${note.slug}`, "_blank")}>
             <Icon.external />
           </IconButton>
-          <ThemeToggle />
           <div className="mx-1 h-5 w-px bg-line" />
           <IconButton
             label={panelOpen ? "收起面板" : "笔记信息与编辑"}
@@ -56,16 +60,28 @@ export function ReaderChrome({ note }: { note: Note }) {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <iframe
           title={note.title}
           sandbox="allow-same-origin"
           srcDoc={note.html}
           className="min-w-0 flex-1 border-0 bg-panel"
         />
-        {panelOpen ? (
-          <aside className="scroll-thin w-[320px] shrink-0 overflow-y-auto border-l border-line bg-sidebar p-4">
-            <h2 className="text-[11px] font-medium tracking-[0.08em] text-ink-faint">笔记信息</h2>
+
+        <aside
+          aria-hidden={!panelOpen}
+          style={{ width: PANEL_WIDTH, marginRight: panelOpen ? 0 : -PANEL_WIDTH }}
+          className="shrink-0 border-l border-line bg-sidebar transition-[margin] duration-200 ease-out"
+        >
+          <div
+            className={`scroll-thin h-full w-[320px] overflow-y-auto p-4 transition duration-200 ease-out ${
+              panelOpen ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-[11px] font-medium tracking-[0.08em] text-ink-faint">笔记信息</h2>
+              <ThemeToggle />
+            </div>
             <dl className="mt-3 space-y-3 text-[13px]">
               <div>
                 <dt className="text-[11px] text-ink-faint">标题</dt>
@@ -138,8 +154,8 @@ export function ReaderChrome({ note }: { note: Note }) {
                 </a>
               </div>
             ) : null}
-          </aside>
-        ) : null}
+          </div>
+        </aside>
       </div>
     </div>
   );

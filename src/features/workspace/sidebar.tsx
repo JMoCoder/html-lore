@@ -135,7 +135,7 @@ function Row({
       type="button"
       title={label}
       onClick={onClick}
-      className={`mb-0.5 flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] transition-colors ${
+      className={`mb-0.5 flex h-8 w-full items-center gap-2 rounded-lg px-3 text-left text-[13px] transition-colors ${
         active ? "bg-panel-raised font-medium text-ink shadow-[var(--shadow-sm)]" : "text-ink-soft hover:bg-panel-raised/70 hover:text-ink"
       }`}
     >
