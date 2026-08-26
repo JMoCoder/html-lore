@@ -4,6 +4,8 @@ Languages: [English](README.md) | [中文](README.zh-CN.md) | [日本語](README
 
 Deployment: [Self-hosted Docker and security baseline](DEPLOYMENT.md)
 
+Public demo: [https://jmocoder.github.io/html-lore/](https://jmocoder.github.io/html-lore/)
+
 HTMlore is a self-hosted knowledge workspace for saving, browsing, reading,
 and eventually discussing HTML-based knowledge files with AI. It is designed
 for people who want their notes to remain portable files instead of being

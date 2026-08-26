@@ -129,7 +129,7 @@ backend token.
 On a fresh host:
 
 ```bash
-git clone https://github.com/JMoCoder/html_lore.git /srv/html-lore
+git clone https://github.com/JMoCoder/html-lore.git /srv/html-lore
 cd /srv/html-lore
 git checkout main
 docker compose up -d --build

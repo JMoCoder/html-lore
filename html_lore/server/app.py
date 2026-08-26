@@ -351,8 +351,8 @@ def create_app() -> FastAPI:
         return {
             "version": __version__,
             "brand": "HTMlore",
-            "repository": "JMoCoder/html_lore",
-            "release_url": "https://github.com/JMoCoder/html_lore/releases",
+            "repository": "JMoCoder/html-lore",
+            "release_url": "https://github.com/JMoCoder/html-lore/releases",
         }
 
     @app.get("/api/ai/providers")

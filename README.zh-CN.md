@@ -4,6 +4,8 @@
 
 部署：[自托管 Docker 与安全基线](DEPLOYMENT.zh-CN.md)
 
+公开演示：[https://jmocoder.github.io/html-lore/](https://jmocoder.github.io/html-lore/)
+
 HTMlore 是一个自托管 HTML 知识库工作台，用于保存、浏览、阅读和未来通过 AI 讨论 HTML 形式的知识文件。它面向希望内容仍然保留为可携带文件、而不是被锁进数据库优先笔记软件的用户。
 
 项目长期方向是一个 Web 优先的个人知识库：导入或生成 HTML 笔记，用集合和标签组织，通过精致的卡片工作台阅读，安装为 PWA，并在后续接入 AI 服务，对自己的资料库进行分类、检索、总结和多轮问答。

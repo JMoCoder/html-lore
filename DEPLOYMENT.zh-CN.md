@@ -104,7 +104,7 @@ Caddy 会先要求用户登录，再只在反代到内部 API 服务时注入 `A
 新主机上执行：
 
 ```bash
-git clone https://github.com/JMoCoder/html_lore.git /srv/html-lore
+git clone https://github.com/JMoCoder/html-lore.git /srv/html-lore
 cd /srv/html-lore
 git checkout main
 docker compose up -d --build

@@ -2424,7 +2424,7 @@ async function checkVersionStatus() {
 
 async function fetchLatestGithubVersion() {
   const signal = AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined;
-  const releaseResponse = await fetch("https://api.github.com/repos/JMoCoder/html_lore/releases/latest", {
+  const releaseResponse = await fetch("https://api.github.com/repos/JMoCoder/html-lore/releases/latest", {
     headers: { Accept: "application/vnd.github+json" },
     signal,
   });
@@ -2433,7 +2433,7 @@ async function fetchLatestGithubVersion() {
     const version = normalizeVersion(release.tag_name || release.name || "");
     if (version) return version;
   }
-  const tagsResponse = await fetch("https://api.github.com/repos/JMoCoder/html_lore/tags", {
+  const tagsResponse = await fetch("https://api.github.com/repos/JMoCoder/html-lore/tags", {
     headers: { Accept: "application/vnd.github+json" },
     signal,
   });

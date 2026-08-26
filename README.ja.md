@@ -4,6 +4,8 @@ Languages: [English](README.md) | [中文](README.zh-CN.md) | [日本語](README
 
 Deployment: [Self-hosted Docker and security baseline](DEPLOYMENT.md)
 
+公開デモ: [https://jmocoder.github.io/html-lore/](https://jmocoder.github.io/html-lore/)
+
 HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書し、将来的には AI と対話するためのセルフホスト型ナレッジワークスペースです。内容をデータベース中心のノートアプリに閉じ込めず、移植可能なファイルとして保持したいユーザー向けに設計されています。
 
 長期的な方向性は、Web ファーストの個人ナレッジライブラリです。HTML ノートをインポートまたは生成し、コレクションとタグで整理し、洗練されたカードワークスペースで読み、PWA としてインストールし、将来的には AI サービスを接続して、自分のライブラリに対する分類、検索、要約、多ターン会話を行えるようにします。
