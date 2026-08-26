@@ -125,8 +125,8 @@ Optional local defaults are documented in `.env.example`. They mirror the
 compose defaults and are intended for local or private-network testing only.
 
 ```bash
-git clone https://github.com/JMoCoder/html_lore.git
-cd html_lore
+git clone https://github.com/JMoCoder/html-lore.git
+cd html-lore
 docker compose up -d --build
 ```
 
