@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --paper: #f3efe6;
+  --paper-dim: #e8e1d2;
+  --card: #faf7f0;
+  --ink: #1a221e;
+  --ink-soft: #4a534c;
+  --ink-faint: #7a827b;
+  --line: color-mix(in oklab, var(--ink) 12%, transparent);
+  --accent: #2c7a64;
+  --accent-soft: color-mix(in oklab, var(--accent) 16%, var(--paper));
+  --danger: #b8553a;
+  --sidebar: #e4dccb;
+  --shadow: 0 22px 48px -30px rgb(26 34 30 / 0.5);
+}
+
+html.dark {
+  color-scheme: dark;
+  --paper: #121716;
+  --paper-dim: #0c1010;
+  --card: #1a211f;
+  --ink: #ece7da;
+  --ink-soft: #c3bdae;
+  --ink-faint: #8d9088;
+  --line: color-mix(in oklab, var(--ink) 14%, transparent);
+  --accent: #5bbfa2;
+  --accent-soft: color-mix(in oklab, var(--accent) 16%, var(--paper));
+  --danger: #d98263;
+  --sidebar: #0e1312;
+  --shadow: 0 22px 48px -24px rgb(0 0 0 / 0.72);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-dim: var(--paper-dim);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-sidebar: var(--sidebar);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-fraunces);
+  --font-mono: var(--font-mono);
+}
+
+html {
+  background: var(--paper);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}

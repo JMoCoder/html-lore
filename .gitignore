@@ -1,0 +1,72 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+/node_modules.1x.bak/
+# leftover 1.x working tree on this machine (not part of 2.0)
+/app_static/
+/html_lore/
+/html_lore.egg-info/
+/tests/
+/data/
+/documents/
+/content/
+/meta/
+/.venv/
+/.pytest_cache/
+/playwright-report/
+/test-results/
+/scripts/
+/mark/
+/public/app.js
+/public/assets/
+/public/config.js
+/public/config.example.js
+/public/content/
+/public/index.html
+/public/manifest.json
+/public/manifest.webmanifest
+/public/share/
+/public/style.css
+/public/sw.js
+/public/file.svg
+/public/globe.svg
+/public/next.svg
+/public/vercel.svg
+/public/window.svg
