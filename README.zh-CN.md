@@ -76,8 +76,8 @@ HTMlore 是一个自托管 HTML 知识库工作台，用于保存、浏览、阅
 `.env.example` 记录了可选的本地默认值，与 compose 默认值保持一致，仅用于本地或私有网络测试。
 
 ```bash
-git clone https://github.com/JMoCoder/html_lore.git
-cd html_lore
+git clone https://github.com/JMoCoder/html-lore.git
+cd html-lore
 docker compose up -d --build
 ```
 
