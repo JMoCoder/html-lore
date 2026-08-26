@@ -76,8 +76,8 @@ HTMlore は、HTML 形式のナレッジファイルを保存、閲覧、読書�
 任意のローカル既定値は `.env.example` に記載しています。compose の既定値と同じで、ローカルまたはプライベートネットワークでのテスト用途です。
 
 ```bash
-git clone https://github.com/JMoCoder/html_lore.git
-cd html_lore
+git clone https://github.com/JMoCoder/html-lore.git
+cd html-lore
 docker compose up -d --build
 ```
 
