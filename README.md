@@ -2,7 +2,7 @@
 
 自托管 HTML 知识工作台：**导入、筛选、阅读、编辑、分享**。笔记仍是磁盘上的 HTML + YAML，没有 SQL 数据库。
 
-当前稳定版是 **2.0.0**，维护线在 **`next`**。1.x（tag `v1.2.5`，分支 `main`）**冻结**，不再加功能。2.0 用独立 Docker 服务部署，不替换正在运行的 1.x。
+当前稳定版是 **2.0.0**，维护线在 **`main`**。1.x（tag `v1.2.5`，分支 `legacy`）**冻结**，不再加功能。2.0 用独立 Docker 服务部署，不替换正在运行的 1.x。
 
 ```bash
 npm install
@@ -46,4 +46,4 @@ npm run migrate:1x -- /srv/html-lore/data ./data
 - `src/server/` — 纯 TypeScript 领域层（不 import `next/*`）
 - `scripts/migrate-from-1x.mjs` — 1.x → 2.0 文件库拷贝
 
-2.0 不包含知识库问答和 HTML 生成。1.x 实现仍在 `main` / tag `v1.2.5`。
+2.0 不包含知识库问答和 HTML 生成。1.x 实现仍在 `legacy` / tag `v1.2.5`。
