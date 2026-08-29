@@ -199,6 +199,16 @@
     .mode .tag { font-family: var(--font-mono); font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); }
     .mode p { margin: 0 0 12px; color: var(--ink-soft); font-size: 13.5px; }
     .mode ul { margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: 13px; }
+    .mode .best {
+      border-left: 2px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 0 8px 8px 0;
+      padding: 8px 12px;
+      font-size: 12.5px;
+      color: var(--ink);
+      margin: 0 0 12px;
+    }
+    .mode .best b { color: var(--accent-strong); }
 
     /* edit mocks */
     .code-mock {
@@ -479,6 +489,7 @@
         <div class="mode">
           <h3><span class="tag">safe</span><span data-i18n="safeT">消毒静态</span></h3>
           <p data-i18n="safeD">去掉脚本、表单、iframe 和危险标签，只留可读内容。过不了扫描会自动生成一份消毒副本再分享。</p>
+          <p class="best" data-i18n="safeBest"><b>适合</b>：从第三方收藏的 HTML。来源不可控，消毒后再分享才放心。</p>
           <ul>
             <li data-i18n="safeL1">脚本 / 内联事件 / javascript: 一律剥离</li>
             <li data-i18n="safeL2">密钥形态文本拦截或脱敏</li>
@@ -488,6 +499,7 @@
         <div class="mode">
           <h3><span class="tag">interactive</span><span data-i18n="intT">互动沙箱</span></h3>
           <p data-i18n="intD">按原文跑，iframe 只给 allow-scripts，不给 same-origin。过不了安全扫描就直接拒绝，不做副本。</p>
+          <p class="best" data-i18n="intBest"><b>适合</b>：自己生成、内容可控的 HTML。知根知底，保留交互原样分享。</p>
           <ul>
             <li data-i18n="intL1">保留交互，但关在沙箱里</li>
             <li data-i18n="intL2">私网引用需二次确认</li>
@@ -555,8 +567,10 @@
         w3t: "归档与删除", w3d: "归档锁定编辑、移出主视图；永久删除必须先归档。不会误删。",
         shareTitle: "安全分享，两种模式", shareSub: "每条链接一个 token，磁盘只存哈希。过期、撤销、原文归档后，对外就是 404。",
         safeT: "消毒静态", safeD: "去掉脚本、表单、iframe 和危险标签，只留可读内容。过不了扫描会自动生成一份消毒副本再分享。",
+        safeBest: "<b>适合</b>：从第三方收藏的 HTML。来源不可控，消毒后再分享才放心。",
         safeL1: "脚本 / 内联事件 / javascript: 一律剥离", safeL2: "密钥形态文本拦截或脱敏", safeL3: "默认模式，始终可用",
         intT: "互动沙箱", intD: "按原文跑，iframe 只给 allow-scripts，不给 same-origin。过不了安全扫描就直接拒绝，不做副本。",
+        intBest: "<b>适合</b>：自己生成、内容可控的 HTML。知根知底，保留交互原样分享。",
         intL1: "保留交互，但关在沙箱里", intL2: "私网引用需二次确认", intL3: "可用环境变量整体关掉",
         deployTitle: "一个容器，跑在你自己的机器上", deploySub: "独立 Docker 服务，默认端口 3000。和冻结的 1.x 并行，不替换、不共用数据目录。",
         d1k: "默认无登录", d1v: "不设密钥就没有登录页。公网用 Cloudflare Access / Caddy 反代鉴权。",
@@ -593,8 +607,10 @@
         w3t: "Archive & delete", w3d: "Archiving locks editing and hides from the main view. Permanent delete requires archiving first. No accidents.",
         shareTitle: "Safe sharing, two modes", shareSub: "One token per link; only its hash is stored. Expired, revoked, or archived notes return 404.",
         safeT: "Sanitized static", safeD: "Strips scripts, forms, iframes and dangerous tags, keeping readable content. If it fails the scan, a sanitized copy is shared instead.",
+        safeBest: "<b>Best for</b> HTML collected from third parties — untrusted source, sanitized before it goes out.",
         safeL1: "Scripts / inline handlers / javascript: stripped", safeL2: "Secret-shaped text blocked or redacted", safeL3: "Default mode, always available",
         intT: "Interactive sandbox", intD: "Runs as-is in an iframe with allow-scripts but no same-origin. Failing the scan means refusal — no copy.",
+        intBest: "<b>Best for</b> HTML you generated and control — trusted content, shared as-is with interaction.",
         intL1: "Keeps interaction, inside a sandbox", intL2: "Private-network references need confirmation", intL3: "Can be disabled entirely via env",
         deployTitle: "One container, on your own machine", deploySub: "Independent Docker service on port 3000. Runs alongside frozen 1.x — never replaces it, never shares its data directory.",
         d1k: "No login by default", d1v: "No secret, no login page. Put Cloudflare Access / Caddy in front for public access.",
@@ -631,8 +647,10 @@
         w3t: "アーカイブと削除", w3d: "アーカイブは編集をロックしメイン表示から外します。完全削除はアーカイブ後のみ。誤削除を防ぎます。",
         shareTitle: "安全な共有、2 つのモード", shareSub: "リンクごとに 1 トークン。ディスクにはハッシュのみ保存。期限切れ・取り消し・アーカイブ後は 404。",
         safeT: "サニタイズ静的", safeD: "スクリプト、フォーム、iframe、危険なタグを除去し、読める内容だけ残します。スキャンに落ちた場合はサニタイズ済みコピーを共有。",
+        safeBest: "<b>おすすめ</b>：第三者から収集した HTML。出所が不明な分、サニタイズしてから共有。",
         safeL1: "スクリプト / インラインハンドラ / javascript: は除去", safeL2: "シークレットらしき文字列はブロックかマスク", safeL3: "デフォルトモード、常に利用可能",
         intT: "インタラクティブ沙箱", intD: "原文のまま、allow-scripts のみ・same-origin なしの iframe で実行。スキャンに落ちたら拒否。コピーは作りません。",
+        intBest: "<b>おすすめ</b>：自分で生成した管理可能な HTML。内容を把握しているので、そのままインタラクティブに共有。",
         intL1: "インタラクションを沙箱内に保持", intL2: "プライベートネットワーク参照は要確認", intL3: "環境変数で完全に無効化可能",
         deployTitle: "1 つのコンテナを自分のマシンで", deploySub: "独立した Docker サービス、デフォルトポート 3000。凍結された 1.x と並行稼働。置き換えもデータ共有もしません。",
         d1k: "デフォルトでログインなし", d1v: "シークレット未設定ならログイン画面は出ません。公開時は Cloudflare Access / Caddy で認証を。",
