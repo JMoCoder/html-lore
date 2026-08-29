@@ -200,6 +200,58 @@
     .mode p { margin: 0 0 12px; color: var(--ink-soft); font-size: 13.5px; }
     .mode ul { margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: 13px; }
 
+    /* edit mocks */
+    .code-mock {
+      background: #141a17;
+      border-radius: 10px;
+      padding: 12px 0;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.9;
+      overflow: hidden;
+      margin: 14px 0 16px;
+    }
+    .code-mock .ln { display: flex; }
+    .code-mock .no2 { width: 30px; flex-shrink: 0; text-align: right; padding-right: 12px; color: #4a5a52; user-select: none; }
+    .code-mock .tx { color: #c9d6cf; white-space: pre; }
+    .code-mock .tag2 { color: #6bc0a8; }
+    .code-mock .attr { color: #9ad6c5; }
+    .code-mock .str { color: #d9c98a; }
+    .visual-mock {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-raised);
+      padding: 46px 18px 18px;
+      margin: 14px 0 16px;
+      font-size: 12.5px;
+      color: var(--ink-soft);
+    }
+    .visual-mock .vm-p { margin: 0 0 10px; }
+    .visual-mock .vm-p:last-child { margin-bottom: 0; }
+    .visual-mock .sel {
+      position: relative;
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 2px;
+      color: var(--ink);
+    }
+    .visual-mock .vm-bar {
+      position: absolute;
+      top: -32px;
+      left: -3px;
+      display: flex;
+      align-items: center;
+      gap: 1px;
+      background: var(--ink);
+      color: var(--bg);
+      border-radius: 7px;
+      padding: 3px 6px;
+      font-size: 11px;
+      box-shadow: var(--shadow-card);
+    }
+    .visual-mock .vm-bar b, .visual-mock .vm-bar i, .visual-mock .vm-bar u, .visual-mock .vm-bar s { padding: 1px 5px; font-weight: 600; }
+    .visual-mock .vm-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-left: 5px; }
+
     /* deploy */
     .deploy { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
     .term {
@@ -216,10 +268,6 @@
     .facts { display: grid; gap: 10px; }
     .fact { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; color: var(--ink-soft); }
     .fact b { color: var(--ink); font-weight: 600; white-space: nowrap; }
-
-    /* not */
-    .not { border-top: 1px solid var(--line); }
-    .not .card { background: transparent; }
 
     footer {
       border-top: 1px solid var(--line);
@@ -261,6 +309,7 @@
       <nav class="nav">
         <a href="#files" class="hide-m" data-i18n="navFiles">文件即库</a>
         <a href="#workbench" class="hide-m" data-i18n="navWorkbench">工作台</a>
+        <a href="#edit" class="hide-m" data-i18n="navEdit">编辑</a>
         <a href="#share" class="hide-m" data-i18n="navShare">分享</a>
         <a href="#deploy" class="hide-m" data-i18n="navDeploy">部署</a>
         <a href="demo/" data-i18n="navDemo">Demo</a>
@@ -372,6 +421,56 @@
       </div>
     </section>
 
+    <!-- EDIT -->
+    <section class="block" id="edit">
+      <h2 data-i18n="editTitle">两种编辑器，都直接改文件</h2>
+      <p class="sub" data-i18n="editSub">保存就是写盘，预览立刻刷新。没有发布按钮，没有同步延迟——你改的就是文件本身。</p>
+      <div class="split">
+        <div class="mode">
+          <h3><span class="tag" data-i18n="srcTag">源码</span><span data-i18n="srcT">CodeMirror 源码编辑</span></h3>
+          <p data-i18n="srcD">面向结构和标记的完整控制。</p>
+          <div class="code-mock" aria-hidden="true">
+            <div class="ln"><span class="no2">1</span><span class="tx">&lt;<span class="tag2">article</span> <span class="attr">class</span>=<span class="str">"note"</span>&gt;</span></div>
+            <div class="ln"><span class="no2">2</span><span class="tx">  &lt;<span class="tag2">h1</span>&gt;Docker Network&lt;/<span class="tag2">h1</span>&gt;</span></div>
+            <div class="ln"><span class="no2">3</span><span class="tx">  &lt;<span class="tag2">p</span>&gt;Bridge networks…&lt;/<span class="tag2">p</span>&gt;</span></div>
+            <div class="ln"><span class="no2">4</span><span class="tx">&lt;/<span class="tag2">article</span>&gt;</span></div>
+          </div>
+          <ul>
+            <li data-i18n="srcL1">行号列号、自动换行、全屏模式</li>
+            <li data-i18n="srcL2">未保存就关闭，会先确认</li>
+            <li data-i18n="srcL3">适合清理标记、调整结构、批量修正</li>
+          </ul>
+        </div>
+        <div class="mode">
+          <h3><span class="tag" data-i18n="visTag">可视化</span><span data-i18n="visT">可视化文件编辑</span></h3>
+          <p data-i18n="visD">不懂 HTML 也能改。在预览里点选，直接改。</p>
+          <div class="visual-mock" aria-hidden="true">
+            <p class="vm-p sel"><span class="vm-bar"><b>B</b><i>I</i><u>U</u><s>S</s><span class="vm-dot"></span></span>Service discovery notes for Docker.</p>
+            <p class="vm-p">Bridge networks, published ports…</p>
+          </div>
+          <ul>
+            <li data-i18n="visL1">点选文字或元素，改内容、颜色、背景</li>
+            <li data-i18n="visL2">字号、行高、字重、对齐，加粗 / 斜体 / 下划线</li>
+            <li data-i18n="visL3">撤销 / 重做；不支持的元素会明说</li>
+          </ul>
+        </div>
+      </div>
+      <div class="grid cols-3" style="margin-top:16px">
+        <div class="card">
+          <h3 data-i18n="g1t">保存即生效</h3>
+          <p data-i18n="g1d">写盘后 iframe 立刻刷新。你看到的就是磁盘上的文件，没有中间状态。</p>
+        </div>
+        <div class="card">
+          <h3 data-i18n="g2t">保存前安全预检</h3>
+          <p data-i18n="g2d">每次保存先扫描；会影响安全分享的改动先提示，由你决定写不写。</p>
+        </div>
+        <div class="card">
+          <h3 data-i18n="g3t">写回核对</h3>
+          <p data-i18n="g3d">写完读回比对，不一致就报错。不会静默写坏一篇笔记。</p>
+        </div>
+      </div>
+    </section>
+
     <!-- SHARE -->
     <section class="block" id="share">
       <h2 data-i18n="shareTitle">安全分享，两种模式</h2>
@@ -421,29 +520,6 @@
       </div>
     </section>
 
-    <!-- NOT -->
-    <section class="block not">
-      <h2 data-i18n="notTitle">2.0 明确不做</h2>
-      <p class="sub" data-i18n="notSub">比 1.x 简化是刻意的。砍掉的部分，写在明处。</p>
-      <div class="grid cols-2">
-        <div class="card">
-          <h3 data-i18n="n1t">没有 AI</h3>
-          <p data-i18n="n1d">不生成 HTML，不做知识库问答，不接模型。1.x 的 AI 密钥和索引不会被带进 2.0。</p>
-        </div>
-        <div class="card">
-          <h3 data-i18n="n2t">没有应用内登录</h3>
-          <p data-i18n="n2d">默认假设你在反代层做鉴权。只有显式配置，才会出现 1.x 那套账号页。</p>
-        </div>
-        <div class="card">
-          <h3 data-i18n="n3t">不替换 1.x</h3>
-          <p data-i18n="n3d">2.0 是新容器、新目录、新端口。1.x 冻结并行；迁过来等于放弃问答和生成。</p>
-        </div>
-        <div class="card">
-          <h3 data-i18n="n4t">不是离线库</h3>
-          <p data-i18n="n4d">PWA 只缓存壳和静态资源。笔记正文、分享页、API 始终走网络。</p>
-        </div>
-      </div>
-    </section>
   </main>
 
   <footer>
@@ -460,7 +536,7 @@
   <script>
     const I18N = {
       "zh-CN": {
-        navFiles: "文件即库", navWorkbench: "工作台", navShare: "分享", navDeploy: "部署", navDemo: "Demo",
+        navFiles: "文件即库", navWorkbench: "工作台", navEdit: "编辑", navShare: "分享", navDeploy: "部署", navDemo: "Demo",
         heroEyebrow: "自托管 · 无数据库 · 无 AI",
         heroTitle: "你的笔记，<br>就是 HTML 文件。",
         heroLead: "HTMlore 2.0 是一个 HTML 知识工作台。导入、筛选、阅读、编辑、安全分享——笔记始终是磁盘上的 HTML + YAML，不锁进数据库，不经过任何模型。",
@@ -475,7 +551,7 @@
         mockCollections: "集合", mockTags: "标签", mockSearch: "搜索笔记…", mockSort: "最近创建", mockImport: "导入 HTML",
         mockC1: "自托管 HTML 知识工作台，无数据库、无登录、无 AI。", mockC2: "信任边界、权限与工具调用风险。", mockC3: "Bridge 网络、端口与服务发现。", mockC4: "PWA 壳缓存策略与收藏卡片。",
         w1t: "筛选与排序", w1d: "资料库视图、集合、标签（任一/全部）、只看收藏、六种排序。全部在浏览器里即时完成。",
-        w2t: "阅读与编辑", w2d: "iframe 沙箱读原文；CodeMirror 改源码，或可视化改文字和样式。元数据随改随存。",
+        w2t: "阅读与元数据", w2d: "iframe 沙箱读原文；标题、摘要、集合、标签在侧栏随改随存。",
         w3t: "归档与删除", w3d: "归档锁定编辑、移出主视图；永久删除必须先归档。不会误删。",
         shareTitle: "安全分享，两种模式", shareSub: "每条链接一个 token，磁盘只存哈希。过期、撤销、原文归档后，对外就是 404。",
         safeT: "消毒静态", safeD: "去掉脚本、表单、iframe 和危险标签，只留可读内容。过不了扫描会自动生成一份消毒副本再分享。",
@@ -487,15 +563,18 @@
         d2k: "独立部署", d2v: "compose 项目 html-lore-v2，端口 3000。1.x 冻结在 legacy / v1.2.5，继续跑 8080。",
         d3k: "文件迁移", d3v: "拷 content/ 和 meta/，跳过 AI 密钥和向量索引。未过期分享链接继续有效。",
         d4k: "中英日", d4v: "界面中 / 英 / 日，亮暗主题。PWA 壳可离线回退。",
-        notTitle: "2.0 明确不做", notSub: "比 1.x 简化是刻意的。砍掉的部分，写在明处。",
-        n1t: "没有 AI", n1d: "不生成 HTML，不做知识库问答，不接模型。1.x 的 AI 密钥和索引不会被带进 2.0。",
-        n2t: "没有应用内登录", n2d: "默认假设你在反代层做鉴权。只有显式配置，才会出现 1.x 那套账号页。",
-        n3t: "不替换 1.x", n3d: "2.0 是新容器、新目录、新端口。1.x 冻结并行；迁过来等于放弃问答和生成。",
-        n4t: "不是离线库", n4d: "PWA 只缓存壳和静态资源。笔记正文、分享页、API 始终走网络。",
+        editTitle: "两种编辑器，都直接改文件", editSub: "保存就是写盘，预览立刻刷新。没有发布按钮，没有同步延迟——你改的就是文件本身。",
+        srcTag: "源码", srcT: "CodeMirror 源码编辑", srcD: "面向结构和标记的完整控制。",
+        srcL1: "行号列号、自动换行、全屏模式", srcL2: "未保存就关闭，会先确认", srcL3: "适合清理标记、调整结构、批量修正",
+        visTag: "可视化", visT: "可视化文件编辑", visD: "不懂 HTML 也能改。在预览里点选，直接改。",
+        visL1: "点选文字或元素，改内容、颜色、背景", visL2: "字号、行高、字重、对齐，加粗 / 斜体 / 下划线", visL3: "撤销 / 重做；不支持的元素会明说",
+        g1t: "保存即生效", g1d: "写盘后 iframe 立刻刷新。你看到的就是磁盘上的文件，没有中间状态。",
+        g2t: "保存前安全预检", g2d: "每次保存先扫描；会影响安全分享的改动先提示，由你决定写不写。",
+        g3t: "写回核对", g3d: "写完读回比对，不一致就报错。不会静默写坏一篇笔记。",
         footMain: "维护线 main", footDemo: "Demo", footDocs: "部署文档",
       },
       en: {
-        navFiles: "Files as library", navWorkbench: "Workbench", navShare: "Share", navDeploy: "Deploy", navDemo: "Demo",
+        navFiles: "Files as library", navWorkbench: "Workbench", navEdit: "Edit", navShare: "Share", navDeploy: "Deploy", navDemo: "Demo",
         heroEyebrow: "Self-hosted · No database · No AI",
         heroTitle: "Your notes are<br>just HTML files.",
         heroLead: "HTMlore 2.0 is an HTML knowledge workbench. Import, filter, read, edit, share safely — notes stay as HTML + YAML on your disk. No database, no model in the loop.",
@@ -510,7 +589,7 @@
         mockCollections: "Collections", mockTags: "Tags", mockSearch: "Search notes…", mockSort: "Recently created", mockImport: "Import HTML",
         mockC1: "Self-hosted HTML workbench. No database, no login, no AI.", mockC2: "Trust boundaries, permissions, tool-call risks.", mockC3: "Bridge networks, ports, service discovery.", mockC4: "PWA shell caching and favorite cards.",
         w1t: "Filter & sort", w1d: "Library views, collections, tags (any/all), favorites-only, six sort orders — all instant, in the browser.",
-        w2t: "Read & edit", w2d: "Read the original in a sandboxed iframe; edit source with CodeMirror or visually edit text and styles. Metadata saves as you type.",
+        w2t: "Read & metadata", w2d: "Read the original in a sandboxed iframe; title, summary, collection and tags save as you type in the side panel.",
         w3t: "Archive & delete", w3d: "Archiving locks editing and hides from the main view. Permanent delete requires archiving first. No accidents.",
         shareTitle: "Safe sharing, two modes", shareSub: "One token per link; only its hash is stored. Expired, revoked, or archived notes return 404.",
         safeT: "Sanitized static", safeD: "Strips scripts, forms, iframes and dangerous tags, keeping readable content. If it fails the scan, a sanitized copy is shared instead.",
@@ -522,15 +601,18 @@
         d2k: "Independent deploy", d2v: "Compose project html-lore-v2 on 3000. 1.x is frozen at legacy / v1.2.5 on 8080.",
         d3k: "File migration", d3v: "Copy content/ and meta/, skip AI keys and vector indexes. Unexpired share links keep working.",
         d4k: "中文 / EN / 日本語", d4v: "UI in Chinese, English, Japanese. Light and dark themes. PWA shell works offline.",
-        notTitle: "What 2.0 explicitly does not do", notSub: "Simpler than 1.x on purpose. The removed parts, stated plainly.",
-        n1t: "No AI", n1d: "No HTML generation, no library Q&A, no model. 1.x AI keys and indexes are never carried over.",
-        n2t: "No in-app login", n2d: "Assumes you authenticate at the reverse proxy. The 1.x account screen only appears if you explicitly configure it.",
-        n3t: "Does not replace 1.x", n3d: "2.0 is a new container, directory and port. 1.x runs frozen in parallel; migrating means giving up Q&A and generation.",
-        n4t: "Not an offline library", n4d: "The PWA caches only the shell and static assets. Note content, share pages and APIs always hit the network.",
+        editTitle: "Two editors, both write straight to the file", editSub: "Saving is writing to disk; the preview refreshes immediately. No publish button, no sync lag — what you edit is the file itself.",
+        srcTag: "Source", srcT: "CodeMirror source editing", srcD: "Full control over structure and markup.",
+        srcL1: "Line/column numbers, wrapping, fullscreen", srcL2: "Closing with unsaved changes asks first", srcL3: "Best for cleaning markup, restructuring, batch fixes",
+        visTag: "Visual", visT: "Visual file editing", visD: "No HTML needed. Click in the preview, change it directly.",
+        visL1: "Click text or elements; edit content, color, background", visL2: "Font size, line height, weight, alignment; bold / italic / underline", visL3: "Undo / redo; unsupported elements say so",
+        g1t: "Save means live", g1d: "After writing, the iframe refreshes at once. What you see is the file on disk — no intermediate state.",
+        g2t: "Safety precheck on save", g2d: "Every save is scanned; changes that would break safe sharing are flagged before you commit.",
+        g3t: "Write-back check", g3d: "Content is read back and compared. A mismatch raises an error instead of silently corrupting a note.",
         footMain: "main is the maintenance line", footDemo: "Demo", footDocs: "Deploy docs",
       },
       ja: {
-        navFiles: "ファイル即ライブラリ", navWorkbench: "ワークベンチ", navShare: "共有", navDeploy: "デプロイ", navDemo: "デモ",
+        navFiles: "ファイル即ライブラリ", navWorkbench: "ワークベンチ", navEdit: "編集", navShare: "共有", navDeploy: "デプロイ", navDemo: "デモ",
         heroEyebrow: "セルフホスト · データベースなし · AI なし",
         heroTitle: "ノートは、<br>HTML ファイルそのもの。",
         heroLead: "HTMlore 2.0 は HTML ナレッジワークベンチです。インポート、絞り込み、閲覧、編集、安全な共有——ノートは常にディスク上の HTML + YAML。データベースにもモデルにも渡しません。",
@@ -545,7 +627,7 @@
         mockCollections: "コレクション", mockTags: "タグ", mockSearch: "ノートを検索…", mockSort: "作成が新しい順", mockImport: "HTML をインポート",
         mockC1: "セルフホスト HTML ワークベンチ。DB・ログイン・AI なし。", mockC2: "信頼境界、権限、ツール呼び出しのリスク。", mockC3: "Bridge ネットワーク、ポート、サービス検出。", mockC4: "PWA シェルキャッシュとお気に入りカード。",
         w1t: "絞り込みと並び替え", w1d: "ライブラリビュー、コレクション、タグ（いずれか/すべて）、お気に入りのみ、6 種の並び替え。すべてブラウザ内で即時。",
-        w2t: "閲覧と編集", w2d: "サンドボックス iframe で原文を表示。CodeMirror でソース、または視覚的にテキストとスタイルを編集。メタデータは即保存。",
+        w2t: "閲覧とメタデータ", w2d: "サンドボックス iframe で原文を表示。タイトル、概要、コレクション、タグはサイドパネルで即保存。",
         w3t: "アーカイブと削除", w3d: "アーカイブは編集をロックしメイン表示から外します。完全削除はアーカイブ後のみ。誤削除を防ぎます。",
         shareTitle: "安全な共有、2 つのモード", shareSub: "リンクごとに 1 トークン。ディスクにはハッシュのみ保存。期限切れ・取り消し・アーカイブ後は 404。",
         safeT: "サニタイズ静的", safeD: "スクリプト、フォーム、iframe、危険なタグを除去し、読める内容だけ残します。スキャンに落ちた場合はサニタイズ済みコピーを共有。",
@@ -557,11 +639,14 @@
         d2k: "独立デプロイ", d2v: "compose プロジェクト html-lore-v2、ポート 3000。1.x は legacy / v1.2.5 で凍結、8080 で稼働。",
         d3k: "ファイル移行", d3v: "content/ と meta/ をコピー。AI キーとベクターインデックスは除外。未期限切れの共有リンクは引き続き有効。",
         d4k: "中文 / EN / 日本語", d4v: "UI は中国語・英語・日本語。ライト/ダークテーマ。PWA シェルはオフラインで動作。",
-        notTitle: "2.0 が明確にやらないこと", notSub: "1.x よりシンプルなのは意図的です。削った部分を明示します。",
-        n1t: "AI なし", n1d: "HTML 生成もライブラリ Q&A もモデル接続もなし。1.x の AI キーとインデックスは持ち越されません。",
-        n2t: "アプリ内ログインなし", n2d: "リバースプロキシでの認証を前提。明示的に設定した場合のみ 1.x のアカウント画面が出ます。",
-        n3t: "1.x を置き換えない", n3d: "2.0 は新しいコンテナ・ディレクトリ・ポート。1.x は凍結されたまま並行。移行は Q&A と生成を手放すことを意味します。",
-        n4t: "オフラインライブラリではない", n4d: "PWA がキャッシュするのはシェルと静的アセットのみ。ノート本文、共有ページ、API は常にネットワーク経由。",
+        editTitle: "2 つのエディタ、どちらもファイルを直接書き換える", editSub: "保存はそのままディスクへの書き込み。プレビューは即座に更新。公開ボタンも同期の待ち時間もありません。",
+        srcTag: "ソース", srcT: "CodeMirror ソース編集", srcD: "構造とマークアップを完全にコントロール。",
+        srcL1: "行・桁番号、折り返し、全画面モード", srcL2: "未保存で閉じるときは確認", srcL3: "マークアップの整理、構造変更、一括修正に",
+        visTag: "ビジュアル", visT: "ビジュアルファイル編集", visD: "HTML がわからなくても、プレビューでクリックして直接変更。",
+        visL1: "テキストや要素をクリックして内容・色・背景を変更", visL2: "文字サイズ、行の高さ、太さ、配置。太字・斜体・下線", visL3: "取り消し / やり直し。非対応の要素は明示",
+        g1t: "保存すれば即反映", g1d: "書き込み後、iframe はすぐ更新。見えているものがディスク上のファイルです。",
+        g2t: "保存前の安全プリチェック", g2d: "保存のたびにスキャン。安全な共有を壊す変更は書き込む前に警告します。",
+        g3t: "書き戻し検証", g3d: "書き込み後に読み戻して比較。不一致はエラーになり、静かに壊れることはありません。",
         footMain: "main がメンテナンスライン", footDemo: "デモ", footDocs: "デプロイドキュメント",
       },
     };
