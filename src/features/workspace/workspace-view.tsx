@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { LibraryFilter, Note, SortMode } from "@/fixtures/notes";
 import { filterNotes } from "@/features/workspace/filter-notes";
 import { Sidebar } from "@/features/workspace/sidebar";
@@ -19,12 +19,25 @@ type ShareRow = { item_id: string; url_path: string; active: boolean };
 
 const RECENT_MS = 1000 * 60 * 60 * 24 * 30;
 
-export function WorkspaceView() {
+type Props = {
+  initialItems?: Item[];
+  initialShares?: ShareRow[];
+  initialNav?: NavConfig | null;
+  initialInteractive?: boolean;
+};
+
+export function WorkspaceView({
+  initialItems = [],
+  initialShares = [],
+  initialNav = null,
+  initialInteractive = true,
+}: Props) {
   const { messages: t } = useI18n();
-  const [items, setItems] = useState<Item[]>([]);
-  const [shares, setShares] = useState<ShareRow[]>([]);
-  const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
-  const [interactiveEnabled, setInteractiveEnabled] = useState(true);
+  const [items, setItems] = useState<Item[]>(initialItems);
+  const [shares, setShares] = useState<ShareRow[]>(initialShares);
+  const [navConfig, setNavConfig] = useState<NavConfig | null>(initialNav);
+  const [interactiveEnabled, setInteractiveEnabled] = useState(initialInteractive);
+  const [now] = useState(() => Date.now());
   const [shareTarget, setShareTarget] = useState<Note | null>(null);
   const [error, setError] = useState("");
   const [library, setLibrary] = useState<LibraryFilter>("all");
@@ -35,7 +48,6 @@ export function WorkspaceView() {
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [recentCount, setRecentCount] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareEpoch, setShareEpoch] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -51,10 +63,6 @@ export function WorkspaceView() {
     setInteractiveEnabled(shareList.interactive_enabled ?? true);
     setNavConfig(navigation);
   }, []);
-
-  useEffect(() => {
-    load().catch((err: Error) => setError(err.message));
-  }, [load]);
 
   const tokenByItem = useMemo(() => {
     const map = new Map<string, string>();
@@ -85,10 +93,7 @@ export function WorkspaceView() {
   );
 
   const active = notes.filter((n) => !n.archived);
-
-  useEffect(() => {
-    setRecentCount(active.filter((n) => Date.now() - Date.parse(n.updated) < RECENT_MS).length);
-  }, [active]);
+  const recentCount = active.filter((n) => now - Date.parse(n.updated) < RECENT_MS).length;
 
   const collections = useMemo(
     () =>
@@ -107,7 +112,7 @@ export function WorkspaceView() {
     [active],
   );
 
-  async function patchState(note: Note, values: { favorite?: boolean; archived?: boolean }) {
+  async function patchState(note: Note, values: { favorite?: boolean; archived?: boolean; pinned?: boolean }) {
     await apiJson(itemApiHref(note.id, "state"), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -128,17 +133,19 @@ export function WorkspaceView() {
         ref={fileRef}
         type="file"
         accept=".html,.htm"
+        multiple
         className="hidden"
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            const form = new FormData();
-            form.set("file", file);
-            apiJson("/api/uploads/html", { method: "POST", body: form })
-              .then(() => load())
-              .catch((err: Error) => setError(err.message));
-          }
+          const picked = [...(event.target.files ?? [])];
           event.target.value = "";
+          if (!picked.length) return;
+          if (picked.length > 5) setError(t.workspace.importMax(5));
+          const files = picked.slice(0, 5);
+          const form = new FormData();
+          for (const file of files) form.append("file", file);
+          apiJson("/api/uploads/html", { method: "POST", body: form })
+            .then(() => load())
+            .catch((err: Error) => setError(err.message));
         }}
       />
       <Sidebar
@@ -194,22 +201,26 @@ export function WorkspaceView() {
         <NoteGrid
           notes={visible}
           onFavorite={(note) => patchState(note, { favorite: !note.favorite }).catch((err: Error) => setError(err.message))}
+          onPin={(note) => patchState(note, { pinned: !note.pinned }).catch((err: Error) => setError(err.message))}
           onArchive={(note) => patchState(note, { archived: !note.archived }).catch((err: Error) => setError(err.message))}
           onDelete={(note) => remove(note).catch((err: Error) => setError(err.message))}
           onShare={(note) => setShareTarget(note)}
         />
       </main>
-      <ShareDialog
-        open={Boolean(shareTarget)}
-        itemId={shareTarget?.id ?? ""}
-        title={shareTarget?.title ?? ""}
-        interactiveEnabled={interactiveEnabled}
-        onClose={() => setShareTarget(null)}
-        onChanged={() => {
-          setShareEpoch((n) => n + 1);
-          load().catch((err: Error) => setError(err.message));
-        }}
-      />
+      {shareTarget ? (
+        <ShareDialog
+          key={shareTarget.id}
+          open
+          itemId={shareTarget.id}
+          title={shareTarget.title}
+          interactiveEnabled={interactiveEnabled}
+          onClose={() => setShareTarget(null)}
+          onChanged={() => {
+            setShareEpoch((n) => n + 1);
+            load().catch((err: Error) => setError(err.message));
+          }}
+        />
+      ) : null}
       {settingsOpen ? (
         <SettingsPage
           onClose={() => setSettingsOpen(false)}
@@ -224,6 +235,13 @@ export function WorkspaceView() {
             favorites: active.filter((n) => n.favorite).length,
             imported: active.filter((n) => n.imported).length,
             archived: notes.filter((n) => n.archived).length,
+          }}
+          onItemsChanged={() => {
+            load().catch((err: Error) => setError(err.message));
+          }}
+          onRenamed={(kind, from, to) => {
+            if (kind === "collection" && collection === from) setCollection(to);
+            if (kind === "tag") setTags((current) => current.map((tag) => (tag === from ? to : tag)));
           }}
           onSharesChanged={() => {
             setShareEpoch((n) => n + 1);

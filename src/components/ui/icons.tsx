@@ -27,6 +27,12 @@ export const Icon = {
       <path d="m6.5 10.5-2.5 2.5-2.5-2.5" />
     </Svg>
   ),
+  pin: ({ filled = false }: { filled?: boolean }) => (
+    <Svg fill={filled ? "currentColor" : "none"}>
+      <path d="M8 14.2 8 9" />
+      <path d="M5.2 3.8h5.6v2.2l1.2 2.6H4l1.2-2.6z" />
+    </Svg>
+  ),
   star: ({ filled = false }: { filled?: boolean }) => (
     <Svg fill={filled ? "currentColor" : "none"}>
       <path d="m8 2.6 1.7 3.4 3.8.6-2.75 2.67.65 3.78L8 11.2l-3.4 1.85.65-3.78L2.5 6.6l3.8-.6z" />

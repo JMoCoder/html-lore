@@ -75,18 +75,18 @@ export function FileEditorDialog({
   const { messages: t } = useI18n();
   const e = t.reader.editor;
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const [srcdoc, setSrcdoc] = useState("");
-  const [original, setOriginal] = useState("");
+  const [srcdoc, setSrcdoc] = useState(() => injectFileEditorRuntime(html));
+  const [original, setOriginal] = useState(html);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState(e.fileLoading);
+  const [feedback, setFeedback] = useState(e.fileLoaded);
   const [mode, setMode] = useState<Mode>("text");
   const [collapsed, setCollapsed] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const historyRef = useRef({ list: [] as string[], index: -1 });
+  const [history, setHistory] = useState<string[]>(() => [html]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const historyRef = useRef({ list: [html], index: 0 });
   const syncing = useRef(false);
   const historyTimer = useRef(0);
   const modeRef = useRef<Mode>("text");
@@ -97,20 +97,6 @@ export function FileEditorDialog({
     setSrcdoc(injectFileEditorRuntime(source));
     setSelection(null);
   }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    setOriginal(html);
-    setDirty(false);
-    setMode("text");
-    modeRef.current = "text";
-    setCollapsed(false);
-    setFeedback(e.fileLoaded);
-    loadDocument(html);
-    historyRef.current = { list: [html], index: 0 };
-    setHistory([html]);
-    setHistoryIndex(0);
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function post(message: Record<string, unknown>) {
     frameRef.current?.contentWindow?.postMessage(message, "*");

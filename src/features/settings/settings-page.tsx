@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/icon-button";
@@ -39,6 +39,8 @@ type Props = {
   collections: Entry[];
   allTags: Entry[];
   libraryCounts: Record<LibraryFilter, number>;
+  onItemsChanged: () => void;
+  onRenamed?: (kind: "collection" | "tag", from: string, to: string) => void;
   onSharesChanged: () => void;
   shareEpoch?: number;
   onManageShare: (itemId: string) => void;
@@ -51,6 +53,7 @@ export function SettingsPage(props: Props) {
   const { locale, messages: t } = useI18n();
   const [tab, setTab] = useState<Tab>("basic");
   const [savingNav, setSavingNav] = useState(false);
+  const [renameMessage, setRenameMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
   const [shares, setShares] = useState<ManagedShare[]>([]);
   const [shareMessage, setShareMessage] = useState("");
@@ -123,6 +126,24 @@ export function SettingsPage(props: Props) {
         body: JSON.stringify(next),
       });
       props.onNavConfig(saved);
+    } finally {
+      setSavingNav(false);
+    }
+  }
+
+  async function renameEntry(kind: "collection" | "tag", from: string, to: string) {
+    setRenameMessage("");
+    setSavingNav(true);
+    try {
+      const result = await apiJson<{ from: string; to: string }>("/api/taxonomy/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, from, to }),
+      });
+      props.onRenamed?.(kind, result.from, result.to);
+      props.onItemsChanged();
+    } catch {
+      setRenameMessage(t.settings.renameFailed);
     } finally {
       setSavingNav(false);
     }
@@ -236,7 +257,13 @@ export function SettingsPage(props: Props) {
                   empty={t.settings.emptyList}
                   disabled={savingNav}
                   onToggle={(name, visible) => toggleVisible("collections", name, visible)}
+                  onRename={(from, to) => renameEntry("collection", from, to)}
+                  renameLabel={t.settings.rename}
+                  renameSave={t.settings.renameSave}
+                  renameCancel={t.settings.renameCancel}
+                  renamePlaceholder={t.settings.renamePlaceholder}
                 />
+                {renameMessage && tab === "collections" ? <p className="mt-3 text-[12px] text-ink-soft">{renameMessage}</p> : null}
               </Section>
             ) : null}
 
@@ -253,7 +280,13 @@ export function SettingsPage(props: Props) {
                   empty={t.settings.emptyList}
                   disabled={savingNav}
                   onToggle={(name, visible) => toggleVisible("tags", name, visible)}
+                  onRename={(from, to) => renameEntry("tag", from, to)}
+                  renameLabel={t.settings.rename}
+                  renameSave={t.settings.renameSave}
+                  renameCancel={t.settings.renameCancel}
+                  renamePlaceholder={t.settings.renamePlaceholder}
                 />
+                {renameMessage && tab === "tags" ? <p className="mt-3 text-[12px] text-ink-soft">{renameMessage}</p> : null}
               </Section>
             ) : null}
 
@@ -397,16 +430,14 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function ThemeModeButtons() {
   const { messages: t } = useI18n();
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    function sync() {
-      setDark(isDarkTheme());
-    }
-    sync();
-    window.addEventListener(THEME_CHANGE_EVENT, sync);
-    return () => window.removeEventListener(THEME_CHANGE_EVENT, sync);
-  }, []);
+  const dark = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
+      return () => window.removeEventListener(THEME_CHANGE_EVENT, onStoreChange);
+    },
+    isDarkTheme,
+    () => false,
+  );
 
   return (
     <div className="inline-flex h-9 rounded-[var(--radius-control)] border border-line bg-panel p-0.5">
@@ -434,21 +465,87 @@ function ManagementList({
   empty,
   disabled,
   onToggle,
+  onRename,
+  renameLabel,
+  renameSave,
+  renameCancel,
+  renamePlaceholder,
 }: {
   rows: { name: string; label: string; count: number; visible: boolean }[];
   visibleLabel: string;
   empty: string;
   disabled: boolean;
   onToggle: (name: string, visible: boolean) => void;
+  onRename?: (from: string, to: string) => void;
+  renameLabel?: string;
+  renameSave?: string;
+  renameCancel?: string;
+  renamePlaceholder?: string;
 }) {
+  const [editing, setEditing] = useState("");
+  const [draft, setDraft] = useState("");
+
   if (rows.length === 0) {
     return <p className="mt-6 text-[13px] text-ink-faint">{empty}</p>;
   }
+
+  function commit(from: string) {
+    const next = draft.trim();
+    setEditing("");
+    if (!next || next === from) return;
+    onRename?.(from, next);
+  }
+
   return (
     <ul className="mt-5 divide-y divide-line rounded-[var(--radius-card)] border border-line bg-panel">
       {rows.map((row) => (
-        <li key={row.name} className="flex h-11 items-center gap-3 px-4">
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{row.label}</span>
+        <li key={row.name} className="flex min-h-11 items-center gap-3 px-4 py-1.5">
+          {editing === row.name ? (
+            <form
+              className="flex min-w-0 flex-1 items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                commit(row.name);
+              }}
+            >
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={renamePlaceholder}
+                autoFocus
+                disabled={disabled}
+                className="h-8 min-w-0 flex-1 rounded-md border border-line bg-panel-raised px-2 text-[13px] text-ink outline-none focus:border-accent/60"
+              />
+              <button type="submit" disabled={disabled} className="h-8 rounded-md px-2 text-[12px] text-accent hover:bg-accent-soft">
+                {renameSave}
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                className="h-8 rounded-md px-2 text-[12px] text-ink-faint hover:bg-panel-raised"
+                onClick={() => setEditing("")}
+              >
+                {renameCancel}
+              </button>
+            </form>
+          ) : (
+            <>
+              <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{row.label}</span>
+              {onRename ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className="h-8 rounded-md px-2 text-[12px] text-ink-soft hover:bg-panel-raised hover:text-ink"
+                  onClick={() => {
+                    setEditing(row.name);
+                    setDraft(row.name);
+                  }}
+                >
+                  {renameLabel}
+                </button>
+              ) : null}
+            </>
+          )}
           <span className="text-[11px] tabular-nums text-ink-faint">{row.count}</span>
           <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] text-ink-faint">
             <span>{visibleLabel}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import {
   DEFAULT_LOCALE,
   LOCALE_STORAGE_KEY,
@@ -10,6 +10,8 @@ import {
   type Messages,
 } from "@/i18n";
 
+const LOCALE_CHANGE_EVENT = "html-lore-locale";
+
 type LocaleContextValue = {
   locale: Locale;
   messages: Messages;
@@ -18,28 +20,34 @@ type LocaleContextValue = {
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
+function subscribeLocale(onStoreChange: () => void) {
+  window.addEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+  return () => window.removeEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+}
+
+function readLocale(): Locale {
+  try {
+    return resolveLocale(localStorage.getItem(LOCALE_STORAGE_KEY));
+  } catch {
+    return DEFAULT_LOCALE;
+  }
+}
+
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
+  const locale = useSyncExternalStore(subscribeLocale, readLocale, () => DEFAULT_LOCALE);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
-      const next = resolveLocale(stored);
-      setLocaleState(next);
-      document.documentElement.lang = next;
-    } catch {
-      document.documentElement.lang = DEFAULT_LOCALE;
-    }
-  }, []);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
     try {
       localStorage.setItem(LOCALE_STORAGE_KEY, next);
     } catch {
       /* ignore */
     }
     document.documentElement.lang = next;
+    window.dispatchEvent(new Event(LOCALE_CHANGE_EVENT));
   }, []);
 
   const value = useMemo(

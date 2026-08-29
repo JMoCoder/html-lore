@@ -56,6 +56,7 @@ function itemStub(overrides: Partial<Item>): Item {
     cover: null,
     open_mode: "iframe",
     agent: {},
+    text: "",
     ...overrides,
   };
 }
@@ -225,5 +226,43 @@ describe("examples fixtures", () => {
       confirmPrivateReferences: true,
     });
     expect(created.share.mode).toBe("interactive");
+  });
+
+  it("renames a collection and a tag across notes", () => {
+    const settings = tempWorkspace();
+    const items = new ItemService(settings);
+    const renamed = items.renameCollection("Dev", "Ops");
+    expect(renamed.updated).toBeGreaterThan(0);
+    expect(items.listItems({ q: "", library: "all", collection: "Ops", tags: [], tagMatch: "any", favorite: null, archived: null, sort: "newest", limit: null }).length).toBeGreaterThan(0);
+    expect(items.listItems({ q: "", library: "all", collection: "Dev", tags: [], tagMatch: "any", favorite: null, archived: null, sort: "newest", limit: null }).length).toBe(0);
+    const tagged = items.listItems({ q: "", library: "all", collection: "", tags: ["Docker"], tagMatch: "any", favorite: null, archived: null, sort: "newest", limit: null });
+    expect(tagged.length).toBeGreaterThan(0);
+    items.renameTag("Docker", "Containers");
+    expect(items.listItems({ q: "", library: "all", collection: "", tags: ["Containers"], tagMatch: "any", favorite: null, archived: null, sort: "newest", limit: null }).length).toBe(tagged.length);
+    expect(items.listItems({ q: "", library: "all", collection: "", tags: ["Docker"], tagMatch: "any", favorite: null, archived: null, sort: "newest", limit: null }).length).toBe(0);
+  });
+
+  it("pins a note and searches HTML body text", () => {
+    const settings = tempWorkspace();
+    const items = new ItemService(settings);
+    const upload = new UploadService(settings).importHtml({
+      filename: "body-search.html",
+      content: Buffer.from("<!doctype html><html><head><title>Visible title</title></head><body><p>unique-body-token-zxqv</p></body></html>", "utf8"),
+      collection: "Inbox",
+    });
+    expect(items.listItems({ q: "unique-body-token-zxqv", library: "all", collection: "", tags: [], tagMatch: "any", favorite: null, archived: null, sort: "newest", limit: null }).some((item) => item.id === upload.item_id)).toBe(true);
+    const pinned = items.updateItemState(upload.item_id, { pinned: true });
+    expect(pinned.pinned).toBe(true);
+  });
+
+  it("imports up to five html files and rejects a sixth", () => {
+    const settings = tempWorkspace();
+    const upload = new UploadService(settings);
+    const files = Array.from({ length: 5 }, (_, index) => ({
+      filename: `batch-${index}.html`,
+      content: Buffer.from(`<!doctype html><html><head><title>N${index}</title></head><body><p>Hi</p></body></html>`, "utf8"),
+    }));
+    expect(upload.importHtmlFiles(files).length).toBe(5);
+    expect(() => upload.importHtmlFiles([...files, { filename: "batch-6.html", content: Buffer.from("<p>x</p>") }])).toThrow(/at most 5/);
   });
 });

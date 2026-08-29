@@ -7,12 +7,14 @@ import { useI18n } from "@/i18n/locale-provider";
 export function NoteGrid({
   notes,
   onFavorite,
+  onPin,
   onArchive,
   onDelete,
   onShare,
 }: {
   notes: Note[];
   onFavorite: (note: Note) => void;
+  onPin: (note: Note) => void;
   onArchive: (note: Note) => void;
   onDelete: (note: Note) => void;
   onShare: (note: Note) => void;
@@ -35,6 +37,7 @@ export function NoteGrid({
           key={note.id}
           note={note}
           onFavorite={onFavorite}
+          onPin={onPin}
           onArchive={onArchive}
           onDelete={onDelete}
           onShare={onShare}

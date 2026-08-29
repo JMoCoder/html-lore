@@ -11,6 +11,7 @@ export type Note = {
   favorite: boolean;
   archived: boolean;
   imported: boolean;
+  pinned: boolean;
   created: string;
   updated: string;
   shareToken?: string;
@@ -39,6 +40,7 @@ export const notes: Note[] = [
     favorite: true,
     archived: false,
     imported: false,
+    pinned: true,
     created: "2026-05-29",
     updated: "2026-05-29",
     shareToken: "mcp-security",
@@ -57,6 +59,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: true,
+    pinned: false,
     created: "2026-04-12",
     updated: "2026-04-12",
     shareToken: "docker-network",
@@ -76,6 +79,7 @@ export const notes: Note[] = [
     favorite: true,
     archived: false,
     imported: false,
+    pinned: false,
     created: "2026-06-02",
     updated: "2026-06-02",
     html: page(
@@ -94,6 +98,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: false,
+    pinned: false,
     created: "2026-05-18",
     updated: "2026-05-18",
     html: page(
@@ -111,6 +116,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: true,
+    pinned: false,
     created: "2026-07-03",
     updated: "2026-07-03",
     html: page(
@@ -128,6 +134,7 @@ export const notes: Note[] = [
     favorite: true,
     archived: false,
     imported: false,
+    pinned: false,
     created: "2026-08-20",
     updated: "2026-08-20",
     shareToken: "editorial-chrome",
@@ -146,6 +153,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: true,
+    pinned: false,
     created: "2026-03-21",
     updated: "2026-03-21",
     html: page(
@@ -163,6 +171,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: true,
     imported: true,
+    pinned: false,
     created: "2025-11-08",
     updated: "2025-11-08",
     html: page(

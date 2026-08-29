@@ -34,10 +34,11 @@ export function filterNotes(
       if (options.tagMatch === "any" && !hit) return false;
     }
     if (!query) return true;
-    return `${note.title} ${note.summary} ${note.collection} ${note.tags.join(" ")}`.toLowerCase().includes(query);
+    return `${note.title} ${note.summary} ${note.collection} ${note.tags.join(" ")} ${note.html}`.toLowerCase().includes(query);
   });
 
   return [...filtered].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     const titleOrder = a.title.localeCompare(b.title, "zh");
     const titleDescOrder = b.title.localeCompare(a.title, "zh");
     const newestUpdated = b.updated.localeCompare(a.updated);

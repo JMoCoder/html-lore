@@ -11,20 +11,25 @@ export default async function SharePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+  const payload = await readShare(token);
+  if (!payload) notFound();
+  return (
+    <ShareShell
+      title={payload.item.title}
+      summary={payload.item.summary}
+      html={payload.html}
+      styles={payload.styles}
+      mode={String(payload.share.mode || "safe")}
+    />
+  );
+}
+
+async function readShare(token: string) {
   try {
     const root = await getRootSettings();
     const settings = settingsForShareToken(root, token);
-    const payload = new ShareService(settings, root).publicReadByToken(token);
-    return (
-      <ShareShell
-        title={payload.item.title}
-        summary={payload.item.summary}
-        html={payload.html}
-        styles={payload.styles}
-        mode={String(payload.share.mode || "safe")}
-      />
-    );
+    return new ShareService(settings, root).publicReadByToken(token);
   } catch {
-    notFound();
+    return null;
   }
 }

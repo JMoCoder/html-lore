@@ -95,6 +95,7 @@ export function mapDomainError(error: unknown): Response {
       return jsonError({ message, safety: err.safety }, 400);
     case "ShareError":
       return jsonError(message, message === "Share not found." || message === "Item not found." ? 404 : 400);
+    case "TaxonomyError":
     case "NavigationConfigError":
     case "ExportError":
       return jsonError(message, 400);

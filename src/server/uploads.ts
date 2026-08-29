@@ -8,6 +8,8 @@ import { ensureWithin } from "@/server/paths";
 import type { ServerSettings } from "@/server/settings";
 import type { Item } from "@/server/types";
 
+export const MAX_IMPORT_FILES = 5;
+
 export class UploadError extends Error {
   constructor(message: string) {
     super(message);
@@ -59,6 +61,12 @@ export class UploadService {
       status: "indexed",
       item,
     };
+  }
+
+  importHtmlFiles(files: { filename: string; content: Buffer; title?: string; summary?: string; collection?: string; tags?: string | string[] }[]): UploadResult[] {
+    if (!files.length) throw new UploadError("HTML file is required.");
+    if (files.length > MAX_IMPORT_FILES) throw new UploadError(`You can import at most ${MAX_IMPORT_FILES} files at once.`);
+    return files.map((file) => this.importHtml(file));
   }
 
   private nextImportPath(filename: string, now: Date): string {

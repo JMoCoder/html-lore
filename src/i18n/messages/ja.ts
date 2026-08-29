@@ -36,7 +36,7 @@ export const ja: Messages = {
   },
   noteGrid: {
     emptyTitle: "条件に合うノートがありません。",
-    emptyHint: "タグや検索語をクリアするか、HTML をインポートしてください。",
+    emptyHint: "タグや検索語をクリアするか、HTML を最大 5 件までインポートしてください。",
   },
   noteCard: {
     favorite: "お気に入り",
@@ -48,6 +48,8 @@ export const ja: Messages = {
     share: "共有",
     openOriginal: "原文を開く",
     shared: "共有中",
+    pin: "ピン留め",
+    unpin: "ピンを外す",
   },
   reader: {
     back: "ワークスペース",
@@ -183,6 +185,7 @@ export const ja: Messages = {
   },
   workspace: {
     deleteConfirm: (title) => `「${title}」を完全に削除しますか？`,
+    importMax: (count) => `一度にインポートできるのは最大 ${count} 件です。`,
   },
   meta: {
     readingMinutes: (minutes) => `${minutes} 分`,
@@ -201,11 +204,15 @@ export const ja: Messages = {
     libraryIntro: "ライブラリは固定のシステムビューです。ここでは各ビューをサイドバーに表示するかだけを設定できます。",
     collections: "コレクション",
     collectionsIntro:
-      "サイドバーのコレクション表示/非表示のみ変更できます。名前はノートのメタデータにあり、追加・名前変更・統合・削除はまだありません。",
+      "コレクション名を変更すると、その名前を使っているノートもすべて書き換わります。ライブラリビューはシステム固定のため改名できません。",
     tags: "タグ",
-    tagsIntro:
-      "サイドバーのタグ表示/非表示のみ変更できます。名前はノートのメタデータにあり、追加・名前変更・統合・削除はまだありません。",
+    tagsIntro: "タグ名を変更すると、そのタグを使っているノートもすべて書き換わります。",
     visible: "表示",
+    rename: "名前を変更",
+    renameSave: "保存",
+    renameCancel: "キャンセル",
+    renamePlaceholder: "新しい名前",
+    renameFailed: "名前の変更に失敗しました。",
     emptyList: "管理できる項目はまだありません。",
     export: "データエクスポート",
     exportIntro: "ライブラリの Manifest を書き出すか、HTML 原ファイルをまとめてパックします。",

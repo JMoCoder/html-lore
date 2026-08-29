@@ -4,8 +4,10 @@ import { buildManifest } from "@/server/manifest";
 import { MetadataStore } from "@/server/metadata";
 import { dumpSimpleYaml } from "@/server/yaml";
 import { ensureWithin, metadataPathForItem, removeEmptyParents, writeFileDurable } from "@/server/paths";
+import { NavigationConfigService } from "@/server/navigation";
 import type { ServerSettings } from "@/server/settings";
 import type { Item, ItemQuery } from "@/server/types";
+import type { NavConfig } from "@/lib/navigation";
 
 export const VALID_LIBRARY_FILTERS = new Set(["all", "inbox", "recent", "favorites", "generated", "imported", "archived"]);
 export const VALID_SORT_MODES = new Set(["created-newest", "created-oldest", "newest", "oldest", "title-az", "title-za"]);
@@ -39,6 +41,12 @@ export class ItemDeleteError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ItemDeleteError";
+  }
+}
+export class TaxonomyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TaxonomyError";
   }
 }
 
@@ -146,7 +154,7 @@ export class ItemService {
     const item = this.getItem(itemId);
     if (!item) throw new ItemStateError("Item not found.");
     const state: Record<string, boolean> = {};
-    for (const key of ["favorite", "archived"] as const) {
+    for (const key of ["favorite", "archived", "pinned"] as const) {
       if (key in values) {
         if (typeof values[key] !== "boolean") throw new ItemStateError(`${key} must be a boolean.`);
         state[key] = values[key];
@@ -171,6 +179,7 @@ export class ItemService {
       updated: new Date().toISOString(),
     };
     delete metadata.path;
+    delete metadata.text;
     if (metadata.source_url == null) delete metadata.source_url;
     fs.writeFileSync(metadataPath, dumpSimpleYaml(metadata), "utf8");
     const updated = this.getItem(itemId);
@@ -193,6 +202,48 @@ export class ItemService {
       }
     }
     return { id: itemId, deleted: true };
+  }
+
+  renameCollection(from: string, to: string): { from: string; to: string; updated: number } {
+    const source = normalizeMetadataText(from);
+    const target = normalizeMetadataText(to);
+    if (!source) throw new TaxonomyError("Current collection name is required.");
+    if (!target) throw new TaxonomyError("New collection name cannot be empty.");
+    if (source === target) return { from: source, to: target, updated: 0 };
+    const items = this.manifest().items.filter((item) => item.collection === source);
+    for (const item of items) {
+      this.writeItemMetadata(item.id, item, { collection: target });
+    }
+    this.relabelNav("collections", source, target);
+    return { from: source, to: target, updated: items.length };
+  }
+
+  renameTag(from: string, to: string): { from: string; to: string; updated: number } {
+    const source = normalizeTags([from])[0];
+    const target = normalizeTags([to])[0];
+    if (!source) throw new TaxonomyError("Current tag name is required.");
+    if (!target) throw new TaxonomyError("New tag name cannot be empty.");
+    if (source === target) return { from: source, to: target, updated: 0 };
+    const items = this.manifest().items.filter((item) => item.tags.includes(source));
+    for (const item of items) {
+      const tags = [...new Set(item.tags.map((tag) => (tag === source ? target : tag)))];
+      this.writeItemMetadata(item.id, item, { tags });
+    }
+    this.relabelNav("tags", source, target);
+    return { from: source, to: target, updated: items.length };
+  }
+
+  private relabelNav(section: keyof NavConfig, from: string, to: string): void {
+    const nav = new NavigationConfigService(this.settings);
+    const config = nav.getConfig();
+    const current = config[section][from];
+    if (!current && !config[section][to]) return;
+    const nextSection = { ...config[section] };
+    if (current) {
+      nextSection[to] = { ...current, ...nextSection[to] };
+      delete nextSection[from];
+    }
+    nav.updateConfig({ ...config, [section]: nextSection });
   }
 }
 
@@ -279,7 +330,7 @@ export function applySearchFilter(items: Item[], query: string): Item[] {
 }
 
 function searchableText(item: Item): string {
-  return [item.title, item.summary, item.path, item.collection, item.source_type, ...item.tags]
+  return [item.title, item.summary, item.path, item.collection, item.source_type, item.text, ...item.tags]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -303,6 +354,7 @@ export function scoreSearchResult(item: Item, query: string): number {
   if ((item.collection || "").toLowerCase().includes(needle)) score += 10;
   if (item.tags.join(" ").toLowerCase().includes(needle)) score += 10;
   if ((item.path || "").toLowerCase().includes(needle)) score += 5;
+  if ((item.text || "").toLowerCase().includes(needle)) score += 8;
   return score;
 }
 
@@ -315,6 +367,7 @@ export function searchMatches(item: Item, query: string): string[] {
     collection: item.collection,
     tags: item.tags.join(" "),
     path: item.path,
+    text: item.text,
   };
   return Object.entries(fields)
     .filter(([, value]) => String(value || "").toLowerCase().includes(needle))
@@ -322,7 +375,7 @@ export function searchMatches(item: Item, query: string): string[] {
 }
 
 export function searchSnippet(item: Item, query: string): string {
-  const source = item.summary || item.title || "";
+  const source = item.summary || item.text || item.title || "";
   if (!query) return source.slice(0, 180);
   const index = source.toLowerCase().indexOf(query.toLowerCase());
   if (index < 0) return source.slice(0, 180);

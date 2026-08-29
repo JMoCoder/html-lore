@@ -56,6 +56,8 @@ export type Messages = {
     share: string;
     openOriginal: string;
     shared: string;
+    pin: string;
+    unpin: string;
   };
   reader: {
     back: string;
@@ -190,6 +192,7 @@ export type Messages = {
   };
   workspace: {
     deleteConfirm: (title: string) => string;
+    importMax: (count: number) => string;
   };
   meta: {
     readingMinutes: (minutes: number) => string;
@@ -211,6 +214,11 @@ export type Messages = {
     tags: string;
     tagsIntro: string;
     visible: string;
+    rename: string;
+    renameSave: string;
+    renameCancel: string;
+    renamePlaceholder: string;
+    renameFailed: string;
     emptyList: string;
     export: string;
     exportIntro: string;

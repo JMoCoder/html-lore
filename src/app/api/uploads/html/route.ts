@@ -5,20 +5,27 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireApiAuth(request);
     const form = await request.formData();
-    const file = form.get("file");
-    if (!(file instanceof File)) return jsonError("HTML file is required.", 400);
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const result = new UploadService(ctx.settings).importHtml({
-      filename: file.name,
-      content: buffer,
-      title: String(form.get("title") || ""),
-      summary: String(form.get("summary") || ""),
-      collection: String(form.get("collection") || ""),
-      tags: String(form.get("tags") || ""),
-    });
+    const files = [...form.getAll("file"), ...form.getAll("files")].filter((value): value is File => value instanceof File);
+    if (!files.length) return jsonError("HTML file is required.", 400);
+    const results = new UploadService(ctx.settings).importHtmlFiles(
+      await Promise.all(
+        files.map(async (file) => ({
+          filename: file.name,
+          content: Buffer.from(await file.arrayBuffer()),
+          title: String(form.get("title") || ""),
+          summary: String(form.get("summary") || ""),
+          collection: String(form.get("collection") || ""),
+          tags: String(form.get("tags") || ""),
+        })),
+      ),
+    );
+    const first = results[0];
     return jsonOk({
-      ...result,
-      job_id: `upl_job_${result.upload_id}`,
+      ...first,
+      job_id: `upl_job_${first.upload_id}`,
+      imported: results.length,
+      items: results.map((row) => row.item),
+      upload_ids: results.map((row) => row.upload_id),
     });
   } catch (error) {
     return mapDomainError(error);

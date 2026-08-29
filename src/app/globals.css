@@ -121,3 +121,9 @@ input::placeholder {
 .html-source-editor .cm-editor {
   height: 100%;
 }
+
+nextjs-portal,
+[data-nextjs-dev-indicator],
+#nextjs-dev-indicator {
+  display: none !important;
+}

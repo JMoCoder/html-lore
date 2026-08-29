@@ -236,39 +236,48 @@ export function ReaderChrome({
           </div>
         </aside>
       </div>
-      <ShareDialog
-        open={shareOpen}
-        itemId={note.id}
-        title={title}
-        interactiveEnabled={interactiveEnabled}
-        onClose={() => setShareOpen(false)}
-        onChanged={() => {
-          listShares()
-            .then((body) => {
-              const active = body.shares.find((row) => row.item_id === note.id && row.active);
-              const token = active?.url_path.split("/").filter(Boolean)[1];
-              setShareToken(token);
-            })
-            .catch(() => setShareToken(undefined));
-          router.refresh();
-        }}
-      />
-      <SourceEditorDialog
-        open={sourceOpen}
-        itemId={note.id}
-        title={title}
-        value={source}
-        onClose={() => setSourceOpen(false)}
-        onSaved={handleContentSaved}
-      />
-      <FileEditorDialog
-        open={fileOpen}
-        itemId={note.id}
-        title={title}
-        html={source}
-        onClose={() => setFileOpen(false)}
-        onSaved={handleContentSaved}
-      />
+      {shareOpen ? (
+        <ShareDialog
+          key={note.id}
+          open
+          itemId={note.id}
+          title={title}
+          interactiveEnabled={interactiveEnabled}
+          onClose={() => setShareOpen(false)}
+          onChanged={() => {
+            listShares()
+              .then((body) => {
+                const active = body.shares.find((row) => row.item_id === note.id && row.active);
+                const token = active?.url_path.split("/").filter(Boolean)[1];
+                setShareToken(token);
+              })
+              .catch(() => setShareToken(undefined));
+            router.refresh();
+          }}
+        />
+      ) : null}
+      {sourceOpen ? (
+        <SourceEditorDialog
+          key={`src-${note.id}`}
+          open
+          itemId={note.id}
+          title={title}
+          value={source}
+          onClose={() => setSourceOpen(false)}
+          onSaved={handleContentSaved}
+        />
+      ) : null}
+      {fileOpen ? (
+        <FileEditorDialog
+          key={`file-${note.id}`}
+          open
+          itemId={note.id}
+          title={title}
+          html={source}
+          onClose={() => setFileOpen(false)}
+          onSaved={handleContentSaved}
+        />
+      ) : null}
     </div>
   );
 }

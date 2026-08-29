@@ -1,5 +1,28 @@
 import { Parser } from "htmlparser2";
 
+export function extractPlainText(html: string, max = 20000): string {
+  const parts: string[] = [];
+  let skip = 0;
+  const parser = new Parser(
+    {
+      onopentag(name) {
+        if (name === "script" || name === "style" || name === "noscript") skip += 1;
+      },
+      onclosetag(name) {
+        if (name === "script" || name === "style" || name === "noscript") skip = Math.max(0, skip - 1);
+      },
+      ontext(data) {
+        if (!skip) parts.push(data);
+      },
+    },
+    { decodeEntities: true },
+  );
+  parser.write(html);
+  parser.end();
+  const text = parts.join(" ").replace(/\s+/g, " ").trim();
+  return text.length > max ? text.slice(0, max) : text;
+}
+
 export function extractHtmlMetadata(html: string, fallbackTitle: string): { title: string; summary: string } {
   let title = "";
   let h1 = "";

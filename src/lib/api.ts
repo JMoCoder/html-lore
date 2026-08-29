@@ -12,10 +12,11 @@ export function itemToNote(item: Item, extras: { html?: string; shareToken?: str
     favorite: item.favorite,
     archived: item.archived,
     imported: item.source_type === "imported" || item.source_type === "html",
+    pinned: item.pinned,
     created: item.created,
     updated: item.updated,
     shareToken: extras.shareToken,
-    html: extras.html ?? "",
+    html: extras.html ?? item.text ?? "",
   };
 }
 

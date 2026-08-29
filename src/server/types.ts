@@ -17,6 +17,7 @@ export type Item = {
   cover: string | null;
   open_mode: string;
   agent: Record<string, unknown>;
+  text: string;
 };
 
 export type Manifest = {

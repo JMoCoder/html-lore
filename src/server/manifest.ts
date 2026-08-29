@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { extractHtmlMetadata, filenameToTitle, slugify } from "@/server/html-meta";
+import { extractHtmlMetadata, extractPlainText, filenameToTitle, slugify } from "@/server/html-meta";
 import { MetadataStore } from "@/server/metadata";
 import type { Item, Manifest } from "@/server/types";
 
@@ -47,6 +47,7 @@ export function buildItem(filePath: string, contentDir: string, metadata: Metada
     cover: sidecar.cover == null ? null : String(sidecar.cover),
     open_mode: String(sidecar.open_mode || "iframe"),
     agent: isPlainObject(sidecar.agent) ? sidecar.agent : { generated: sourceType === "topic" },
+    text: extractPlainText(html),
   };
 }
 

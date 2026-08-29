@@ -13,12 +13,14 @@ import { useI18n } from "@/i18n/locale-provider";
 export function NoteCard({
   note,
   onFavorite,
+  onPin,
   onArchive,
   onDelete,
   onShare,
 }: {
   note: Note;
   onFavorite: (note: Note) => void;
+  onPin: (note: Note) => void;
   onArchive: (note: Note) => void;
   onDelete: (note: Note) => void;
   onShare: (note: Note) => void;
@@ -34,6 +36,13 @@ export function NoteCard({
           active: note.favorite,
           onClick: () => onFavorite(note),
           icon: <Icon.star filled={note.favorite} />,
+        },
+        {
+          key: "pin",
+          label: note.pinned ? t.noteCard.unpin : t.noteCard.pin,
+          active: note.pinned,
+          onClick: () => onPin(note),
+          icon: <Icon.pin filled={note.pinned} />,
         },
         {
           key: "archive",
@@ -56,6 +65,13 @@ export function NoteCard({
           active: note.favorite,
           onClick: () => onFavorite(note),
           icon: <Icon.star filled={note.favorite} />,
+        },
+        {
+          key: "pin",
+          label: note.pinned ? t.noteCard.unpin : t.noteCard.pin,
+          active: note.pinned,
+          onClick: () => onPin(note),
+          icon: <Icon.pin filled={note.pinned} />,
         },
         {
           key: "archive",
@@ -94,6 +110,11 @@ export function NoteCard({
           {note.collection}
         </Link>
         <div className="flex h-5 shrink-0 items-center gap-1 text-accent">
+          {note.pinned ? (
+            <span aria-label={t.noteCard.pin} title={t.noteCard.pin}>
+              <Icon.pin filled />
+            </span>
+          ) : null}
           {note.favorite ? (
             <span aria-label={t.noteCard.favorite} title={t.noteCard.favorite}>
               <Icon.star filled />

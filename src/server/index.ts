@@ -8,6 +8,7 @@ export {
   ItemMetadataError,
   ItemStateError,
   ItemDeleteError,
+  TaxonomyError,
 } from "@/server/items";
 export { UploadService, UploadError } from "@/server/uploads";
 export {

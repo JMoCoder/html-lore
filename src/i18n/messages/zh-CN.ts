@@ -36,7 +36,7 @@ export const zhCN: Messages = {
   },
   noteGrid: {
     emptyTitle: "没有符合当前筛选的笔记。",
-    emptyHint: "试试清空标签或搜索词，或导入一篇 HTML。",
+    emptyHint: "试试清空标签或搜索词，或一次导入最多 5 篇 HTML。",
   },
   noteCard: {
     favorite: "收藏",
@@ -48,6 +48,8 @@ export const zhCN: Messages = {
     share: "分享",
     openOriginal: "打开原文",
     shared: "已分享",
+    pin: "置顶",
+    unpin: "取消置顶",
   },
   reader: {
     back: "工作台",
@@ -183,6 +185,7 @@ export const zhCN: Messages = {
   },
   workspace: {
     deleteConfirm: (title) => `永久删除「${title}」？`,
+    importMax: (count) => `一次最多导入 ${count} 个文件。`,
   },
   meta: {
     readingMinutes: (minutes) => `${minutes} 分钟`,
@@ -200,10 +203,15 @@ export const zhCN: Messages = {
     library: "资料库",
     libraryIntro: "资料库是固定系统视图。这里只控制每个视图是否显示在左侧导航。",
     collections: "集合",
-    collectionsIntro: "当前只控制侧栏集合是否显示。集合名称写在笔记元数据上，新增、重命名、合并、删除尚未提供。",
+    collectionsIntro: "可以改集合名称，也会改写所有使用该名称的笔记。资料库视图是系统固定项，不能改名。",
     tags: "标签",
-    tagsIntro: "当前只控制侧栏标签是否显示。标签写在笔记元数据上，新增、重命名、合并、删除尚未提供。",
+    tagsIntro: "可以改标签名称，也会改写所有使用该标签的笔记。",
     visible: "显示",
+    rename: "改名",
+    renameSave: "保存",
+    renameCancel: "取消",
+    renamePlaceholder: "新名称",
+    renameFailed: "改名失败。",
     emptyList: "还没有可管理的条目。",
     export: "数据导出",
     exportIntro: "导出资料库清单，或打包全部 HTML 原文件。",

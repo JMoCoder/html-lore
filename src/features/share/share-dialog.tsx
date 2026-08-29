@@ -50,10 +50,6 @@ export function ShareDialog(props: Props) {
 
   useEffect(() => {
     if (!props.open || !props.itemId) return;
-    setError("");
-    setFeedback("");
-    setAwaitingConfirm(false);
-    setModeHint(null);
     let cancelled = false;
     listShares()
       .then((body) => {

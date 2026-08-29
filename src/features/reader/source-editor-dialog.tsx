@@ -35,16 +35,6 @@ export function SourceEditorDialog({
   const savingRef = useRef(false);
   const dirty = draft !== original;
 
-  useEffect(() => {
-    if (!open) return;
-    draftRef.current = value;
-    setDraft(value);
-    setOriginal(value);
-    setFeedback(e.loaded);
-    setFullscreen(false);
-    setCursor({ line: 1, column: 1 });
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- snapshot original only when opening
-
   const close = useCallback(
     (force = false) => {
       if (!force && draftRef.current !== original && !window.confirm(e.confirmClose)) return;

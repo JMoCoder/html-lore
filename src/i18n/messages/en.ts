@@ -36,7 +36,7 @@ export const en: Messages = {
   },
   noteGrid: {
     emptyTitle: "No notes match the current filters.",
-    emptyHint: "Try clearing tags or search, or import an HTML file.",
+    emptyHint: "Try clearing tags or search, or import up to 5 HTML files.",
   },
   noteCard: {
     favorite: "Favorite",
@@ -48,6 +48,8 @@ export const en: Messages = {
     share: "Share",
     openOriginal: "Open original",
     shared: "Shared",
+    pin: "Pin",
+    unpin: "Unpin",
   },
   reader: {
     back: "Workspace",
@@ -183,6 +185,7 @@ export const en: Messages = {
   },
   workspace: {
     deleteConfirm: (title) => `Permanently delete “${title}”?`,
+    importMax: (count) => `You can import at most ${count} files at once.`,
   },
   meta: {
     readingMinutes: (minutes) => `${minutes} min read`,
@@ -201,11 +204,15 @@ export const en: Messages = {
     libraryIntro: "Library filters are fixed system views. Here you only choose which ones appear in the sidebar.",
     collections: "Collections",
     collectionsIntro:
-      "You can hide collections from the sidebar. Names live on note metadata; add, rename, merge, and delete are not available yet.",
+      "Rename a collection to rewrite every note that uses it. Library views are fixed system filters and cannot be renamed.",
     tags: "Tags",
-    tagsIntro:
-      "You can hide tags from the sidebar. Names live on note metadata; add, rename, merge, and delete are not available yet.",
+    tagsIntro: "Rename a tag to rewrite every note that uses it.",
     visible: "Visible",
+    rename: "Rename",
+    renameSave: "Save",
+    renameCancel: "Cancel",
+    renamePlaceholder: "New name",
+    renameFailed: "Rename failed.",
     emptyList: "Nothing to manage yet.",
     export: "Data export",
     exportIntro: "Export the library manifest, or pack every original HTML file.",
