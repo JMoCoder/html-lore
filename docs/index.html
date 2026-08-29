@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTMlore — 你的笔记，就是 HTML 文件</title>
+  <meta name="description" content="HTMlore 2.0 是自托管 HTML 知识工作台。笔记就是磁盘上的 HTML + YAML，没有数据库、没有 AI、默认无登录。导入、筛选、阅读、编辑、安全分享。">
+  <link rel="icon" href="demo/assets/html-lore-logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@600;900&family=Noto+Sans+SC:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f6f4;
+      --panel: #fcfcfb;
+      --panel-raised: #ffffff;
+      --ink: #191b1d;
+      --ink-soft: #50555a;
+      --ink-faint: #878d93;
+      --line: #e1e0dc;
+      --accent: #2f6d5e;
+      --accent-strong: #245144;
+      --accent-soft: rgb(47 109 94 / 0.1);
+      --shadow-card: 0 1px 2px rgb(24 26 28 / 0.04), 0 14px 34px -20px rgb(24 26 28 / 0.3);
+      --font-sans: Inter, "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+      --font-display: Fraunces, "Noto Serif SC", Georgia, serif;
+      --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.6 var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    ::selection { background: var(--accent-soft); }
+
+    /* ---------- nav ---------- */
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      border-bottom: 1px solid var(--line);
+    }
+    .top-in {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+    .brand img { width: 22px; height: 22px; border-radius: 6px; }
+    .brand strong { font-family: var(--font-display); font-size: 16px; letter-spacing: -0.03em; }
+    .nav { display: flex; align-items: center; gap: 20px; font-size: 13px; color: var(--ink-soft); }
+    .nav a { text-decoration: none; }
+    .nav a:hover { color: var(--ink); }
+    .nav .cta {
+      color: var(--accent-strong);
+      font-weight: 600;
+    }
+    .lang { display: flex; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+    .lang button {
+      border: 0;
+      background: transparent;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 12px;
+      color: var(--ink-faint);
+      cursor: pointer;
+    }
+    .lang button[aria-pressed="true"] { background: var(--panel-raised); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.06); }
+
+    /* ---------- hero ---------- */
+    .hero {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 88px 24px 64px;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      font-weight: 600;
+      margin: 0 0 14px;
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      font-weight: 600;
+      margin: 0 0 20px;
+    }
+    .hero p.lead {
+      font-size: 17px;
+      color: var(--ink-soft);
+      max-width: 34rem;
+      margin: 0 0 28px;
+    }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 42px;
+      padding: 0 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: var(--panel-raised);
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn:hover { box-shadow: var(--shadow-card); }
+
+    /* file tree visual */
+    .tree {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow-card);
+      padding: 18px 20px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.9;
+      color: var(--ink-soft);
+      overflow: hidden;
+    }
+    .tree .root { color: var(--ink); font-weight: 600; }
+    .tree .dir { color: var(--accent-strong); }
+    .tree .yml { color: var(--ink-faint); }
+    .tree .note { color: var(--ink-faint); font-family: var(--font-sans); font-size: 11px; }
+
+    /* ---------- sections ---------- */
+    section.block { max-width: 1120px; margin: 0 auto; padding: 56px 24px; }
+    .block h2 {
+      font-family: var(--font-display);
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      letter-spacing: -0.03em;
+      font-weight: 600;
+      margin: 0 0 12px;
+    }
+    .block .sub { color: var(--ink-soft); max-width: 40rem; margin: 0 0 32px; }
+
+    .grid { display: grid; gap: 16px; }
+    .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 22px;
+    }
+    .card h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+    .card p { margin: 0; color: var(--ink-soft); font-size: 13.5px; }
+    .card .no { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.08em; }
+
+    /* mock workbench */
+    .mock {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      min-height: 320px;
+    }
+    .mock-side { background: #efedeb; border-right: 1px solid var(--line); padding: 14px 12px; font-size: 12.5px; }
+    .mock-side .g { color: var(--ink-faint); font-size: 10.5px; letter-spacing: 0.08em; margin: 12px 4px 6px; }
+    .mock-side .row { padding: 5px 8px; border-radius: 7px; color: var(--ink-soft); display: flex; justify-content: space-between; }
+    .mock-side .row.on { background: var(--panel-raised); color: var(--ink); }
+    .mock-main { padding: 14px; }
+    .mock-bar { display: flex; gap: 8px; margin-bottom: 14px; }
+    .mock-bar .s { flex: 1; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-raised); display: flex; align-items: center; padding: 0 10px; color: var(--ink-faint); font-size: 12px; }
+    .mock-bar .b { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-raised); font-size: 12px; display: flex; align-items: center; color: var(--ink-soft); }
+    .mock-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .mock-card { border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; background: var(--panel-raised); }
+    .mock-card .m { font-size: 10px; letter-spacing: 0.06em; color: var(--ink-faint); }
+    .mock-card h4 { margin: 6px 0 4px; font-size: 13px; }
+    .mock-card p { margin: 0; font-size: 11.5px; color: var(--ink-soft); }
+
+    /* share split */
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .mode { border: 1px solid var(--line); border-radius: 12px; padding: 22px; background: var(--panel); }
+    .mode h3 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .mode .tag { font-family: var(--font-mono); font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); }
+    .mode p { margin: 0 0 12px; color: var(--ink-soft); font-size: 13.5px; }
+    .mode ul { margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: 13px; }
+
+    /* deploy */
+    .deploy { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+    .term {
+      background: #141a17;
+      color: #dcece5;
+      border-radius: 12px;
+      padding: 18px 20px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.9;
+      overflow-x: auto;
+    }
+    .term .c { color: #6b8f82; }
+    .facts { display: grid; gap: 10px; }
+    .fact { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; color: var(--ink-soft); }
+    .fact b { color: var(--ink); font-weight: 600; white-space: nowrap; }
+
+    /* not */
+    .not { border-top: 1px solid var(--line); }
+    .not .card { background: transparent; }
+
+    footer {
+      border-top: 1px solid var(--line);
+      margin-top: 32px;
+    }
+    .foot {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 24px 48px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 12.5px;
+      color: var(--ink-faint);
+    }
+    .foot a { text-decoration: none; color: var(--ink-soft); }
+    .foot a:hover { color: var(--ink); }
+
+    [data-i18n] { transition: opacity 0.15s; }
+    .switching [data-i18n] { opacity: 0; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; padding-top: 56px; }
+      .grid.cols-3, .grid.cols-2, .split, .deploy { grid-template-columns: 1fr; }
+      .mock { grid-template-columns: 1fr; }
+      .mock-side { display: none; }
+      .nav .hide-m { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top-in">
+      <a class="brand" href="#">
+        <img src="demo/assets/html-lore-logo.svg" alt="">
+        <strong>HTMlore</strong>
+      </a>
+      <nav class="nav">
+        <a href="#files" class="hide-m" data-i18n="navFiles">文件即库</a>
+        <a href="#workbench" class="hide-m" data-i18n="navWorkbench">工作台</a>
+        <a href="#share" class="hide-m" data-i18n="navShare">分享</a>
+        <a href="#deploy" class="hide-m" data-i18n="navDeploy">部署</a>
+        <a href="demo/" data-i18n="navDemo">Demo</a>
+        <a href="https://github.com/JMoCoder/html-lore" class="hide-m">GitHub</a>
+        <div class="lang" role="group" aria-label="language">
+          <button type="button" data-lang="zh-CN" aria-pressed="true">中</button>
+          <button type="button" data-lang="en" aria-pressed="false">EN</button>
+          <button type="button" data-lang="ja" aria-pressed="false">日</button>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div>
+        <p class="eyebrow" data-i18n="heroEyebrow">自托管 · 无数据库 · 无 AI</p>
+        <h1 data-i18n="heroTitle">你的笔记，<br>就是 HTML 文件。</h1>
+        <p class="lead" data-i18n="heroLead">HTMlore 2.0 是一个 HTML 知识工作台。导入、筛选、阅读、编辑、安全分享——笔记始终是磁盘上的 HTML + YAML，不锁进数据库，不经过任何模型。</p>
+        <div class="actions">
+          <a class="btn primary" href="demo/" data-i18n="heroDemo">打开只读 Demo</a>
+          <a class="btn" href="https://github.com/JMoCoder/html-lore" data-i18n="heroGithub">GitHub</a>
+        </div>
+      </div>
+      <div class="tree" aria-hidden="true">
+        <div class="root">data/</div>
+        <div>├─ <span class="dir">content/</span></div>
+        <div>│&nbsp;&nbsp;├─ reading/knowledge-workspace.html</div>
+        <div>│&nbsp;&nbsp;├─ imported/docker-network.html</div>
+        <div>│&nbsp;&nbsp;└─ generated/2026/05/mcp-security.html</div>
+        <div>├─ <span class="dir">meta/items/</span></div>
+        <div>│&nbsp;&nbsp;├─ reading/knowledge-workspace<span class="yml">.yml</span></div>
+        <div>│&nbsp;&nbsp;└─ … <span class="note" data-i18n="treeNote1">标题 / 集合 / 标签 / 收藏</span></div>
+        <div>├─ meta/config/shares.json <span class="note" data-i18n="treeNote2">只存 token 哈希</span></div>
+        <div>└─ users.json <span class="note" data-i18n="treeNote3">可选</span></div>
+      </div>
+    </section>
+
+    <!-- FILES -->
+    <section class="block" id="files">
+      <h2 data-i18n="filesTitle">文件即真源</h2>
+      <p class="sub" data-i18n="filesSub">没有 SQL，没有向量库。正文是 HTML，元数据是 YAML sidecar。备份就是拷目录，迁移就是拷文件。</p>
+      <div class="grid cols-3">
+        <div class="card">
+          <span class="no">01</span>
+          <h3 data-i18n="f1t">正文是 HTML</h3>
+          <p data-i18n="f1d">每篇笔记是一个独立 .html。用浏览器打开、用任何静态服务器托管、用编辑器改。它永远可读。</p>
+        </div>
+        <div class="card">
+          <span class="no">02</span>
+          <h3 data-i18n="f2t">元数据是 YAML</h3>
+          <p data-i18n="f2d">标题、摘要、集合、标签、收藏、归档写在同名 .yml 里。纯文本，可 diff，可版本管理。</p>
+        </div>
+        <div class="card">
+          <span class="no">03</span>
+          <h3 data-i18n="f3t">没有数据库</h3>
+          <p data-i18n="f3d">不跑 Postgres，不建索引。磁盘目录就是库。换机器、换容器，把 data/ 拷过去就完了。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- WORKBENCH -->
+    <section class="block" id="workbench">
+      <h2 data-i18n="wbTitle">一个工作台，管所有 HTML</h2>
+      <p class="sub" data-i18n="wbSub">导入、整理、阅读、编辑。界面只做这一件事，不做问答，不做生成。</p>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-side">
+          <div class="g" data-i18n="mockLibrary">资料库</div>
+          <div class="row on"><span data-i18n="mockAll">全部笔记</span><span>6</span></div>
+          <div class="row"><span data-i18n="mockRecent">最近</span><span>2</span></div>
+          <div class="row"><span data-i18n="mockFav">收藏</span><span>3</span></div>
+          <div class="row"><span data-i18n="mockImported">已导入</span><span>2</span></div>
+          <div class="row"><span data-i18n="mockArchived">已归档</span><span>0</span></div>
+          <div class="g" data-i18n="mockCollections">集合</div>
+          <div class="row"><span>Reading</span><span>3</span></div>
+          <div class="row"><span>Dev</span><span>3</span></div>
+          <div class="g" data-i18n="mockTags">标签</div>
+          <div class="row"><span>HTML</span><span>2</span></div>
+          <div class="row"><span>Docker</span><span>1</span></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-bar">
+            <div class="s" data-i18n="mockSearch">搜索笔记…</div>
+            <div class="b" data-i18n="mockSort">最近创建</div>
+            <div class="b" data-i18n="mockImport">导入 HTML</div>
+          </div>
+          <div class="mock-cards">
+            <div class="mock-card"><span class="m">READING · ★</span><h4>HTMlore 2.0</h4><p data-i18n="mockC1">自托管 HTML 知识工作台，无数据库、无登录、无 AI。</p></div>
+            <div class="mock-card"><span class="m">DEV</span><h4>MCP Server 安全模型</h4><p data-i18n="mockC2">信任边界、权限与工具调用风险。</p></div>
+            <div class="mock-card"><span class="m">DEV</span><h4>Docker Network Quick Notes</h4><p data-i18n="mockC3">Bridge 网络、端口与服务发现。</p></div>
+            <div class="mock-card"><span class="m">READING · ★</span><h4>Offline-First 阅读体验</h4><p data-i18n="mockC4">PWA 壳缓存策略与收藏卡片。</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid cols-3" style="margin-top:16px">
+        <div class="card">
+          <h3 data-i18n="w1t">筛选与排序</h3>
+          <p data-i18n="w1d">资料库视图、集合、标签（任一/全部）、只看收藏、六种排序。全部在浏览器里即时完成。</p>
+        </div>
+        <div class="card">
+          <h3 data-i18n="w2t">阅读与编辑</h3>
+          <p data-i18n="w2d">iframe 沙箱读原文；CodeMirror 改源码，或可视化改文字和样式。元数据随改随存。</p>
+        </div>
+        <div class="card">
+          <h3 data-i18n="w3t">归档与删除</h3>
+          <p data-i18n="w3d">归档锁定编辑、移出主视图；永久删除必须先归档。不会误删。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHARE -->
+    <section class="block" id="share">
+      <h2 data-i18n="shareTitle">安全分享，两种模式</h2>
+      <p class="sub" data-i18n="shareSub">每条链接一个 token，磁盘只存哈希。过期、撤销、原文归档后，对外就是 404。</p>
+      <div class="split">
+        <div class="mode">
+          <h3><span class="tag">safe</span><span data-i18n="safeT">消毒静态</span></h3>
+          <p data-i18n="safeD">去掉脚本、表单、iframe 和危险标签，只留可读内容。过不了扫描会自动生成一份消毒副本再分享。</p>
+          <ul>
+            <li data-i18n="safeL1">脚本 / 内联事件 / javascript: 一律剥离</li>
+            <li data-i18n="safeL2">密钥形态文本拦截或脱敏</li>
+            <li data-i18n="safeL3">默认模式，始终可用</li>
+          </ul>
+        </div>
+        <div class="mode">
+          <h3><span class="tag">interactive</span><span data-i18n="intT">互动沙箱</span></h3>
+          <p data-i18n="intD">按原文跑，iframe 只给 allow-scripts，不给 same-origin。过不了安全扫描就直接拒绝，不做副本。</p>
+          <ul>
+            <li data-i18n="intL1">保留交互，但关在沙箱里</li>
+            <li data-i18n="intL2">私网引用需二次确认</li>
+            <li data-i18n="intL3">可用环境变量整体关掉</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEPLOY -->
+    <section class="block" id="deploy">
+      <h2 data-i18n="deployTitle">一个容器，跑在你自己的机器上</h2>
+      <p class="sub" data-i18n="deploySub">独立 Docker 服务，默认端口 3000。和冻结的 1.x 并行，不替换、不共用数据目录。</p>
+      <div class="deploy">
+        <div class="term">
+          <div><span class="c"># 2.0 独立服务</span></div>
+          <div>git clone https://github.com/JMoCoder/html-lore.git</div>
+          <div>cd html-lore && cp .env.example .env</div>
+          <div>docker compose up -d --build</div>
+          <div>&nbsp;</div>
+          <div><span class="c"># 从 1.x 拷文件库（不是 dump）</span></div>
+          <div>npm run migrate:1x -- /srv/v1/data ./data</div>
+        </div>
+        <div class="facts">
+          <div class="fact"><b data-i18n="d1k">默认无登录</b><span data-i18n="d1v">不设密钥就没有登录页。公网用 Cloudflare Access / Caddy 反代鉴权。</span></div>
+          <div class="fact"><b data-i18n="d2k">独立部署</b><span data-i18n="d2v">compose 项目 html-lore-v2，端口 3000。1.x 冻结在 legacy / v1.2.5，继续跑 8080。</span></div>
+          <div class="fact"><b data-i18n="d3k">文件迁移</b><span data-i18n="d3v">拷 content/ 和 meta/，跳过 AI 密钥和向量索引。未过期分享链接继续有效。</span></div>
+          <div class="fact"><b data-i18n="d4k">中英日</b><span data-i18n="d4v">界面中 / 英 / 日，亮暗主题。PWA 壳可离线回退。</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NOT -->
+    <section class="block not">
+      <h2 data-i18n="notTitle">2.0 明确不做</h2>
+      <p class="sub" data-i18n="notSub">比 1.x 简化是刻意的。砍掉的部分，写在明处。</p>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3 data-i18n="n1t">没有 AI</h3>
+          <p data-i18n="n1d">不生成 HTML，不做知识库问答，不接模型。1.x 的 AI 密钥和索引不会被带进 2.0。</p>
+        </div>
+        <div class="card">
+          <h3 data-i18n="n2t">没有应用内登录</h3>
+          <p data-i18n="n2d">默认假设你在反代层做鉴权。只有显式配置，才会出现 1.x 那套账号页。</p>
+        </div>
+        <div class="card">
+          <h3 data-i18n="n3t">不替换 1.x</h3>
+          <p data-i18n="n3d">2.0 是新容器、新目录、新端口。1.x 冻结并行；迁过来等于放弃问答和生成。</p>
+        </div>
+        <div class="card">
+          <h3 data-i18n="n4t">不是离线库</h3>
+          <p data-i18n="n4d">PWA 只缓存壳和静态资源。笔记正文、分享页、API 始终走网络。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="foot">
+      <span>HTMlore 2.0.0 · <span data-i18n="footMain">维护线 main</span> · 1.x legacy</span>
+      <span>
+        <a href="demo/" data-i18n="footDemo">Demo</a> ·
+        <a href="https://github.com/JMoCoder/html-lore">GitHub</a> ·
+        <a href="https://github.com/JMoCoder/html-lore/blob/main/docs/deploy-2x.md" data-i18n="footDocs">部署文档</a>
+      </span>
+    </div>
+  </footer>
+
+  <script>
+    const I18N = {
+      "zh-CN": {
+        navFiles: "文件即库", navWorkbench: "工作台", navShare: "分享", navDeploy: "部署", navDemo: "Demo",
+        heroEyebrow: "自托管 · 无数据库 · 无 AI",
+        heroTitle: "你的笔记，<br>就是 HTML 文件。",
+        heroLead: "HTMlore 2.0 是一个 HTML 知识工作台。导入、筛选、阅读、编辑、安全分享——笔记始终是磁盘上的 HTML + YAML，不锁进数据库，不经过任何模型。",
+        heroDemo: "打开只读 Demo", heroGithub: "GitHub",
+        treeNote1: "标题 / 集合 / 标签 / 收藏", treeNote2: "只存 token 哈希", treeNote3: "可选",
+        filesTitle: "文件即真源", filesSub: "没有 SQL，没有向量库。正文是 HTML，元数据是 YAML sidecar。备份就是拷目录，迁移就是拷文件。",
+        f1t: "正文是 HTML", f1d: "每篇笔记是一个独立 .html。用浏览器打开、用任何静态服务器托管、用编辑器改。它永远可读。",
+        f2t: "元数据是 YAML", f2d: "标题、摘要、集合、标签、收藏、归档写在同名 .yml 里。纯文本，可 diff，可版本管理。",
+        f3t: "没有数据库", f3d: "不跑 Postgres，不建索引。磁盘目录就是库。换机器、换容器，把 data/ 拷过去就完了。",
+        wbTitle: "一个工作台，管所有 HTML", wbSub: "导入、整理、阅读、编辑。界面只做这一件事，不做问答，不做生成。",
+        mockLibrary: "资料库", mockAll: "全部笔记", mockRecent: "最近", mockFav: "收藏", mockImported: "已导入", mockArchived: "已归档",
+        mockCollections: "集合", mockTags: "标签", mockSearch: "搜索笔记…", mockSort: "最近创建", mockImport: "导入 HTML",
+        mockC1: "自托管 HTML 知识工作台，无数据库、无登录、无 AI。", mockC2: "信任边界、权限与工具调用风险。", mockC3: "Bridge 网络、端口与服务发现。", mockC4: "PWA 壳缓存策略与收藏卡片。",
+        w1t: "筛选与排序", w1d: "资料库视图、集合、标签（任一/全部）、只看收藏、六种排序。全部在浏览器里即时完成。",
+        w2t: "阅读与编辑", w2d: "iframe 沙箱读原文；CodeMirror 改源码，或可视化改文字和样式。元数据随改随存。",
+        w3t: "归档与删除", w3d: "归档锁定编辑、移出主视图；永久删除必须先归档。不会误删。",
+        shareTitle: "安全分享，两种模式", shareSub: "每条链接一个 token，磁盘只存哈希。过期、撤销、原文归档后，对外就是 404。",
+        safeT: "消毒静态", safeD: "去掉脚本、表单、iframe 和危险标签，只留可读内容。过不了扫描会自动生成一份消毒副本再分享。",
+        safeL1: "脚本 / 内联事件 / javascript: 一律剥离", safeL2: "密钥形态文本拦截或脱敏", safeL3: "默认模式，始终可用",
+        intT: "互动沙箱", intD: "按原文跑，iframe 只给 allow-scripts，不给 same-origin。过不了安全扫描就直接拒绝，不做副本。",
+        intL1: "保留交互，但关在沙箱里", intL2: "私网引用需二次确认", intL3: "可用环境变量整体关掉",
+        deployTitle: "一个容器，跑在你自己的机器上", deploySub: "独立 Docker 服务，默认端口 3000。和冻结的 1.x 并行，不替换、不共用数据目录。",
+        d1k: "默认无登录", d1v: "不设密钥就没有登录页。公网用 Cloudflare Access / Caddy 反代鉴权。",
+        d2k: "独立部署", d2v: "compose 项目 html-lore-v2，端口 3000。1.x 冻结在 legacy / v1.2.5，继续跑 8080。",
+        d3k: "文件迁移", d3v: "拷 content/ 和 meta/，跳过 AI 密钥和向量索引。未过期分享链接继续有效。",
+        d4k: "中英日", d4v: "界面中 / 英 / 日，亮暗主题。PWA 壳可离线回退。",
+        notTitle: "2.0 明确不做", notSub: "比 1.x 简化是刻意的。砍掉的部分，写在明处。",
+        n1t: "没有 AI", n1d: "不生成 HTML，不做知识库问答，不接模型。1.x 的 AI 密钥和索引不会被带进 2.0。",
+        n2t: "没有应用内登录", n2d: "默认假设你在反代层做鉴权。只有显式配置，才会出现 1.x 那套账号页。",
+        n3t: "不替换 1.x", n3d: "2.0 是新容器、新目录、新端口。1.x 冻结并行；迁过来等于放弃问答和生成。",
+        n4t: "不是离线库", n4d: "PWA 只缓存壳和静态资源。笔记正文、分享页、API 始终走网络。",
+        footMain: "维护线 main", footDemo: "Demo", footDocs: "部署文档",
+      },
+      en: {
+        navFiles: "Files as library", navWorkbench: "Workbench", navShare: "Share", navDeploy: "Deploy", navDemo: "Demo",
+        heroEyebrow: "Self-hosted · No database · No AI",
+        heroTitle: "Your notes are<br>just HTML files.",
+        heroLead: "HTMlore 2.0 is an HTML knowledge workbench. Import, filter, read, edit, share safely — notes stay as HTML + YAML on your disk. No database, no model in the loop.",
+        heroDemo: "Open read-only demo", heroGithub: "GitHub",
+        treeNote1: "title / collection / tags / favorite", treeNote2: "token hashes only", treeNote3: "optional",
+        filesTitle: "Files are the source of truth", filesSub: "No SQL, no vector store. Content is HTML; metadata is a YAML sidecar. Backup is copying a directory. Migration is copying files.",
+        f1t: "Content is HTML", f1d: "Every note is a standalone .html. Open it in a browser, serve it anywhere, edit it with any tool. It stays readable forever.",
+        f2t: "Metadata is YAML", f2d: "Title, summary, collection, tags, favorite, archived — in a same-named .yml. Plain text, diffable, versionable.",
+        f3t: "No database", f3d: "No Postgres, no index. The directory is the library. Move machines or containers by copying data/.",
+        wbTitle: "One workbench for all your HTML", wbSub: "Import, organize, read, edit. The UI does this one thing — no Q&A, no generation.",
+        mockLibrary: "Library", mockAll: "All notes", mockRecent: "Recent", mockFav: "Favorites", mockImported: "Imported", mockArchived: "Archived",
+        mockCollections: "Collections", mockTags: "Tags", mockSearch: "Search notes…", mockSort: "Recently created", mockImport: "Import HTML",
+        mockC1: "Self-hosted HTML workbench. No database, no login, no AI.", mockC2: "Trust boundaries, permissions, tool-call risks.", mockC3: "Bridge networks, ports, service discovery.", mockC4: "PWA shell caching and favorite cards.",
+        w1t: "Filter & sort", w1d: "Library views, collections, tags (any/all), favorites-only, six sort orders — all instant, in the browser.",
+        w2t: "Read & edit", w2d: "Read the original in a sandboxed iframe; edit source with CodeMirror or visually edit text and styles. Metadata saves as you type.",
+        w3t: "Archive & delete", w3d: "Archiving locks editing and hides from the main view. Permanent delete requires archiving first. No accidents.",
+        shareTitle: "Safe sharing, two modes", shareSub: "One token per link; only its hash is stored. Expired, revoked, or archived notes return 404.",
+        safeT: "Sanitized static", safeD: "Strips scripts, forms, iframes and dangerous tags, keeping readable content. If it fails the scan, a sanitized copy is shared instead.",
+        safeL1: "Scripts / inline handlers / javascript: stripped", safeL2: "Secret-shaped text blocked or redacted", safeL3: "Default mode, always available",
+        intT: "Interactive sandbox", intD: "Runs as-is in an iframe with allow-scripts but no same-origin. Failing the scan means refusal — no copy.",
+        intL1: "Keeps interaction, inside a sandbox", intL2: "Private-network references need confirmation", intL3: "Can be disabled entirely via env",
+        deployTitle: "One container, on your own machine", deploySub: "Independent Docker service on port 3000. Runs alongside frozen 1.x — never replaces it, never shares its data directory.",
+        d1k: "No login by default", d1v: "No secret, no login page. Put Cloudflare Access / Caddy in front for public access.",
+        d2k: "Independent deploy", d2v: "Compose project html-lore-v2 on 3000. 1.x is frozen at legacy / v1.2.5 on 8080.",
+        d3k: "File migration", d3v: "Copy content/ and meta/, skip AI keys and vector indexes. Unexpired share links keep working.",
+        d4k: "中文 / EN / 日本語", d4v: "UI in Chinese, English, Japanese. Light and dark themes. PWA shell works offline.",
+        notTitle: "What 2.0 explicitly does not do", notSub: "Simpler than 1.x on purpose. The removed parts, stated plainly.",
+        n1t: "No AI", n1d: "No HTML generation, no library Q&A, no model. 1.x AI keys and indexes are never carried over.",
+        n2t: "No in-app login", n2d: "Assumes you authenticate at the reverse proxy. The 1.x account screen only appears if you explicitly configure it.",
+        n3t: "Does not replace 1.x", n3d: "2.0 is a new container, directory and port. 1.x runs frozen in parallel; migrating means giving up Q&A and generation.",
+        n4t: "Not an offline library", n4d: "The PWA caches only the shell and static assets. Note content, share pages and APIs always hit the network.",
+        footMain: "main is the maintenance line", footDemo: "Demo", footDocs: "Deploy docs",
+      },
+      ja: {
+        navFiles: "ファイル即ライブラリ", navWorkbench: "ワークベンチ", navShare: "共有", navDeploy: "デプロイ", navDemo: "デモ",
+        heroEyebrow: "セルフホスト · データベースなし · AI なし",
+        heroTitle: "ノートは、<br>HTML ファイルそのもの。",
+        heroLead: "HTMlore 2.0 は HTML ナレッジワークベンチです。インポート、絞り込み、閲覧、編集、安全な共有——ノートは常にディスク上の HTML + YAML。データベースにもモデルにも渡しません。",
+        heroDemo: "読み取り専用デモを開く", heroGithub: "GitHub",
+        treeNote1: "タイトル / コレクション / タグ / お気に入り", treeNote2: "トークンのハッシュのみ", treeNote3: "任意",
+        filesTitle: "ファイルが真実の源", filesSub: "SQL もベクターストアもなし。本文は HTML、メタデータは YAML サイドカー。バックアップはディレクトリのコピー、移行はファイルのコピー。",
+        f1t: "本文は HTML", f1d: "各ノートは独立した .html。ブラウザで開き、任意の静的サーバーで配信し、任意のエディタで編集できます。",
+        f2t: "メタデータは YAML", f2d: "タイトル、概要、コレクション、タグ、お気に入り、アーカイブは同名の .yml に。プレーンテキストで diff 可能。",
+        f3t: "データベースなし", f3d: "Postgres もインデックスもなし。ディレクトリがそのままライブラリ。data/ をコピーするだけで移行できます。",
+        wbTitle: "すべての HTML をひとつのワークベンチで", wbSub: "インポート、整理、閲覧、編集。UI はこれだけに集中。Q&A も生成もありません。",
+        mockLibrary: "ライブラリ", mockAll: "すべてのノート", mockRecent: "最近", mockFav: "お気に入り", mockImported: "インポート済み", mockArchived: "アーカイブ",
+        mockCollections: "コレクション", mockTags: "タグ", mockSearch: "ノートを検索…", mockSort: "作成が新しい順", mockImport: "HTML をインポート",
+        mockC1: "セルフホスト HTML ワークベンチ。DB・ログイン・AI なし。", mockC2: "信頼境界、権限、ツール呼び出しのリスク。", mockC3: "Bridge ネットワーク、ポート、サービス検出。", mockC4: "PWA シェルキャッシュとお気に入りカード。",
+        w1t: "絞り込みと並び替え", w1d: "ライブラリビュー、コレクション、タグ（いずれか/すべて）、お気に入りのみ、6 種の並び替え。すべてブラウザ内で即時。",
+        w2t: "閲覧と編集", w2d: "サンドボックス iframe で原文を表示。CodeMirror でソース、または視覚的にテキストとスタイルを編集。メタデータは即保存。",
+        w3t: "アーカイブと削除", w3d: "アーカイブは編集をロックしメイン表示から外します。完全削除はアーカイブ後のみ。誤削除を防ぎます。",
+        shareTitle: "安全な共有、2 つのモード", shareSub: "リンクごとに 1 トークン。ディスクにはハッシュのみ保存。期限切れ・取り消し・アーカイブ後は 404。",
+        safeT: "サニタイズ静的", safeD: "スクリプト、フォーム、iframe、危険なタグを除去し、読める内容だけ残します。スキャンに落ちた場合はサニタイズ済みコピーを共有。",
+        safeL1: "スクリプト / インラインハンドラ / javascript: は除去", safeL2: "シークレットらしき文字列はブロックかマスク", safeL3: "デフォルトモード、常に利用可能",
+        intT: "インタラクティブ沙箱", intD: "原文のまま、allow-scripts のみ・same-origin なしの iframe で実行。スキャンに落ちたら拒否。コピーは作りません。",
+        intL1: "インタラクションを沙箱内に保持", intL2: "プライベートネットワーク参照は要確認", intL3: "環境変数で完全に無効化可能",
+        deployTitle: "1 つのコンテナを自分のマシンで", deploySub: "独立した Docker サービス、デフォルトポート 3000。凍結された 1.x と並行稼働。置き換えもデータ共有もしません。",
+        d1k: "デフォルトでログインなし", d1v: "シークレット未設定ならログイン画面は出ません。公開時は Cloudflare Access / Caddy で認証を。",
+        d2k: "独立デプロイ", d2v: "compose プロジェクト html-lore-v2、ポート 3000。1.x は legacy / v1.2.5 で凍結、8080 で稼働。",
+        d3k: "ファイル移行", d3v: "content/ と meta/ をコピー。AI キーとベクターインデックスは除外。未期限切れの共有リンクは引き続き有効。",
+        d4k: "中文 / EN / 日本語", d4v: "UI は中国語・英語・日本語。ライト/ダークテーマ。PWA シェルはオフラインで動作。",
+        notTitle: "2.0 が明確にやらないこと", notSub: "1.x よりシンプルなのは意図的です。削った部分を明示します。",
+        n1t: "AI なし", n1d: "HTML 生成もライブラリ Q&A もモデル接続もなし。1.x の AI キーとインデックスは持ち越されません。",
+        n2t: "アプリ内ログインなし", n2d: "リバースプロキシでの認証を前提。明示的に設定した場合のみ 1.x のアカウント画面が出ます。",
+        n3t: "1.x を置き換えない", n3d: "2.0 は新しいコンテナ・ディレクトリ・ポート。1.x は凍結されたまま並行。移行は Q&A と生成を手放すことを意味します。",
+        n4t: "オフラインライブラリではない", n4d: "PWA がキャッシュするのはシェルと静的アセットのみ。ノート本文、共有ページ、API は常にネットワーク経由。",
+        footMain: "main がメンテナンスライン", footDemo: "デモ", footDocs: "デプロイドキュメント",
+      },
+    };
+
+    function setLang(lang) {
+      const dict = I18N[lang] || I18N["zh-CN"];
+      document.documentElement.lang = lang;
+      document.body.classList.add("switching");
+      requestAnimationFrame(() => {
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          const key = el.dataset.i18n;
+          if (dict[key] != null) el.innerHTML = dict[key];
+        });
+        document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === lang ? "true" : "false"));
+        document.body.classList.remove("switching");
+      });
+      try { localStorage.setItem("htmlore-site-lang", lang); } catch (e) {}
+    }
+
+    document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => setLang(b.dataset.lang)));
+    const saved = (() => { try { return localStorage.getItem("htmlore-site-lang"); } catch (e) { return null; } })();
+    if (saved && I18N[saved]) setLang(saved);
+  </script>
+</body>
+</html>
