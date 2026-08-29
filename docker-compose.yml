@@ -1,0 +1,33 @@
+# Independent 2.0 stack. Do not reuse a live 1.x compose project or data volume.
+# 1.x (frozen at v1.2.5) listens on 8080 in its own checkout; this service uses 3000.
+name: html-lore-v2
+
+services:
+  html-lore:
+    container_name: html-lore-v2
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+      args:
+        NODE_IMAGE: ${HTML_LORE_NODE_IMAGE:-node:22-alpine}
+    user: "${HTML_LORE_UID:-1000}:${HTML_LORE_GID:-1000}"
+    environment:
+      HTML_LORE_CONTENT: /data/content
+      HTML_LORE_META: /data/meta
+      HTML_LORE_PUBLIC: /data/public
+      HTML_LORE_TITLE: ${HTML_LORE_TITLE:-HTMlore}
+      HTML_LORE_MAX_UPLOAD_BYTES: ${HTML_LORE_MAX_UPLOAD_BYTES:-104857600}
+      HTML_LORE_API_TOKEN: ${HTML_LORE_API_TOKEN:-}
+      HTML_LORE_AUTH_USERNAME: ${HTML_LORE_AUTH_USERNAME:-}
+      HTML_LORE_AUTH_PASSWORD: ${HTML_LORE_AUTH_PASSWORD:-}
+      HTML_LORE_USERS_FILE: ${HTML_LORE_USERS_FILE:-/data/users.json}
+      HTML_LORE_USER_DATA_DIR: ${HTML_LORE_USER_DATA_DIR:-/data/users}
+      HTML_LORE_SESSION_SECRET: ${HTML_LORE_SESSION_SECRET:-}
+      HTML_LORE_SESSION_SECURE: ${HTML_LORE_SESSION_SECURE:-false}
+      HTML_LORE_SHARE_INTERACTIVE_ENABLED: ${HTML_LORE_SHARE_INTERACTIVE_ENABLED:-true}
+    volumes:
+      - ${HTML_LORE_DATA:-./data}:/data
+    ports:
+      - "${HTML_LORE_HTTP_PORT:-3000}:3000"
+    restart: unless-stopped

@@ -1,24 +1,74 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryFilter, Note, SortMode } from "@/fixtures/notes";
 import { filterNotes } from "@/features/workspace/filter-notes";
 import { Sidebar } from "@/features/workspace/sidebar";
 import { Topbar } from "@/features/workspace/topbar";
 import { NoteGrid } from "@/features/workspace/note-grid";
+import { ShareDialog } from "@/features/share/share-dialog";
+import { SettingsPage } from "@/features/settings/settings-page";
+import { useI18n } from "@/i18n/locale-provider";
+import { apiJson, itemApiHref, itemToNote } from "@/lib/api";
+import type { NavConfig } from "@/lib/navigation";
+import type { Item } from "@/server/types";
 
 export type TagMatchMode = "any" | "all";
 
-export function WorkspaceView({ notes }: { notes: Note[] }) {
+type ShareRow = { item_id: string; url_path: string; active: boolean };
+
+const RECENT_MS = 1000 * 60 * 60 * 24 * 30;
+
+export function WorkspaceView() {
+  const { messages: t } = useI18n();
+  const [items, setItems] = useState<Item[]>([]);
+  const [shares, setShares] = useState<ShareRow[]>([]);
+  const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
+  const [interactiveEnabled, setInteractiveEnabled] = useState(true);
+  const [shareTarget, setShareTarget] = useState<Note | null>(null);
+  const [error, setError] = useState("");
   const [library, setLibrary] = useState<LibraryFilter>("all");
   const [collection, setCollection] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagMatch, setTagMatch] = useState<TagMatchMode>("all");
-  const [sort, setSort] = useState<SortMode>("newest");
+  const [sort, setSort] = useState<SortMode>("created-newest");
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [recentCount, setRecentCount] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareEpoch, setShareEpoch] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    const [manifest, shareList, navigation] = await Promise.all([
+      apiJson<{ items: Item[] }>("/api/manifest"),
+      apiJson<{ shares: ShareRow[]; interactive_enabled?: boolean }>("/api/shares").catch(() => ({ shares: [], interactive_enabled: true })),
+      apiJson<NavConfig>("/api/navigation").catch(() => null),
+    ]);
+    setItems(manifest.items);
+    setShares(shareList.shares.filter((row) => row.active));
+    setInteractiveEnabled(shareList.interactive_enabled ?? true);
+    setNavConfig(navigation);
+  }, []);
+
+  useEffect(() => {
+    load().catch((err: Error) => setError(err.message));
+  }, [load]);
+
+  const tokenByItem = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const share of shares) {
+      const token = share.url_path.split("/").filter(Boolean)[1];
+      if (token) map.set(share.item_id, token);
+    }
+    return map;
+  }, [shares]);
+
+  const notes = useMemo(
+    () => items.map((item) => itemToNote(item, { shareToken: tokenByItem.get(item.id) })),
+    [items, tokenByItem],
+  );
 
   const visible = useMemo(
     () =>
@@ -35,6 +85,11 @@ export function WorkspaceView({ notes }: { notes: Note[] }) {
   );
 
   const active = notes.filter((n) => !n.archived);
+
+  useEffect(() => {
+    setRecentCount(active.filter((n) => Date.now() - Date.parse(n.updated) < RECENT_MS).length);
+  }, [active]);
+
   const collections = useMemo(
     () =>
       [...new Set(active.map((n) => n.collection))].map((name) => ({
@@ -52,15 +107,45 @@ export function WorkspaceView({ notes }: { notes: Note[] }) {
     [active],
   );
 
+  async function patchState(note: Note, values: { favorite?: boolean; archived?: boolean }) {
+    await apiJson(itemApiHref(note.id, "state"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    await load();
+  }
+
+  async function remove(note: Note) {
+    if (!confirm(t.workspace.deleteConfirm(note.title))) return;
+    await apiJson(itemApiHref(note.id), { method: "DELETE" });
+    await load();
+  }
+
   return (
     <div className="flex h-dvh bg-bg">
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".html,.htm"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            const form = new FormData();
+            form.set("file", file);
+            apiJson("/api/uploads/html", { method: "POST", body: form })
+              .then(() => load())
+              .catch((err: Error) => setError(err.message));
+          }
+          event.target.value = "";
+        }}
+      />
       <Sidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
         library={library}
         onLibrary={(value) => {
           setLibrary(value);
-          if (value !== "all") setCollection("");
+          setCollection("");
         }}
         collection={collection}
         onCollection={setCollection}
@@ -70,13 +155,15 @@ export function WorkspaceView({ notes }: { notes: Note[] }) {
         }
         collections={collections}
         allTags={allTags}
+        navConfig={navConfig}
         counts={{
           all: active.length,
-          recent: active.filter((n) => Date.now() - Date.parse(n.updated) < 1000 * 60 * 60 * 24 * 30).length,
+          recent: recentCount,
           favorites: active.filter((n) => n.favorite).length,
           imported: active.filter((n) => n.imported).length,
           archived: notes.filter((n) => n.archived).length,
         }}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
       <main className="flex min-w-0 flex-1 flex-col">
         <Topbar
@@ -87,20 +174,73 @@ export function WorkspaceView({ notes }: { notes: Note[] }) {
           favoritesOnly={favoritesOnly}
           onToggleFavorites={() => setFavoritesOnly((v) => !v)}
           filterOpen={filterOpen}
-          onToggleFilter={() => setFilterOpen((v) => !v)}
+          onFilterOpen={setFilterOpen}
           tags={tags}
+          availableTags={allTags}
           tagMatch={tagMatch}
           onTagMatch={setTagMatch}
-          onRemoveTag={(tag) => setTags((current) => current.filter((t) => t !== tag))}
+          onToggleTag={(tag) =>
+            setTags((current) => (current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]))
+          }
           onClearFilters={() => {
             setTags([]);
             setQuery("");
             setFavoritesOnly(false);
           }}
           resultCount={visible.length}
+          onImport={() => fileRef.current?.click()}
         />
-        <NoteGrid notes={visible} />
+        {error ? <p className="px-4 py-2 text-xs text-danger">{error}</p> : null}
+        <NoteGrid
+          notes={visible}
+          onFavorite={(note) => patchState(note, { favorite: !note.favorite }).catch((err: Error) => setError(err.message))}
+          onArchive={(note) => patchState(note, { archived: !note.archived }).catch((err: Error) => setError(err.message))}
+          onDelete={(note) => remove(note).catch((err: Error) => setError(err.message))}
+          onShare={(note) => setShareTarget(note)}
+        />
       </main>
+      <ShareDialog
+        open={Boolean(shareTarget)}
+        itemId={shareTarget?.id ?? ""}
+        title={shareTarget?.title ?? ""}
+        interactiveEnabled={interactiveEnabled}
+        onClose={() => setShareTarget(null)}
+        onChanged={() => {
+          setShareEpoch((n) => n + 1);
+          load().catch((err: Error) => setError(err.message));
+        }}
+      />
+      {settingsOpen ? (
+        <SettingsPage
+          onClose={() => setSettingsOpen(false)}
+          navConfig={navConfig}
+          onNavConfig={setNavConfig}
+          items={items}
+          collections={collections}
+          allTags={allTags}
+          libraryCounts={{
+            all: active.length,
+            recent: recentCount,
+            favorites: active.filter((n) => n.favorite).length,
+            imported: active.filter((n) => n.imported).length,
+            archived: notes.filter((n) => n.archived).length,
+          }}
+          onSharesChanged={() => {
+            setShareEpoch((n) => n + 1);
+            load().catch((err: Error) => setError(err.message));
+          }}
+          shareEpoch={shareEpoch}
+          onManageShare={(itemId) => {
+            const note = notes.find((row) => row.id === itemId);
+            if (note) {
+              setShareTarget(note);
+              return;
+            }
+            const item = items.find((row) => row.id === itemId);
+            if (item) setShareTarget(itemToNote(item));
+          }}
+        />
+      ) : null}
     </div>
   );
 }

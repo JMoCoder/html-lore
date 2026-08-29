@@ -1,0 +1,17 @@
+id: generated/2026/05/mcp-docker-agent.html
+title: MCP Docker Agent Notes
+summary: MCP agent deployment notes for Docker-based local services.
+source_type: topic
+collection: AI
+tags:
+  - MCP
+  - Docker
+  - AI Agent
+status: ready
+favorite: false
+pinned: false
+open_mode: iframe
+agent:
+  generated: true
+  job_id: job_demo_docker
+  model: demo

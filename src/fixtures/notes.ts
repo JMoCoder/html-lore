@@ -1,5 +1,5 @@
 export type LibraryFilter = "all" | "recent" | "favorites" | "imported" | "archived";
-export type SortMode = "newest" | "oldest" | "title-az" | "title-za";
+export type SortMode = "created-newest" | "created-oldest" | "newest" | "oldest" | "title-az" | "title-za";
 
 export type Note = {
   id: string;
@@ -11,6 +11,7 @@ export type Note = {
   favorite: boolean;
   archived: boolean;
   imported: boolean;
+  created: string;
   updated: string;
   shareToken?: string;
   html: string;
@@ -38,6 +39,7 @@ export const notes: Note[] = [
     favorite: true,
     archived: false,
     imported: false,
+    created: "2026-05-29",
     updated: "2026-05-29",
     shareToken: "mcp-security",
     html: page(
@@ -55,6 +57,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: true,
+    created: "2026-04-12",
     updated: "2026-04-12",
     shareToken: "docker-network",
     html: page(
@@ -73,6 +76,7 @@ export const notes: Note[] = [
     favorite: true,
     archived: false,
     imported: false,
+    created: "2026-06-02",
     updated: "2026-06-02",
     html: page(
       "Knowledge Workspace Design Notes",
@@ -90,6 +94,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: false,
+    created: "2026-05-18",
     updated: "2026-05-18",
     html: page(
       "MCP Docker Agent Notes",
@@ -106,6 +111,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: true,
+    created: "2026-07-03",
     updated: "2026-07-03",
     html: page(
       "Caddy 分享页响应头",
@@ -122,6 +128,7 @@ export const notes: Note[] = [
     favorite: true,
     archived: false,
     imported: false,
+    created: "2026-08-20",
     updated: "2026-08-20",
     shareToken: "editorial-chrome",
     html: page(
@@ -139,6 +146,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: false,
     imported: true,
+    created: "2026-03-21",
     updated: "2026-03-21",
     html: page(
       "YAML 旁车元数据",
@@ -155,6 +163,7 @@ export const notes: Note[] = [
     favorite: false,
     archived: true,
     imported: true,
+    created: "2025-11-08",
     updated: "2025-11-08",
     html: page(
       "早期收件箱草稿",

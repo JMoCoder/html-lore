@@ -1,0 +1,14 @@
+id: imported/weekly-review-template.html
+title: Weekly Review 模板
+summary: 三周滚动复盘：完成项、阻塞项、下周重点。适合 Work 集合下的中等长度标题卡片。
+source_type: imported
+collection: Work
+tags:
+  - Productivity
+  - Template
+status: ready
+favorite: false
+pinned: false
+created: "2026-05-08T16:00:00.000Z"
+updated: "2026-05-08T16:00:00.000Z"
+open_mode: iframe

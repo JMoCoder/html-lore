@@ -1,6 +1,10 @@
-import { notes } from "@/fixtures/notes";
+import { redirect } from "next/navigation";
+import { authEnabled } from "@/server";
+import { getServerContext } from "@/app/api/_lib/http";
 import { WorkspaceView } from "@/features/workspace/workspace-view";
 
-export default function HomePage() {
-  return <WorkspaceView notes={notes} />;
+export default async function HomePage() {
+  const ctx = await getServerContext();
+  if (authEnabled(ctx.root) && !ctx.user) redirect("/login");
+  return <WorkspaceView />;
 }

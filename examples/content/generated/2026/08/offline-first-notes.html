@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offline-First 阅读体验笔记</title>
+  <meta name="description" content="收藏态卡片、较长摘要段落，以及 PWA shell 缓存策略的简要记录。Service Worker 只缓存静态壳层，API 与分享页保持网络优先。">
+  <style>
+    body { max-width: 860px; margin: 0 auto; padding: 32px; line-height: 1.75; font-family: system-ui, sans-serif; }
+    blockquote { margin: 1.2em 0; padding-left: 1em; border-left: 3px solid #2f6d5e; color: #444; }
+  </style>
+</head>
+<body>
+  <article>
+    <h1>Offline-First 阅读体验笔记</h1>
+    <p>HTMlore 2.0 的 PWA 只增强壳层加载，笔记正文仍从 API 读取，避免 stale content。</p>
+    <blockquote>阅读器 iframe 与卡片网格分离：卡片负责发现，iframe 负责沉浸阅读。</blockquote>
+    <p>这篇笔记故意写得更长一些，用来观察摘要两行截断后的省略号位置。</p>
+  </article>
+</body>
+</html>

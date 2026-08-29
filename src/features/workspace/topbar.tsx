@@ -1,17 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/icon-button";
+import { ClientOnly } from "@/components/ui/client-only";
 import type { SortMode } from "@/fixtures/notes";
 import type { TagMatchMode } from "@/features/workspace/workspace-view";
-
-const sorts: { id: SortMode; label: string }[] = [
-  { id: "newest", label: "最近更新" },
-  { id: "oldest", label: "最早更新" },
-  { id: "title-az", label: "标题 A → Z" },
-  { id: "title-za", label: "标题 Z → A" },
-];
+import { useI18n } from "@/i18n/locale-provider";
 
 type Props = {
   query: string;
@@ -21,21 +16,59 @@ type Props = {
   favoritesOnly: boolean;
   onToggleFavorites: () => void;
   filterOpen: boolean;
-  onToggleFilter: () => void;
+  onFilterOpen: (open: boolean) => void;
   tags: string[];
+  availableTags: { name: string; count: number }[];
   tagMatch: TagMatchMode;
   onTagMatch: (mode: TagMatchMode) => void;
-  onRemoveTag: (tag: string) => void;
+  onToggleTag: (tag: string) => void;
   onClearFilters: () => void;
   resultCount: number;
+  onImport: () => void;
 };
 
 export function Topbar(props: Props) {
-  const router = useRouter();
+  const { messages: t } = useI18n();
+  const [sortOpen, setSortOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  const sorts: { id: SortMode; label: string }[] = [
+    { id: "created-newest", label: t.topbar.sortCreatedNewest },
+    { id: "created-oldest", label: t.topbar.sortCreatedOldest },
+    { id: "newest", label: t.topbar.sortNewest },
+    { id: "oldest", label: t.topbar.sortOldest },
+    { id: "title-az", label: t.topbar.sortTitleAz },
+    { id: "title-za", label: t.topbar.sortTitleZa },
+  ];
+
+  useEffect(() => {
+    if (!props.filterOpen && !sortOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (filterRef.current?.contains(target) || sortRef.current?.contains(target)) return;
+      props.onFilterOpen(false);
+      setSortOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [props.filterOpen, props.onFilterOpen, sortOpen]);
+
+  function openFilter() {
+    const next = !props.filterOpen;
+    setSortOpen(false);
+    props.onFilterOpen(next);
+  }
+
+  function openSort() {
+    const next = !sortOpen;
+    props.onFilterOpen(false);
+    setSortOpen(next);
+  }
 
   return (
-    <header className="relative z-20 border-b border-line bg-bg">
-      <div className="flex h-14 items-center gap-2 px-4">
+    <header className="relative z-20 h-14 border-b border-line bg-bg">
+      <div className="flex h-full items-center gap-2 px-4">
         <label className="relative w-full max-w-[360px]">
           <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint">
             <Icon.search />
@@ -43,101 +76,125 @@ export function Topbar(props: Props) {
           <input
             value={props.query}
             onChange={(e) => props.onQuery(e.target.value)}
-            placeholder="搜索笔记…"
+            placeholder={t.topbar.searchPlaceholder}
+            suppressHydrationWarning
             className="h-9 w-full rounded-[var(--radius-control)] border border-line bg-panel pl-9 pr-3 text-[13px] outline-none placeholder:text-ink-faint focus:border-accent/60"
           />
         </label>
 
-        <div className="ml-auto flex items-center gap-1">
-          <IconButton label="导入 HTML" onClick={() => alert("原型：导入将在领域层接线后启用") }>
+        <div className="ml-auto flex h-full items-center gap-1">
+          <IconButton label={t.topbar.importHtml} onClick={props.onImport}>
             <Icon.plus />
           </IconButton>
+          <div ref={filterRef} className="relative flex h-full items-center">
+            <IconButton
+              label={t.topbar.filter}
+              tone={props.filterOpen || props.tags.length ? "active" : "default"}
+              onClick={openFilter}
+            >
+              <Icon.filter />
+            </IconButton>
+            {props.filterOpen ? (
+              <div className="absolute top-full right-0 z-30 mt-1.5 w-[260px] rounded-[var(--radius-card)] border border-line bg-panel-raised p-3 shadow-[var(--shadow-card)]">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-ink-soft">{t.topbar.selectedTags}</p>
+                  <div className="flex items-center rounded-lg bg-sidebar p-0.5">
+                    {(["any", "all"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => props.onTagMatch(mode)}
+                        className={`h-6 rounded-md px-2 text-[11px] ${
+                          props.tagMatch === mode ? "bg-panel-raised text-ink shadow-[var(--shadow-sm)]" : "text-ink-faint"
+                        }`}
+                      >
+                        {mode === "any" ? t.topbar.tagMatchAny : t.topbar.tagMatchAll}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2 flex min-h-[30px] flex-wrap gap-1.5">
+                  {props.availableTags.length === 0 ? (
+                    <span className="text-xs text-ink-faint">{t.topbar.pickTagsHint}</span>
+                  ) : (
+                    props.availableTags.map((entry) => {
+                      const selected = props.tags.includes(entry.name);
+                      return (
+                        <button
+                          key={entry.name}
+                          type="button"
+                          onClick={() => props.onToggleTag(entry.name)}
+                          className={`inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] ${
+                            selected
+                              ? "bg-accent-soft text-accent-strong"
+                              : "bg-sidebar text-ink-soft hover:text-ink"
+                          }`}
+                        >
+                          #{entry.name}
+                          <span className="tabular-nums text-[10px] text-ink-faint">{entry.count}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={props.onClearFilters}
+                    className="text-[11px] text-ink-faint hover:text-ink"
+                  >
+                    {t.topbar.clearFilters}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
           <IconButton
-            label="筛选"
-            tone={props.filterOpen || props.tags.length ? "active" : "default"}
-            onClick={props.onToggleFilter}
-          >
-            <Icon.filter />
-          </IconButton>
-          <IconButton
-            label="只看收藏"
+            label={t.topbar.favoritesOnly}
             tone={props.favoritesOnly ? "active" : "default"}
             onClick={props.onToggleFavorites}
           >
             <Icon.star filled={props.favoritesOnly} />
           </IconButton>
 
-          <div className="relative ml-1">
-            <select
-              value={props.sort}
-              onChange={(e) => props.onSort(e.target.value as SortMode)}
-              aria-label="排序"
-              className="h-9 appearance-none rounded-[var(--radius-control)] border border-line bg-panel pl-3 pr-8 text-[13px] text-ink-soft outline-none focus:border-accent/60"
+          <div ref={sortRef} className="relative flex h-full items-center">
+            <IconButton
+              label={t.topbar.sort}
+              tone={sortOpen || props.sort !== "created-newest" ? "active" : "default"}
+              onClick={openSort}
             >
-              {sorts.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-ink-faint">
-              <Icon.chevronDown />
-            </span>
+              <Icon.sort />
+            </IconButton>
+            {sortOpen ? (
+              <div className="absolute top-full right-0 z-30 mt-1.5 w-max min-w-[7.5rem] rounded-[var(--radius-card)] border border-line bg-panel-raised p-1.5 shadow-[var(--shadow-card)]">
+                {sorts.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      props.onSort(item.id);
+                      setSortOpen(false);
+                    }}
+                    className={`mb-0.5 flex h-8 w-full items-center whitespace-nowrap rounded-lg px-2.5 text-left text-[13px] last:mb-0 ${
+                      props.sort === item.id
+                        ? "bg-panel font-medium text-ink shadow-[var(--shadow-sm)]"
+                        : "text-ink-soft hover:bg-panel hover:text-ink"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
-          <span className="ml-3 hidden text-xs text-ink-faint tabular-nums md:block">
-            {props.resultCount} 篇
-          </span>
+          <ClientOnly fallback={<span className="ml-3 hidden text-xs text-ink-faint tabular-nums md:block">—</span>}>
+            <span className="ml-3 hidden text-xs text-ink-faint tabular-nums md:block">
+              {t.topbar.resultCount(props.resultCount)}
+            </span>
+          </ClientOnly>
         </div>
       </div>
-
-      {props.filterOpen ? (
-        <div className="absolute top-full right-4 mt-2 w-[320px] rounded-[var(--radius-card)] border border-line bg-panel-raised p-3 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-ink-soft">已选标签</p>
-            <div className="flex items-center rounded-lg bg-sidebar p-0.5">
-              {(["any", "all"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => props.onTagMatch(mode)}
-                  className={`h-6 rounded-md px-2 text-[11px] ${
-                    props.tagMatch === mode ? "bg-panel-raised text-ink shadow-[var(--shadow-sm)]" : "text-ink-faint"
-                  }`}
-                >
-                  {mode === "any" ? "任一" : "全部"}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mt-2 flex min-h-[30px] flex-wrap gap-1.5">
-            {props.tags.length === 0 ? (
-              <span className="text-xs text-ink-faint">在左侧标签区点选</span>
-            ) : (
-              props.tags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => props.onRemoveTag(tag)}
-                  className="inline-flex h-6 items-center gap-1 rounded-md bg-accent-soft px-2 text-[11px] text-accent-strong"
-                >
-                  #{tag}
-                  <Icon.x />
-                </button>
-              ))
-            )}
-          </div>
-          <div className="mt-2 flex justify-end">
-            <button
-              type="button"
-              onClick={props.onClearFilters}
-              className="text-[11px] text-ink-faint hover:text-ink"
-            >
-              清空筛选
-            </button>
-          </div>
-        </div>
-      ) : null}
     </header>
   );
 }

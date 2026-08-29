@@ -50,10 +50,10 @@ html.dark {
   --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-display-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-brand), "Noto Serif SC", "Noto Serif JP", Georgia, "Times New Roman", serif;
   --font-mono: var(--font-mono), ui-monospace, Menlo, monospace;
   --radius-control: 10px;
-  --radius-card: 14px;
+  --radius-card: 10px;
 }
 
 * {
@@ -78,19 +78,28 @@ body {
   background: var(--accent-soft);
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
+/*
+ * These resets must live in Tailwind's `base` layer. Cascade Layers give
+ * unlayered rules higher priority than any `@layer` rule regardless of
+ * selector specificity, so an unlayered `button { padding: 0 }` here would
+ * silently beat every `px-*`/`py-*` utility applied to a <button> — which is
+ * exactly what caused the sidebar row padding to collapse to 0.
+ */
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
 
-button {
-  cursor: pointer;
-  background: none;
-  border: 0;
-  padding: 0;
+  button {
+    cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 0;
+  }
 }
 
 input::placeholder {
@@ -105,4 +114,10 @@ input::placeholder {
 .scroll-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
+}
+
+.html-source-editor,
+.html-source-editor .cm-theme,
+.html-source-editor .cm-editor {
+  height: 100%;
 }

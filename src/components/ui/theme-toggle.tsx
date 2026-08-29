@@ -3,22 +3,28 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/icon-button";
+import { isDarkTheme, THEME_CHANGE_EVENT, toggleTheme } from "@/components/ui/theme";
+import { useI18n } from "@/i18n/locale-provider";
 
 export function ThemeToggle() {
+  const { messages: t } = useI18n();
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
+    function sync() {
+      setDark(isDarkTheme());
+    }
+    sync();
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, sync);
   }, []);
 
   return (
     <IconButton
-      label={dark ? "切换为亮色" : "切换为暗色"}
+      label={dark ? t.theme.toLight : t.theme.toDark}
       onClick={() => {
-        const next = !document.documentElement.classList.contains("dark");
-        document.documentElement.classList.toggle("dark", next);
-        localStorage.setItem("html-lore-theme", next ? "dark" : "light");
-        setDark(next);
+        toggleTheme();
+        setDark(isDarkTheme());
       }}
     >
       <Icon.moon />

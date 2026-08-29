@@ -1,14 +1,13 @@
 import type { Note } from "@/fixtures/notes";
+import { formatDate as formatDateLocale, formatReadingMinutes, type Locale } from "@/i18n";
 
-export function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", year: "numeric" }).format(date);
+export function formatDate(value: string, locale: Locale = "zh-CN"): string {
+  return formatDateLocale(value, locale);
 }
 
-export function noteReadingTime(note: Note): string {
-  const minutes = Math.max(1, Math.round(note.html.replace(/<[^>]+>/g, "").length / 550));
-  return `${minutes} 分钟`;
+export function noteReadingTime(note: Note, locale: Locale = "zh-CN"): string {
+  const text = note.html ? note.html.replace(/<[^>]+>/g, "") : note.summary;
+  return formatReadingMinutes(text.length, locale);
 }
 
 export function shareUrl(token: string): string {

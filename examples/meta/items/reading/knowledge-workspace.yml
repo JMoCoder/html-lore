@@ -1,0 +1,14 @@
+id: reading/knowledge-workspace.html
+title: Knowledge Workspace Design Notes
+summary: HTML notes work best when each page is treated as a durable knowledge asset with metadata, source context, and a stable URL.
+source_type: html
+collection: Reading
+tags:
+  - Design
+  - HTML
+status: ready
+favorite: false
+pinned: false
+created: "2026-05-29T03:26:34.680Z"
+updated: "2026-05-29T03:26:34.680Z"
+open_mode: iframe

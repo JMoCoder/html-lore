@@ -1,0 +1,18 @@
+id: imported/tag-heavy-reference.html
+title: Tag-Heavy Reference Sheet
+summary: Six tags on metadata; the card should show the first three and keep the row height stable when filters are active.
+source_type: imported
+collection: Dev
+tags:
+  - CSS
+  - HTML
+  - PWA
+  - Docker
+  - MCP
+  - Security
+status: ready
+favorite: false
+pinned: false
+created: "2026-07-01T12:30:00.000Z"
+updated: "2026-07-01T12:30:00.000Z"
+open_mode: iframe

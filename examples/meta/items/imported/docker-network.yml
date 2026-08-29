@@ -1,0 +1,12 @@
+id: imported/docker-network.html
+title: Docker Network Quick Notes
+summary: Bridge networks, published ports, and service discovery notes for Docker.
+source_type: imported
+collection: Dev
+tags:
+  - Docker
+  - Network
+status: ready
+favorite: false
+pinned: false
+open_mode: iframe

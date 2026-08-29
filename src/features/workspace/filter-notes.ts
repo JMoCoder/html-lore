@@ -38,9 +38,17 @@ export function filterNotes(
   });
 
   return [...filtered].sort((a, b) => {
-    if (options.sort === "title-az") return a.title.localeCompare(b.title, "zh");
-    if (options.sort === "title-za") return b.title.localeCompare(a.title, "zh");
-    if (options.sort === "oldest") return a.updated.localeCompare(b.updated);
-    return b.updated.localeCompare(a.updated);
+    const titleOrder = a.title.localeCompare(b.title, "zh");
+    const titleDescOrder = b.title.localeCompare(a.title, "zh");
+    const newestUpdated = b.updated.localeCompare(a.updated);
+    const oldestUpdated = a.updated.localeCompare(b.updated);
+    const newestCreated = b.created.localeCompare(a.created);
+    const oldestCreated = a.created.localeCompare(b.created);
+    if (options.sort === "created-oldest") return oldestCreated || titleOrder;
+    if (options.sort === "oldest") return oldestUpdated || titleOrder;
+    if (options.sort === "newest") return newestUpdated || titleOrder;
+    if (options.sort === "title-az") return titleOrder || newestUpdated;
+    if (options.sort === "title-za") return titleDescOrder || newestUpdated;
+    return newestCreated || titleOrder;
   });
 }

@@ -1,0 +1,17 @@
+id: generated/2026/05/mcp-security.html
+title: MCP Server 安全模型
+summary: 介绍 MCP Server 的信任边界、权限、工具调用风险与部署建议。
+source_type: topic
+collection: AI
+tags:
+  - MCP
+  - Security
+  - AI Agent
+status: ready
+favorite: true
+pinned: true
+open_mode: iframe
+agent:
+  generated: true
+  job_id: job_demo
+  model: demo

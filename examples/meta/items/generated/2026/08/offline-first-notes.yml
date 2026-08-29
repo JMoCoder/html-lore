@@ -1,0 +1,14 @@
+id: generated/2026/08/offline-first-notes.html
+title: Offline-First 阅读体验笔记
+summary: 收藏态卡片、较长摘要段落，以及 PWA shell 缓存策略的简要记录。Service Worker 只缓存静态壳层，API 与分享页保持网络优先。
+source_type: topic
+collection: Reading
+tags:
+  - PWA
+  - Reading
+status: ready
+favorite: true
+pinned: true
+created: "2026-08-15T14:00:00.000Z"
+updated: "2026-08-26T02:00:00.000Z"
+open_mode: iframe

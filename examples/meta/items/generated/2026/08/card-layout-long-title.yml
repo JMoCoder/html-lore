@@ -1,0 +1,15 @@
+id: generated/2026/08/card-layout-long-title.html
+title: HTMlore 2.0 工作台卡片布局：长标题在网格里如何折行与保持可读性
+summary: 验证卡片网格对超长标题与摘要的 line-clamp 表现，以及收藏态、集合标签与日期行的排版。
+source_type: topic
+collection: Design
+tags:
+  - UI
+  - Cards
+  - Layout
+status: ready
+favorite: true
+pinned: false
+created: "2026-08-20T10:00:00.000Z"
+updated: "2026-08-20T10:00:00.000Z"
+open_mode: iframe

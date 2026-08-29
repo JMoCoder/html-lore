@@ -30,6 +30,7 @@ yarn-error.log*
 
 # env files
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -52,8 +53,10 @@ next-env.d.ts
 /.pytest_cache/
 /playwright-report/
 /test-results/
-/scripts/
+/data-v2/
 /mark/
+/.cursor/
+/.mimosa/
 /public/app.js
 /public/assets/
 /public/config.js
@@ -61,10 +64,8 @@ next-env.d.ts
 /public/content/
 /public/index.html
 /public/manifest.json
-/public/manifest.webmanifest
 /public/share/
 /public/style.css
-/public/sw.js
 /public/file.svg
 /public/globe.svg
 /public/next.svg
