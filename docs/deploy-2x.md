@@ -27,6 +27,8 @@ docker compose up -d --build
 
 打开 `http://localhost:3000`。空资料库会从镜像内 `examples/` 复制夹具。
 
+不想先装 Docker 时，可以看只读静态预览：https://jmocoder.github.io/html-lore/demo/ （无登录、无 AI、不能导入或保存）。营销首页在仓库 `docs/index.html`，由单独任务维护。
+
 compose 项目名固定为 `html-lore-v2`，容器名 `html-lore-v2`，默认端口 3000。只要 1.x 仍用 8080，两边可以同时在线。
 
 ## 从 1.x 拷贝资料库

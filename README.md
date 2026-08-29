@@ -15,6 +15,9 @@ npm test
 - 工作台 `http://localhost:3000`
 - 阅读 `http://localhost:3000/read/generated/2026/05/mcp-security.html`
 - 安全分享 `http://localhost:3000/share/<token>`
+- 静态 demo（GitHub Pages，只读、无后端）https://jmocoder.github.io/html-lore/demo/
+
+站点根 `https://jmocoder.github.io/html-lore/` 是营销首页，另有任务维护；在那之前根路径可能仍是 404，先看 `/demo/`。
 
 ## 自托管鉴权
 

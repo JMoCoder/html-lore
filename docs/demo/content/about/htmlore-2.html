@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTMlore 2.0</title>
+  <style>
+    body { margin: 0; background: #fcfcfb; color: #191b1d; font: 16px/1.65 Inter, "Noto Sans SC", sans-serif; }
+    article { max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+    h1 { font-family: Fraunces, "Noto Serif SC", Georgia, serif; font-size: 2rem; letter-spacing: -0.03em; }
+    h2 { font-size: 1.05rem; margin-top: 2rem; }
+    p, li { color: #3d4247; }
+    code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.86em; }
+  </style>
+</head>
+<body>
+  <article>
+    <h1>HTMlore 2.0</h1>
+    <p>自托管 HTML 知识工作台。笔记是磁盘上的 HTML + YAML，没有数据库，也没有应用内登录或 AI。</p>
+    <h2>还做什么</h2>
+    <ul>
+      <li>导入 HTML，用集合 / 标签 / 收藏 / 归档筛选</li>
+      <li>在阅读页看原文，改元数据和源码</li>
+      <li>安全分享：消毒副本或沙箱 iframe</li>
+      <li>独立 Docker 服务 <code>html-lore-v2</code>，默认端口 3000</li>
+    </ul>
+    <h2>不再做什么</h2>
+    <ul>
+      <li>知识库问答、HTML 生成、AI 侧栏和模型设置</li>
+      <li>把工作台登录当成产品能力（公网用反代）</li>
+      <li>原地替换正在运行的 1.x 容器或共用其 <code>data/</code></li>
+    </ul>
+    <h2>分支</h2>
+    <p>维护线是 <code>main</code> / tag <code>v2.0.0</code>。1.x 冻结在 <code>legacy</code> / <code>v1.2.5</code>。迁资料库用 <code>npm run migrate:1x</code> 拷贝文件，不要两套进程写同一卷。</p>
+    <p>这个页面是 GitHub Pages 上的静态预览：可以点卡片、筛选、阅读，不能导入、保存或分享。</p>
+  </article>
+</body>
+</html>
