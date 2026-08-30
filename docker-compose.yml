@@ -29,5 +29,5 @@ services:
     volumes:
       - ${HTML_LORE_DATA:-./data}:/data
     ports:
-      - "${HTML_LORE_HTTP_PORT:-3000}:3000"
+      - "${HTML_LORE_HTTP_BIND:-127.0.0.1}:${HTML_LORE_HTTP_PORT:-3000}:3000"
     restart: unless-stopped

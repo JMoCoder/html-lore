@@ -514,13 +514,17 @@ function ManagementList({
     onRename?.(from, next);
   }
 
+  const columns = onRename
+    ? "grid-cols-[7rem_auto_3ch_auto_minmax(0,1fr)]"
+    : "grid-cols-[7rem_3ch_auto_minmax(0,1fr)]";
+
   return (
     <ul className="mt-5 divide-y divide-line rounded-[var(--radius-card)] border border-line bg-panel">
       {rows.map((row) => (
-        <li key={row.name} className="flex min-h-11 items-center gap-2 px-3 py-2 md:gap-3 md:px-4 md:py-1.5">
+        <li key={row.name} className={`grid min-h-11 items-center gap-x-3 px-3 py-2 md:px-4 md:py-1.5 ${columns}`}>
           {editing === row.name ? (
             <form
-              className="flex min-w-0 flex-1 items-center gap-2"
+              className="col-span-2 flex min-w-0 items-center gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 commit(row.name);
@@ -532,15 +536,15 @@ function ManagementList({
                 placeholder={renamePlaceholder}
                 autoFocus
                 disabled={disabled}
-                className="h-8 min-w-0 flex-1 rounded-md border border-line bg-panel-raised px-2 text-[13px] text-ink outline-none focus:border-accent/60"
+                className="h-8 min-w-0 flex-1 rounded-md border border-line bg-panel-raised px-2 text-[13px] text-ink-soft outline-none focus:border-accent/60"
               />
-              <button type="submit" disabled={disabled} className="h-8 rounded-md px-2 text-[12px] text-accent hover:bg-accent-soft">
+              <button type="submit" disabled={disabled} className="h-8 shrink-0 rounded-md px-2 text-[12px] text-accent hover:bg-accent-soft">
                 {renameSave}
               </button>
               <button
                 type="button"
                 disabled={disabled}
-                className="h-8 rounded-md px-2 text-[12px] text-ink-faint hover:bg-panel-raised"
+                className="h-8 shrink-0 rounded-md px-2 text-[12px] text-ink-faint hover:bg-panel-raised"
                 onClick={() => setEditing("")}
               >
                 {renameCancel}
@@ -548,12 +552,12 @@ function ManagementList({
             </form>
           ) : (
             <>
-              <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{row.label}</span>
+              <span className="min-w-0 truncate text-[13px] text-ink-soft">{row.label}</span>
               {onRename ? (
                 <button
                   type="button"
                   disabled={disabled}
-                  className="h-8 rounded-md px-2 text-[12px] text-ink-soft hover:bg-panel-raised hover:text-ink"
+                  className="justify-self-start text-left text-[12px] text-ink-faint hover:text-ink-soft"
                   onClick={() => {
                     setEditing(row.name);
                     setDraft(row.name);
@@ -564,8 +568,8 @@ function ManagementList({
               ) : null}
             </>
           )}
-          <span className="text-[11px] tabular-nums text-ink-faint">{row.count}</span>
-          <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] text-ink-faint">
+          <span className="w-full text-left text-[12px] tabular-nums text-ink-faint">{row.count}</span>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 justify-self-start text-[12px] text-ink-faint">
             <span>{visibleLabel}</span>
             <input
               type="checkbox"

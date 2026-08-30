@@ -1,6 +1,6 @@
 # HTMlore 2.0 独立部署与 1.x 迁移
 
-当前稳定版 **2.0.3**（分支 `main`）。2.0 和冻结的 1.x（tag `v1.2.5`，分支 `legacy`）**并行、互不替换**。不要把 2.0 容器挂到正在运行的 1.x `data/` 上。
+当前稳定版 **2.0.4**（分支 `main`）。2.0 和冻结的 1.x（tag `v1.2.5`，分支 `legacy`）**并行、互不替换**。不要把 2.0 容器挂到正在运行的 1.x `data/` 上。
 
 **没有传统数据库。** 笔记是磁盘上的 HTML + YAML sidecar + `users.json`。所谓「迁移」是复制文件库，不是 SQL dump。
 
@@ -9,7 +9,7 @@
 | 线 | Git | Docker | 端口（默认） | 状态 |
 |---|---|---|---|---|
 | 1.x | `legacy` / tag `v1.2.5` | 原 compose，服务名 `html-lore` | `8080→8787` | **冻结**，不再加功能 |
-| 2.0 | `main` / tag `v2.0.3` | compose 项目 `html-lore-v2` | `3000→3000` | **当前稳定维护线** |
+| 2.0 | `main` / tag `v2.0.4` | compose 项目 `html-lore-v2` | `3000→3000` | **当前稳定维护线** |
 
 后续功能只合入 `main`。需要 1.x 时继续跑旧容器，或从 `legacy` / tag `v1.2.5` 检出旧树。
 
@@ -29,7 +29,7 @@ docker compose up -d --build
 
 不想先装 Docker 时，可以看只读静态预览：https://jmocoder.github.io/html-lore/demo/ （无登录、无 AI、不能导入或保存）。营销首页在仓库 `docs/index.html`，由单独任务维护。
 
-compose 项目名固定为 `html-lore-v2`，容器名 `html-lore-v2`，默认端口 3000。只要 1.x 仍用 8080，两边可以同时在线。
+compose 项目名固定为 `html-lore-v2`，容器名 `html-lore-v2`，默认 **`127.0.0.1:3000`**。只要 1.x 仍用 8080，两边可以同时在线。公网走本机 Caddy 反代，不要把应用端口绑到 `0.0.0.0`（UFW 挡着也不算过关）。局域网直连才设 `HTML_LORE_HTTP_BIND=0.0.0.0`。
 
 ## 从 1.x 拷贝资料库
 
@@ -72,7 +72,7 @@ node scripts/migrate-from-1x.mjs --merge-users /path/to/v1/data /path/to/v2/data
 分享 token 哈希仍在 `shares.json` / `share-index.json` 里，2.0 的 `/share/{token}` 可以继续打开未过期链接。YAML 里的 `agent:` 只读、界面不展示。
 
 4. `.env` 里 `HTML_LORE_DATA` 指向拷贝后的目录（compose 默认 `./data`）。
-5. `docker compose up -d --build` 后看 `GET /api/health` 是否返回 `"version":"2.0.3"`。
+5. `docker compose up -d --build` 后看 `GET /api/health` 是否返回 `"version":"2.0.4"`。
 
 ## 和 1.x 同时跑
 
@@ -101,6 +101,25 @@ Caddy 里「豁免 + 鉴权」必须用**兄弟互斥 `handle`**，不要把 nam
 
 分享打不开时，按四道闸门复刻比读代码快：`record`（token hash 在 `shares.json`）→ `active`（未撤销、未过期）→ `item`（根库能读到、ID 未改、未归档）→ `content`（`content_item_id` 对应的 HTML 还在）。无登录迁移后若源库没有 `share-index.json`，不影响根级解析。
 
+## 现场升级（rain：`/opt/html-lore-v2`）
+
+未写出备份不得换 tag 或 `compose up --build`。目录：
+
+```bash
+TAG=$(git -C /opt/html-lore-v2 describe --tags --always)
+TS=$(date +%Y%m%d-%H%M%S)
+DEST=/opt/backups/html-lore-v2-upgrade-$TAG-$TS
+mkdir -p "$DEST"
+tar -C /opt/html-lore-v2 -czf "$DEST/data-$TAG.tar.gz" data
+install -m 600 /opt/html-lore-v2/.env "$DEST/env.snapshot"
+cp /opt/html-lore-v2/docker-compose.yml "$DEST/docker-compose.yml"
+(cd "$DEST" && sha256sum data-*.tar.gz env.snapshot docker-compose.yml > SHA256SUMS)
+```
+
+快照至少包含 **data + .env + compose**。2026-08-30 升 2.0.3 时漏了这步，靠当日 12:33 的 `/opt/backups/html-lore-v2-migration-*` 兜底。
+
+然后才 `git fetch --tags`、检出目标 tag、确认 compose 仍是 `127.0.0.1:…:3000`（或 `HTML_LORE_HTTP_BIND` 默认 loopback），再 `docker compose up -d --build`。不要重跑迁移，不要动 `/opt/html-lore`。
+
 ## 回滚
 
-2.0 只读拷贝，1.x 目录未改。关掉 `html-lore-v2` 即可回到只使用 1.x。不要用 2.0 写过的拷贝覆盖回 1.x，除非你明确接受 2.0 的编辑结果。
+2.0 只读拷贝，1.x 目录未改。关掉 `html-lore-v2` 即可回到只使用 1.x。不要用 2.0 写过的拷贝覆盖回 1.x，除非你明确接受 2.0 的编辑结果。现场回滚优先从 `/opt/backups/html-lore-v2-upgrade-<tag>-<ts>/` 还原 data / `.env` / compose。
