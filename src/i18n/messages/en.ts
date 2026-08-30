@@ -9,6 +9,8 @@ export const en: Messages = {
     tags: "Tags",
     settings: "Settings",
     github: "GitHub repository",
+    openNav: "Open navigation",
+    closeNav: "Close navigation",
     all: "All notes",
     recent: "Recent",
     favorites: "Favorites",
@@ -17,6 +19,7 @@ export const en: Messages = {
   },
   topbar: {
     searchPlaceholder: "Search notes…",
+    openNav: "Open navigation",
     importHtml: "Import HTML",
     filter: "Filter",
     favoritesOnly: "Favorites only",
@@ -50,9 +53,11 @@ export const en: Messages = {
     shared: "Shared",
     pin: "Pin",
     unpin: "Unpin",
+    actions: "Note actions",
   },
   reader: {
     back: "Workspace",
+    more: "More actions",
     favorite: "Favorite",
     archive: "Archive",
     share: "Share",

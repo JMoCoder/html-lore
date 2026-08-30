@@ -31,7 +31,7 @@ export function NoteGrid({
   }
 
   return (
-    <section className="scroll-thin grid min-w-0 flex-1 content-start grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-3 overflow-y-auto p-4">
+    <section className="scroll-thin grid min-w-0 flex-1 content-start grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-3 overflow-y-auto p-4 max-md:gap-2.5 max-md:p-3">
       {notes.map((note) => (
         <NoteCard
           key={note.id}

@@ -9,6 +9,8 @@ export const ja: Messages = {
     tags: "タグ",
     settings: "設定",
     github: "GitHub リポジトリ",
+    openNav: "ナビを開く",
+    closeNav: "ナビを閉じる",
     all: "すべてのノート",
     recent: "最近",
     favorites: "お気に入り",
@@ -17,6 +19,7 @@ export const ja: Messages = {
   },
   topbar: {
     searchPlaceholder: "ノートを検索…",
+    openNav: "ナビを開く",
     importHtml: "HTML をインポート",
     filter: "フィルター",
     favoritesOnly: "お気に入りのみ",
@@ -50,9 +53,11 @@ export const ja: Messages = {
     shared: "共有中",
     pin: "ピン留め",
     unpin: "ピンを外す",
+    actions: "ノート操作",
   },
   reader: {
     back: "ワークスペース",
+    more: "その他",
     favorite: "お気に入り",
     archive: "アーカイブ",
     share: "共有",

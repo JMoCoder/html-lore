@@ -134,9 +134,9 @@ export function ShareDialog(props: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/20 px-4 backdrop-blur-[2px]" onClick={props.onClose}>
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/20 px-4 backdrop-blur-[2px] max-md:items-end max-md:px-0 max-md:pb-[env(safe-area-inset-bottom,0px)]" onClick={props.onClose}>
       <div
-        className="w-full max-w-[400px] rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-card)]"
+        className="max-h-[min(640px,calc(100dvh-2rem))] w-full max-w-[400px] overflow-y-auto rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-card)] max-md:max-h-[min(92dvh,720px)] max-md:max-w-none max-md:rounded-b-none max-md:rounded-t-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-labelledby="share-dialog-title"

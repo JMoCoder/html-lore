@@ -183,18 +183,36 @@ export function SettingsPage(props: Props) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4">
+    <div className="app-shell fixed inset-0 z-50 flex flex-col bg-bg">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 md:px-4">
         <IconButton label={t.settings.close} onClick={props.onClose}>
           <Icon.chevronLeft />
         </IconButton>
         <h1 className="text-[15px] font-semibold tracking-tight text-ink">{t.settings.title}</h1>
       </header>
 
+      <nav
+        aria-label={t.settings.sections}
+        className="scroll-thin flex shrink-0 gap-1 overflow-x-auto border-b border-line px-3 py-2 md:hidden"
+      >
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={`h-10 shrink-0 rounded-[var(--radius-control)] px-3 text-[13px] ${
+              tab === item.id ? "bg-accent-soft font-medium text-accent-strong" : "text-ink-soft"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
       <div className="flex min-h-0 flex-1">
         <nav
           aria-label={t.settings.sections}
-          className="flex w-[252px] shrink-0 flex-col border-r border-line bg-sidebar py-3"
+          className="hidden w-[252px] shrink-0 flex-col border-r border-line bg-sidebar py-3 md:flex"
         >
           {navItems.map((item) => (
             <div key={item.id}>
@@ -214,7 +232,7 @@ export function SettingsPage(props: Props) {
           ))}
         </nav>
 
-        <section className="scroll-thin min-w-0 flex-1 overflow-y-auto px-8 py-6">
+        <section className="scroll-thin min-w-0 flex-1 overflow-y-auto px-4 py-5 md:px-8 md:py-6">
           <div className="mx-auto w-full max-w-[640px]">
             {tab === "basic" ? (
               <Section title={t.settings.basic} intro={t.settings.basicIntro}>
@@ -327,7 +345,7 @@ export function SettingsPage(props: Props) {
                           key={share.id}
                           className="rounded-[var(--radius-card)] border border-line bg-panel px-4 py-3"
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start justify-between gap-3 max-md:flex-col">
                             <div className="min-w-0">
                               {item ? (
                                 <button
@@ -350,7 +368,7 @@ export function SettingsPage(props: Props) {
                                 <span>{share.mode}</span>
                               </p>
                             </div>
-                            <div className="flex shrink-0 items-center gap-1">
+                            <div className="flex shrink-0 items-center gap-1 max-md:w-full max-md:justify-end">
                               <button
                                 type="button"
                                 className="h-8 rounded-[var(--radius-control)] px-2.5 text-[12px] text-ink-soft hover:bg-panel-raised hover:text-ink"
@@ -499,7 +517,7 @@ function ManagementList({
   return (
     <ul className="mt-5 divide-y divide-line rounded-[var(--radius-card)] border border-line bg-panel">
       {rows.map((row) => (
-        <li key={row.name} className="flex min-h-11 items-center gap-3 px-4 py-1.5">
+        <li key={row.name} className="flex min-h-11 items-center gap-2 px-3 py-2 md:gap-3 md:px-4 md:py-1.5">
           {editing === row.name ? (
             <form
               className="flex min-w-0 flex-1 items-center gap-2"

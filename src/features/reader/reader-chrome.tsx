@@ -53,10 +53,22 @@ export function ReaderChrome({
   const [archived, setArchived] = useState(note.archived);
   const [shareToken, setShareToken] = useState(note.shareToken);
   const [shareOpen, setShareOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     collectionRef.current = collection;
   }, [collection]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      if (moreRef.current?.contains(event.target as Node)) return;
+      setMoreOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [moreOpen]);
 
   useEffect(() => {
     apiJson<Manifest>("/api/manifest")
@@ -110,45 +122,104 @@ export function ReaderChrome({
     router.refresh();
   }
 
+  const toolbarItems = [
+    {
+      key: "favorite",
+      label: t.reader.favorite,
+      active: favorite,
+      onClick: () => patchState({ favorite: !favorite }),
+      icon: <Icon.star filled={favorite} />,
+    },
+    {
+      key: "archive",
+      label: t.reader.archive,
+      onClick: () => patchState({ archived: !archived }),
+      icon: <Icon.archive />,
+    },
+    {
+      key: "share",
+      label: t.reader.share,
+      active: Boolean(shareToken),
+      onClick: () => setShareOpen(true),
+      icon: <Icon.share />,
+    },
+    {
+      key: "download",
+      label: t.reader.download,
+      onClick: () => triggerDownload(itemContentDownloadHref(note.id)),
+      icon: <Icon.download />,
+    },
+    {
+      key: "original",
+      label: t.reader.openOriginal,
+      onClick: () => window.open(itemContentHref(note.id), "_blank"),
+      icon: <Icon.external />,
+    },
+  ];
+
   return (
-    <div className="flex h-dvh flex-col bg-bg">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4">
+    <div className="app-shell flex flex-col bg-bg">
+      <header className="relative z-50 flex h-14 shrink-0 items-center gap-1 border-b border-line bg-bg px-2 md:gap-2 md:px-4">
         <Link
           href="/"
-          className="group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] text-ink-soft transition-colors hover:bg-panel hover:text-ink"
+          className="group inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] text-ink-soft transition-colors hover:bg-panel hover:text-ink max-md:size-10 max-md:justify-center max-md:px-0"
         >
           <span className="inline-flex transition-transform duration-150 group-hover:-translate-x-0.5">
             <Icon.chevronLeft />
           </span>
-          {t.reader.back}
+          <span className="desktop-only">{t.reader.back}</span>
         </Link>
         <div className="mx-auto flex min-w-0 max-w-xl flex-1 items-center justify-center gap-2">
           <h1 className="truncate text-[14px] font-semibold tracking-tight text-ink">{title}</h1>
-          <span className="shrink-0 text-[11px] text-ink-faint">
+          <span className="hidden shrink-0 text-[11px] text-ink-faint md:inline">
             {collection} · {formatDate(note.updated, locale)}
           </span>
         </div>
         <div className="flex items-center gap-0.5">
-          <IconButton label={t.reader.favorite} tone={favorite ? "active" : "default"} onClick={() => patchState({ favorite: !favorite })}>
-            <Icon.star filled={favorite} />
-          </IconButton>
-          <IconButton label={t.reader.archive} onClick={() => patchState({ archived: !archived })}>
-            <Icon.archive />
-          </IconButton>
-          <IconButton label={t.reader.share} tone={shareToken ? "active" : "default"} onClick={() => setShareOpen(true)}>
-            <Icon.share />
-          </IconButton>
-          <IconButton label={t.reader.download} onClick={() => triggerDownload(itemContentDownloadHref(note.id))}>
-            <Icon.download />
-          </IconButton>
-          <IconButton label={t.reader.openOriginal} onClick={() => window.open(itemContentHref(note.id), "_blank")}>
-            <Icon.external />
-          </IconButton>
-          <div className="mx-1 h-5 w-px bg-line" />
+          <div className="hidden items-center gap-0.5 md:flex">
+            {toolbarItems.map((item) => (
+              <IconButton key={item.key} label={item.label} tone={item.active ? "active" : "default"} onClick={item.onClick}>
+                {item.icon}
+              </IconButton>
+            ))}
+            <div className="mx-1 h-5 w-px bg-line" />
+          </div>
+          <div ref={moreRef} className="relative md:hidden">
+            <IconButton
+              label={t.reader.more}
+              tone={moreOpen ? "active" : "default"}
+              onClick={() => setMoreOpen((value) => !value)}
+            >
+              <Icon.more />
+            </IconButton>
+            {moreOpen ? (
+              <div className="absolute top-full right-0 z-30 mt-1.5 w-max min-w-[10rem] rounded-[var(--radius-card)] border border-line bg-panel-raised p-1.5 shadow-[var(--shadow-card)]">
+                {toolbarItems.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      item.onClick();
+                    }}
+                    className={`mb-0.5 flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] last:mb-0 ${
+                      item.active ? "bg-panel font-medium text-ink" : "text-ink-soft hover:bg-panel hover:text-ink"
+                    }`}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <IconButton
             label={panelOpen ? t.reader.panelOpen : t.reader.panelClosed}
             tone={panelOpen ? "active" : "default"}
-            onClick={() => setPanelOpen((v) => !v)}
+            onClick={() => {
+              setMoreOpen(false);
+              setPanelOpen((v) => !v);
+            }}
           >
             <Icon.edit />
           </IconButton>
@@ -163,19 +234,37 @@ export function ReaderChrome({
           className="min-w-0 flex-1 border-0 bg-panel"
         />
 
+        {panelOpen ? (
+          <button
+            type="button"
+            aria-label={t.reader.panelOpen}
+            className="fixed inset-x-0 bottom-0 top-14 z-30 bg-ink/30 md:hidden"
+            onClick={() => setPanelOpen(false)}
+          />
+        ) : null}
+
         <aside
           aria-hidden={!panelOpen}
           style={{ width: PANEL_WIDTH, marginRight: panelOpen ? 0 : -PANEL_WIDTH }}
-          className="shrink-0 border-l border-line bg-sidebar transition-[margin] duration-200 ease-out"
+          className={`reader-panel shrink-0 border-l border-line bg-sidebar transition-[margin] duration-200 ease-out ${
+            panelOpen
+              ? "is-open max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:mr-0! max-md:w-full! max-md:border-l-0 max-md:pt-[env(safe-area-inset-top,0px)] max-md:pb-[env(safe-area-inset-bottom,0px)]"
+              : "max-md:hidden"
+          }`}
         >
           <div
-            className={`scroll-thin h-full w-[320px] overflow-y-auto p-4 transition duration-200 ease-out ${
-              panelOpen ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"
+            className={`scroll-thin h-full w-[320px] overflow-y-auto p-4 transition duration-200 ease-out max-md:w-full ${
+              panelOpen ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0 max-md:translate-x-0"
             }`}
           >
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-[11px] font-medium tracking-[0.08em] text-ink-faint">{t.reader.noteInfo}</h2>
-              <ThemeToggle />
+              <div className="flex items-center gap-0.5">
+                <ThemeToggle />
+                <IconButton className="md:hidden" label={t.reader.panelOpen} onClick={() => setPanelOpen(false)}>
+                  <Icon.x />
+                </IconButton>
+              </div>
             </div>
             <div className="mt-3 space-y-3 text-[13px]">
               <label className="block text-[11px] text-ink-faint">

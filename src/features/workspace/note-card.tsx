@@ -140,7 +140,7 @@ export function NoteCard({
         href={readHref(note.id)}
         className="flex min-w-0 flex-col px-4 pt-2 pb-4 outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       >
-        <h2 className="min-w-0 truncate text-[15px] font-semibold leading-snug tracking-tight text-ink">
+        <h2 className="min-w-0 truncate text-[15px] font-semibold leading-snug tracking-tight text-ink max-md:whitespace-normal max-md:line-clamp-2">
           {note.title}
         </h2>
         <p className="mt-2 line-clamp-2 h-[42px] overflow-hidden text-[13px] leading-[21px] text-ink-soft">
@@ -161,7 +161,7 @@ export function NoteCard({
       </Link>
 
       <div
-        className="pointer-events-none absolute top-2 right-2 z-10 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+        className="pointer-events-none absolute top-2 right-2 z-10 hidden opacity-0 transition-opacity duration-150 md:block group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
         onClick={stop}
       >
         <div
@@ -183,6 +183,28 @@ export function NoteCard({
             </CardAction>
           ))}
         </div>
+      </div>
+
+      <div
+        className="flex items-center justify-around border-t border-line px-1 py-1 md:hidden"
+        role="toolbar"
+        aria-label={t.noteCard.actions}
+        onClick={stop}
+      >
+        {actions.map((action) => (
+          <CardAction
+            key={action.key}
+            label={action.label}
+            active={action.active}
+            danger={action.danger}
+            onClick={(e) => {
+              stop(e);
+              action.onClick();
+            }}
+          >
+            {action.icon}
+          </CardAction>
+        ))}
       </div>
     </article>
   );
@@ -213,7 +235,7 @@ function CardAction({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`inline-flex h-full w-full items-center justify-center ${tone}`}
+      className={`inline-flex h-full w-full items-center justify-center max-md:size-10 max-md:rounded-[var(--radius-control)] ${tone}`}
     >
       {children}
     </button>

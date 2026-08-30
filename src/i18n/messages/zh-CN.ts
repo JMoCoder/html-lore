@@ -9,6 +9,8 @@ export const zhCN: Messages = {
     tags: "标签",
     settings: "设置",
     github: "GitHub 仓库",
+    openNav: "打开导航",
+    closeNav: "关闭导航",
     all: "全部笔记",
     recent: "最近",
     favorites: "收藏",
@@ -17,6 +19,7 @@ export const zhCN: Messages = {
   },
   topbar: {
     searchPlaceholder: "搜索笔记…",
+    openNav: "打开导航",
     importHtml: "导入 HTML",
     filter: "筛选",
     favoritesOnly: "只看收藏",
@@ -50,9 +53,11 @@ export const zhCN: Messages = {
     shared: "已分享",
     pin: "置顶",
     unpin: "取消置顶",
+    actions: "笔记操作",
   },
   reader: {
     back: "工作台",
+    more: "更多操作",
     favorite: "收藏",
     archive: "归档",
     share: "分享",

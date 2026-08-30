@@ -17,6 +17,8 @@ export type Messages = {
     tags: string;
     settings: string;
     github: string;
+    openNav: string;
+    closeNav: string;
     all: string;
     recent: string;
     favorites: string;
@@ -25,6 +27,7 @@ export type Messages = {
   };
   topbar: {
     searchPlaceholder: string;
+    openNav: string;
     importHtml: string;
     filter: string;
     favoritesOnly: string;
@@ -58,9 +61,11 @@ export type Messages = {
     shared: string;
     pin: string;
     unpin: string;
+    actions: string;
   };
   reader: {
     back: string;
+    more: string;
     favorite: string;
     archive: string;
     share: string;

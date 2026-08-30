@@ -6,6 +6,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { injectFileEditorRuntime, stripFileEditorRuntime } from "@/features/reader/file-editor-runtime";
 import { useI18n } from "@/i18n/locale-provider";
 import { saveItemContent } from "@/lib/api";
+import { useNarrow } from "@/lib/use-narrow";
 
 type Mode = "text" | "element";
 type Selection = {
@@ -74,6 +75,7 @@ export function FileEditorDialog({
 }) {
   const { messages: t } = useI18n();
   const e = t.reader.editor;
+  const narrow = useNarrow();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [srcdoc, setSrcdoc] = useState(() => injectFileEditorRuntime(html));
   const [original, setOriginal] = useState(html);
@@ -82,6 +84,7 @@ export function FileEditorDialog({
   const [feedback, setFeedback] = useState(e.fileLoaded);
   const [mode, setMode] = useState<Mode>("text");
   const [collapsed, setCollapsed] = useState(false);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [history, setHistory] = useState<string[]>(() => [html]);
@@ -165,6 +168,7 @@ export function FileEditorDialog({
       if (message.type === "html-lore-file-editor-select" || message.type === "html-lore-file-editor-direct-text") {
         syncing.current = true;
         setSelection(message.selection as Selection);
+        setMobilePanelOpen(true);
         queueMicrotask(() => {
           syncing.current = false;
         });
@@ -260,8 +264,10 @@ export function FileEditorDialog({
     setFeedback(htmlValue !== original ? e.fileUnsaved : e.fileLoaded);
   }
 
+  const panelOpen = narrow ? mobilePanelOpen : !collapsed;
+
   function startResize(event: ReactPointerEvent<HTMLDivElement>) {
-    if (collapsed) return;
+    if (!panelOpen) return;
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = panelWidth;
@@ -301,13 +307,18 @@ export function FileEditorDialog({
   const strike = String(selection?.style.textDecoration || "").includes("line-through");
 
   return (
-    <div className="fixed inset-0 z-50 grid grid-rows-[auto_minmax(0,1fr)] bg-bg">
-      <div className="flex min-h-12 items-center justify-between gap-3 border-b border-line bg-panel px-4 py-2">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-ink">{e.fileTitle}</p>
-          <p className="truncate text-[12px] text-ink-faint">{title}</p>
+    <div className="app-shell fixed inset-0 z-50 grid grid-rows-[auto_minmax(0,1fr)] bg-bg">
+      <div className="flex flex-col gap-2 border-b border-line bg-panel px-3 py-2 md:flex-row md:items-center md:justify-between md:gap-3 md:px-4">
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-ink">{e.fileTitle}</p>
+            <p className="truncate text-[12px] text-ink-faint">{title}</p>
+          </div>
+          <IconButton className="md:hidden" label={e.close} disabled={saving} onClick={() => close()}>
+            <Icon.x />
+          </IconButton>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:justify-end">
           <button
             type="button"
             onClick={() => {
@@ -315,7 +326,7 @@ export function FileEditorDialog({
               modeRef.current = "text";
               post({ type: "html-lore-file-editor-mode", mode: "text" });
             }}
-            className={`h-8 rounded-[var(--radius-control)] border px-3 text-[12px] ${
+            className={`h-8 rounded-[var(--radius-control)] border px-3 text-[12px] max-md:h-10 ${
               mode === "text" ? "border-accent/50 bg-accent-soft text-accent-strong" : "border-line text-ink-soft hover:bg-panel-raised"
             }`}
           >
@@ -328,7 +339,7 @@ export function FileEditorDialog({
               modeRef.current = "element";
               post({ type: "html-lore-file-editor-mode", mode: "element" });
             }}
-            className={`h-8 rounded-[var(--radius-control)] border px-3 text-[12px] ${
+            className={`h-8 rounded-[var(--radius-control)] border px-3 text-[12px] max-md:h-10 ${
               mode === "element" ? "border-accent/50 bg-accent-soft text-accent-strong" : "border-line text-ink-soft hover:bg-panel-raised"
             }`}
           >
@@ -364,52 +375,54 @@ export function FileEditorDialog({
               markDirty();
               requestHtml().then((next) => next && pushHistory(next)).catch(() => {});
             }}
-            className="h-8 rounded-[var(--radius-control)] border border-line px-3 text-[12px] text-ink hover:bg-panel-raised disabled:opacity-50"
+            className="h-8 rounded-[var(--radius-control)] border border-line px-3 text-[12px] text-ink hover:bg-panel-raised disabled:opacity-50 max-md:h-10"
           >
             {e.fileReset}
           </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => save(false)}
-            className="h-8 rounded-[var(--radius-control)] border border-line px-3 text-[12px] text-ink hover:bg-panel-raised disabled:opacity-50"
-          >
-            {saving ? e.saving : e.save}
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => save(true)}
-            className="h-8 rounded-[var(--radius-control)] bg-accent px-3 text-[12px] font-medium text-white hover:bg-accent-strong disabled:opacity-50"
-          >
-            {saving ? e.saving : e.saveAndClose}
-          </button>
-          <IconButton label={e.close} disabled={saving} onClick={() => close()}>
+          <div className="flex min-w-0 basis-full gap-1.5 md:basis-auto">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => save(false)}
+              className="h-8 min-w-0 flex-1 rounded-[var(--radius-control)] border border-line px-3 text-[12px] text-ink hover:bg-panel-raised disabled:opacity-50 max-md:h-10 md:flex-none"
+            >
+              {saving ? e.saving : e.save}
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => save(true)}
+              className="h-8 min-w-0 flex-1 truncate rounded-[var(--radius-control)] bg-accent px-3 text-[12px] font-medium text-white hover:bg-accent-strong disabled:opacity-50 max-md:h-10 md:flex-none"
+            >
+              {saving ? e.saving : e.saveAndClose}
+            </button>
+          </div>
+          <IconButton className="hidden md:inline-flex" label={e.close} disabled={saving} onClick={() => close()}>
             <Icon.x />
           </IconButton>
         </div>
       </div>
 
-      <div className="relative min-h-0 overflow-hidden bg-sidebar">
+      <div className={`file-editor-stage relative min-h-0 overflow-hidden bg-sidebar ${panelOpen ? "" : "panel-collapsed"}`}>
         <iframe
           ref={frameRef}
           title={e.fileTitle}
           srcDoc={srcdoc}
           onLoad={() => post({ type: "html-lore-file-editor-mode", mode: modeRef.current })}
           className="h-full border-0 bg-white transition-[width] duration-200"
-          style={{ width: collapsed ? "100%" : `calc(100% - ${panelWidth}px)` }}
+          style={{ width: panelOpen && !narrow ? `calc(100% - ${panelWidth}px)` : "100%" }}
         />
         <button
           type="button"
-          aria-label={collapsed ? e.expandPanel : e.collapsePanel}
-          title={collapsed ? e.expandPanel : e.collapsePanel}
-          onClick={() => setCollapsed((v) => !v)}
-          className="absolute top-2.5 z-10 inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] border border-line bg-panel/80 text-ink-soft backdrop-blur-sm hover:text-ink"
-          style={{ right: collapsed ? 18 : panelWidth + 18 }}
+          aria-label={panelOpen ? e.collapsePanel : e.expandPanel}
+          title={panelOpen ? e.collapsePanel : e.expandPanel}
+          onClick={() => (narrow ? setMobilePanelOpen((v) => !v) : setCollapsed((v) => !v))}
+          className="file-editor-collapse absolute top-2.5 z-10 inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] border border-line bg-panel/80 text-ink-soft backdrop-blur-sm hover:text-ink max-md:hidden"
+          style={{ right: panelOpen ? panelWidth + 18 : 18 }}
         >
-          {collapsed ? <Icon.chevronLeft /> : <Icon.chevronRight />}
+          {panelOpen ? <Icon.chevronRight /> : <Icon.chevronLeft />}
         </button>
-        {collapsed ? null : (
+        {panelOpen ? (
           <div
             role="separator"
             aria-orientation="vertical"
@@ -418,16 +431,21 @@ export function FileEditorDialog({
             className="absolute top-0 bottom-0 z-[2] w-1 cursor-col-resize bg-line"
             style={{ right: panelWidth }}
           />
-        )}
+        ) : null}
         <aside
-          className={`absolute inset-y-0 right-0 overflow-y-auto border-l border-line bg-panel p-4 shadow-[var(--shadow-card)] transition-transform duration-200 ${
-            collapsed ? "translate-x-full" : "translate-x-0"
+          className={`absolute inset-y-0 right-0 overflow-y-auto border-l border-line bg-panel p-4 shadow-[var(--shadow-card)] transition-transform duration-200 ease-out ${
+            panelOpen ? "translate-x-0 max-md:translate-y-0" : "translate-x-full max-md:translate-x-0 max-md:translate-y-full max-md:pointer-events-none"
           }`}
           style={{ width: panelWidth }}
         >
-          <div className="mb-3">
-            <p className="text-[13px] font-semibold text-ink">{e.fileSelected}</p>
-            <p className="text-[12px] text-ink-faint">{selectedName}</p>
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-ink">{e.fileSelected}</p>
+              <p className="text-[12px] text-ink-faint">{selectedName}</p>
+            </div>
+            <IconButton className="md:hidden" label={e.collapsePanel} onClick={() => setMobilePanelOpen(false)}>
+              <Icon.x />
+            </IconButton>
           </div>
           <label className="block text-[11px] text-ink-faint">
             {e.fileText}

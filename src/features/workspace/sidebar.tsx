@@ -8,10 +8,13 @@ import { IconButton } from "@/components/ui/icon-button";
 import type { LibraryFilter } from "@/fixtures/notes";
 import { useI18n } from "@/i18n/locale-provider";
 import { isNavVisible, type NavConfig } from "@/lib/navigation";
+import { useNarrow } from "@/lib/use-narrow";
 
 type Entry = { name: string; count: number };
 
 type Props = {
+  open?: boolean;
+  onClose?: () => void;
   library: LibraryFilter;
   onLibrary: (value: LibraryFilter) => void;
   collection: string;
@@ -27,6 +30,8 @@ type Props = {
 
 export function Sidebar(props: Props) {
   const { messages: t } = useI18n();
+  const narrow = useNarrow();
+  const hidden = narrow && !props.open;
 
   const libraryItems = useMemo(
     () =>
@@ -48,10 +53,23 @@ export function Sidebar(props: Props) {
   const visibleTags = props.allTags.filter((entry) => isNavVisible(props.navConfig, "tags", entry.name));
 
   return (
-    <aside className="flex h-full w-[252px] shrink-0 flex-col border-r border-line bg-sidebar">
+    <aside
+      aria-hidden={hidden}
+      className={`nav-drawer flex h-full w-[min(252px,86vw)] shrink-0 flex-col border-r border-line bg-sidebar max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:h-dvh max-md:pt-[env(safe-area-inset-top,0px)] max-md:pb-[env(safe-area-inset-bottom,0px)] max-md:transition-transform max-md:duration-200 max-md:ease-out ${
+        props.open ? "is-open max-md:translate-x-0" : "max-md:-translate-x-full max-md:pointer-events-none"
+      }`}
+    >
       <div className="flex h-14 items-center justify-between border-b border-line px-3">
         <HomeLink />
-        <ThemeToggle />
+        <div className="flex items-center gap-0.5">
+          <ThemeToggle />
+          <IconButton className="mobile-only" label={t.sidebar.settings} onClick={props.onOpenSettings}>
+            <Icon.settings />
+          </IconButton>
+          <IconButton className="mobile-only" label={t.sidebar.closeNav} onClick={props.onClose}>
+            <Icon.x />
+          </IconButton>
+        </div>
       </div>
 
       <nav className="scroll-thin flex-1 overflow-y-auto py-3">
@@ -101,18 +119,18 @@ export function Sidebar(props: Props) {
         ) : null}
       </nav>
 
-      <div className="flex items-center justify-between border-t border-line px-3 py-2.5">
+      <div className="flex items-center justify-between border-t border-line px-3 py-2.5 max-md:min-h-12">
         <a
           href="https://github.com/JMoCoder/html-lore"
           target="_blank"
           rel="noreferrer"
           aria-label={t.sidebar.github}
           title={t.sidebar.github}
-          className="inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink"
+          className="inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink max-md:size-10"
         >
           <Icon.github />
         </a>
-        <IconButton label={t.sidebar.settings} onClick={props.onOpenSettings}>
+        <IconButton className="desktop-only" label={t.sidebar.settings} onClick={props.onOpenSettings}>
           <Icon.settings />
         </IconButton>
       </div>
@@ -144,7 +162,7 @@ function Row({
       type="button"
       title={label}
       onClick={onClick}
-      className={`mb-0.5 flex h-8 w-full items-center gap-2 rounded-lg px-3 text-left text-[13px] transition-all ${
+      className={`mb-0.5 flex h-8 w-full items-center gap-2 rounded-lg px-3 text-left text-[13px] transition-all max-md:h-11 ${
         active ? "bg-panel-raised font-medium text-ink shadow-[var(--shadow-sm)]" : "text-ink-soft hover:bg-panel-raised/70 hover:text-ink"
       }`}
     >

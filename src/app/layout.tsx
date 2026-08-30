@@ -24,13 +24,30 @@ export const metadata: Metadata = {
   title: "HTMlore",
   description: "Self-hosted HTML knowledge workspace.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/html-lore-logo.svg" },
+  applicationName: "HTMlore",
+  formatDetection: { telephone: false },
+  icons: {
+    icon: [
+      { url: "/html-lore-logo.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "HTMlore",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#2f6d5e" },
-    { media: "(prefers-color-scheme: dark)", color: "#6bc0a8" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f6f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#141517" },
   ],
 };
 

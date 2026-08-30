@@ -9,6 +9,16 @@ function Svg({ children, ...props }: SVGProps<SVGSVGElement> & { children: React
 }
 
 export const Icon = {
+  menu: () => (
+    <Svg><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" /></Svg>
+  ),
+  more: () => (
+    <Svg fill="currentColor" stroke="none">
+      <circle cx="8" cy="3.5" r="1.15" />
+      <circle cx="8" cy="8" r="1.15" />
+      <circle cx="8" cy="12.5" r="1.15" />
+    </Svg>
+  ),
   search: () => (
     <Svg><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></Svg>
   ),

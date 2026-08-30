@@ -9,6 +9,8 @@ import type { TagMatchMode } from "@/features/workspace/workspace-view";
 import { useI18n } from "@/i18n/locale-provider";
 
 type Props = {
+  onOpenNav: () => void;
+  navOpen?: boolean;
   query: string;
   onQuery: (value: string) => void;
   sort: SortMode;
@@ -67,9 +69,18 @@ export function Topbar(props: Props) {
   }
 
   return (
-    <header className="relative z-20 h-14 border-b border-line bg-bg">
-      <div className="flex h-full items-center gap-2 px-4">
-        <label className="relative w-full max-w-[360px]">
+    <header className="relative z-50 h-14 border-b border-line bg-bg">
+      <div className="flex h-full items-center gap-1.5 px-3 md:gap-2 md:px-4">
+        <button
+          type="button"
+          className="mobile-only inline-flex size-10 items-center justify-center rounded-[var(--radius-control)] text-ink-faint"
+          aria-label={t.topbar.openNav}
+          aria-expanded={Boolean(props.navOpen)}
+          onClick={props.onOpenNav}
+        >
+          <Icon.menu />
+        </button>
+        <label className="relative min-w-0 flex-1 md:max-w-[360px] md:flex-none">
           <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint">
             <Icon.search />
           </span>
@@ -78,7 +89,7 @@ export function Topbar(props: Props) {
             onChange={(e) => props.onQuery(e.target.value)}
             placeholder={t.topbar.searchPlaceholder}
             suppressHydrationWarning
-            className="h-9 w-full rounded-[var(--radius-control)] border border-line bg-panel pl-9 pr-3 text-[13px] outline-none placeholder:text-ink-faint focus:border-accent/60"
+            className="h-9 w-full rounded-[var(--radius-control)] border border-line bg-panel pr-3 pl-9 text-[13px] outline-none placeholder:text-ink-faint focus:border-accent/60 max-md:h-10"
           />
         </label>
 
@@ -95,7 +106,7 @@ export function Topbar(props: Props) {
               <Icon.filter />
             </IconButton>
             {props.filterOpen ? (
-              <div className="absolute top-full right-0 z-30 mt-1.5 w-[260px] rounded-[var(--radius-card)] border border-line bg-panel-raised p-3 shadow-[var(--shadow-card)]">
+              <div className="absolute top-full right-0 z-30 mt-1.5 w-[260px] rounded-[var(--radius-card)] border border-line bg-panel-raised p-3 shadow-[var(--shadow-card)] max-md:fixed max-md:top-[calc(env(safe-area-inset-top,0px)+3.5rem)] max-md:right-3 max-md:left-3 max-md:mt-0 max-md:w-auto">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-medium text-ink-soft">{t.topbar.selectedTags}</p>
                   <div className="flex items-center rounded-lg bg-sidebar p-0.5">
@@ -166,7 +177,7 @@ export function Topbar(props: Props) {
               <Icon.sort />
             </IconButton>
             {sortOpen ? (
-              <div className="absolute top-full right-0 z-30 mt-1.5 w-max min-w-[7.5rem] rounded-[var(--radius-card)] border border-line bg-panel-raised p-1.5 shadow-[var(--shadow-card)]">
+              <div className="absolute top-full right-0 z-30 mt-1.5 w-max min-w-[7.5rem] rounded-[var(--radius-card)] border border-line bg-panel-raised p-1.5 shadow-[var(--shadow-card)] max-md:fixed max-md:top-[calc(env(safe-area-inset-top,0px)+3.5rem)] max-md:right-3 max-md:left-auto max-md:mt-0">
                 {sorts.map((item) => (
                   <button
                     key={item.id}
@@ -175,7 +186,7 @@ export function Topbar(props: Props) {
                       props.onSort(item.id);
                       setSortOpen(false);
                     }}
-                    className={`mb-0.5 flex h-8 w-full items-center whitespace-nowrap rounded-lg px-2.5 text-left text-[13px] last:mb-0 ${
+                    className={`mb-0.5 flex h-8 w-full items-center whitespace-nowrap rounded-lg px-2.5 text-left text-[13px] last:mb-0 max-md:h-11 ${
                       props.sort === item.id
                         ? "bg-panel font-medium text-ink shadow-[var(--shadow-sm)]"
                         : "text-ink-soft hover:bg-panel hover:text-ink"

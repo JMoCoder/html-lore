@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryFilter, Note, SortMode } from "@/fixtures/notes";
 import { filterNotes } from "@/features/workspace/filter-notes";
 import { Sidebar } from "@/features/workspace/sidebar";
@@ -48,9 +48,19 @@ export function WorkspaceView({
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareEpoch, setShareEpoch] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setNavOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
 
   const load = useCallback(async () => {
     const [manifest, shareList, navigation] = await Promise.all([
@@ -128,7 +138,7 @@ export function WorkspaceView({
   }
 
   return (
-    <div className="flex h-dvh bg-bg">
+    <div className="app-shell flex bg-bg" data-nav-open={navOpen ? "1" : "0"}>
       <input
         ref={fileRef}
         type="file"
@@ -148,14 +158,28 @@ export function WorkspaceView({
             .catch((err: Error) => setError(err.message));
         }}
       />
+      <button
+        type="button"
+        aria-label={t.sidebar.closeNav}
+        tabIndex={navOpen ? 0 : -1}
+        className={`fixed inset-x-0 bottom-0 top-14 z-30 bg-ink/30 transition-opacity duration-200 ease-out md:hidden ${
+          navOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setNavOpen(false)}
+      />
       <Sidebar
+        open={navOpen}
         library={library}
         onLibrary={(value) => {
           setLibrary(value);
           setCollection("");
+          setNavOpen(false);
         }}
         collection={collection}
-        onCollection={setCollection}
+        onCollection={(value) => {
+          setCollection(value);
+          setNavOpen(false);
+        }}
         tags={tags}
         onToggleTag={(tag) =>
           setTags((current) => (current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]))
@@ -170,10 +194,16 @@ export function WorkspaceView({
           imported: active.filter((n) => n.imported).length,
           archived: notes.filter((n) => n.archived).length,
         }}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onClose={() => setNavOpen(false)}
+        onOpenSettings={() => {
+          setNavOpen(false);
+          setSettingsOpen(true);
+        }}
       />
       <main className="flex min-w-0 flex-1 flex-col">
         <Topbar
+          onOpenNav={() => setNavOpen((open) => !open)}
+          navOpen={navOpen}
           query={query}
           onQuery={setQuery}
           sort={sort}

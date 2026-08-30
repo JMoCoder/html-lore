@@ -32,7 +32,7 @@ export function LoginPanel() {
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-bg px-5">
+    <main className="app-shell grid place-items-center bg-bg px-5">
       <div className="w-full max-w-[360px]">
         <div className="flex justify-center">
           <Logo size={26} />
@@ -65,7 +65,7 @@ export function LoginPanel() {
           {error ? <p className="mt-3 text-[12px] text-danger">{error}</p> : null}
           <button
             type="submit"
-            className="mt-5 h-9 w-full rounded-[var(--radius-control)] bg-accent text-[13px] font-medium text-white transition-colors hover:bg-accent-strong"
+            className="mt-5 h-9 w-full rounded-[var(--radius-control)] bg-accent text-[13px] font-medium text-white transition-colors hover:bg-accent-strong max-md:h-11"
           >
             {t.login.submit}
           </button>

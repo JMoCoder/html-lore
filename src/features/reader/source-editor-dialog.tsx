@@ -92,19 +92,19 @@ export function SourceEditorDialog({
 
   return (
     <div
-      className={`fixed inset-0 z-50 grid bg-ink/40 ${fullscreen ? "p-0" : "place-items-center p-5"}`}
+      className={`fixed inset-0 z-50 grid bg-ink/40 ${fullscreen ? "p-0" : "place-items-center p-5 max-md:p-0"}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}
     >
       <div
-        className={`grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border border-line bg-panel shadow-[var(--shadow-card)] ${
+        className={`source-editor-dialog grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border border-line bg-panel shadow-[var(--shadow-card)] ${
           fullscreen
             ? "h-dvh w-full rounded-none"
             : "h-[min(820px,calc(100dvh-40px))] w-full max-w-[1180px] rounded-[var(--radius-card)]"
         }`}
       >
-        <div className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4 py-2">
+        <div className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-3 py-2 max-md:flex-wrap md:px-4">
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-ink">{e.codeTitle}</p>
             <p className="truncate text-[12px] text-ink-faint">{title}</p>

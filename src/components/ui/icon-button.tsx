@@ -21,7 +21,7 @@ export function IconButton({
       type="button"
       aria-label={label}
       title={label}
-      className={`inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] transition-colors ${tones[tone]} ${className}`}
+      className={`inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] transition-colors max-md:size-10 ${tones[tone]} ${className}`}
       {...props}
     >
       {children}
