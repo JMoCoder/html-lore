@@ -12,7 +12,7 @@ export function ServiceWorkerRegister() {
     syncStandalone();
     media.addEventListener("change", syncStandalone);
 
-    if (!("serviceWorker" in navigator)) {
+    if (!("serviceWorker" in navigator) || window.location.pathname.startsWith("/share/")) {
       return () => media.removeEventListener("change", syncStandalone);
     }
 

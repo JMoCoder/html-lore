@@ -60,6 +60,7 @@
 
 ```bash
 npm run migrate:1x -- /path/to/v1/data /path/to/v2/data
+# 无登录部署把多账户并入根库时加 --merge-users
 docker compose up --build
 ```
 

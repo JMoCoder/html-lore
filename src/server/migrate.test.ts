@@ -108,6 +108,62 @@ describe("migrateFrom1x", () => {
     expect(again.htmlCount).toBe(1);
   });
 
+  it("merges user libraries into the dest root for no-login 2.0", () => {
+    const source = make1xNotebook();
+    fs.writeFileSync(
+      path.join(source, "users", "alice", "meta", "items", "imported", "alice.yml"),
+      "title: Alice\ntags:\n  - Demo\n  - AI生成\n",
+    );
+    fs.mkdirSync(path.join(source, "users", "alice", "meta", "config"), { recursive: true });
+    fs.writeFileSync(
+      path.join(source, "users", "alice", "meta", "config", "shares.json"),
+      JSON.stringify({ version: 1, shares: [{ id: "share_alice", item_id: "imported/alice.html", revoked: false }] }, null, 2),
+    );
+    fs.writeFileSync(
+      path.join(source, "meta", "config", "share-index.json"),
+      JSON.stringify({ tokens: { "tok-alice": "alice" } }, null, 2),
+    );
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), "html-lore-2x-merge-"));
+    const result = migrateFrom1x(source, dest, { mergeUsers: true });
+    expect(result.htmlCount).toBe(2);
+    expect(fs.existsSync(path.join(dest, "content", "imported", "note.html"))).toBe(true);
+    expect(fs.existsSync(path.join(dest, "content", "imported", "alice.html"))).toBe(true);
+    expect(fs.existsSync(path.join(dest, "users.json"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "users"))).toBe(false);
+    const aliceYml = fs.readFileSync(path.join(dest, "meta", "items", "imported", "alice.yml"), "utf8");
+    expect(aliceYml).toContain("Demo");
+    expect(aliceYml).not.toContain("AI生成");
+    const shares = JSON.parse(fs.readFileSync(path.join(dest, "meta", "config", "shares.json"), "utf8")) as {
+      shares: { id: string }[];
+    };
+    expect(shares.shares.some((row) => row.id === "share_alice")).toBe(true);
+    const index = JSON.parse(fs.readFileSync(path.join(dest, "meta", "config", "share-index.json"), "utf8")) as {
+      tokens: Record<string, string>;
+    };
+    expect(Object.values(index.tokens).every((dataId) => dataId === "default")).toBe(true);
+    const items = new ItemService(settingsFor(dest)).listItems({
+      q: "",
+      library: "all",
+      collection: "",
+      tags: [],
+      tagMatch: "any",
+      favorite: null,
+      archived: null,
+      sort: "newest",
+      limit: null,
+    });
+    expect(items.some((item) => item.id === "imported/alice.html")).toBe(true);
+    expect(items.some((item) => item.tags.includes("AI生成"))).toBe(false);
+  });
+
+  it("aborts --merge-users when two notebooks share the same note path", () => {
+    const source = make1xNotebook();
+    fs.mkdirSync(path.join(source, "users", "alice", "content", "imported"), { recursive: true });
+    fs.writeFileSync(path.join(source, "users", "alice", "content", "imported", "note.html"), "<title>Clash</title>\n");
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), "html-lore-2x-clash-"));
+    expect(() => migrateFrom1x(source, dest, { mergeUsers: true })).toThrow(/Path collision/);
+  });
+
   it("runs as a node CLI", () => {
     const source = make1xNotebook();
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), "html-lore-2x-cli-"));

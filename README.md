@@ -2,7 +2,7 @@
 
 自托管 HTML 知识工作台：**导入、筛选、阅读、编辑、分享**。笔记仍是磁盘上的 HTML + YAML，没有 SQL 数据库。
 
-当前稳定版是 **2.0.2**，维护线在 **`main`**。1.x（tag `v1.2.5`，分支 `legacy`）**冻结**，不再加功能。2.0 用独立 Docker 服务部署，不替换正在运行的 1.x。
+当前稳定版是 **2.0.3**，维护线在 **`main`**。1.x（tag `v1.2.5`，分支 `legacy`）**冻结**，不再加功能。2.0 用独立 Docker 服务部署，不替换正在运行的 1.x。
 
 ```bash
 npm install
@@ -38,6 +38,8 @@ docker compose up --build
 
 ```bash
 npm run migrate:1x -- /srv/html-lore/data ./data
+# 无登录单库：把 1.x 多账户摊进根目录
+npm run migrate:1x -- --merge-users /srv/html-lore/data ./data
 ```
 
 完整步骤、跳过 AI/静态产物清单、并行运行注意见 [`docs/deploy-2x.md`](docs/deploy-2x.md)。1.x 数据契约见 [`docs/compat-1x.md`](docs/compat-1x.md)。

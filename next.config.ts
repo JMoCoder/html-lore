@@ -5,7 +5,7 @@ function localDevOrigins() {
   const hosts = new Set(["127.0.0.1"]);
   for (const nets of Object.values(networkInterfaces())) {
     for (const net of nets ?? []) {
-      if ((net.family === "IPv4" || net.family === 4) && !net.internal) {
+      if ((net.family === "IPv4" || Number(net.family) === 4) && !net.internal) {
         hosts.add(net.address);
       }
     }

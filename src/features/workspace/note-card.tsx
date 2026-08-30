@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icons";
@@ -161,7 +161,7 @@ export function NoteCard({
       </Link>
 
       <div
-        className="pointer-events-none absolute top-2 right-2 z-10 hidden opacity-0 transition-opacity duration-150 md:block group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+        className="pointer-events-none absolute top-2 right-2 z-10 hidden opacity-0 transition-opacity duration-150 md:block group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
         onClick={stop}
       >
         <div
@@ -176,6 +176,7 @@ export function NoteCard({
               danger={action.danger}
               onClick={(e) => {
                 stop(e);
+                e.currentTarget.blur();
                 action.onClick();
               }}
             >
@@ -199,6 +200,7 @@ export function NoteCard({
             danger={action.danger}
             onClick={(e) => {
               stop(e);
+              e.currentTarget.blur();
               action.onClick();
             }}
           >
@@ -220,7 +222,7 @@ function CardAction({
   label: string;
   active?: boolean;
   danger?: boolean;
-  onClick: (e: { stopPropagation: () => void }) => void;
+  onClick: (e: MouseEvent<HTMLButtonElement>) => void;
   children: ReactNode;
 }) {
   const tone = danger

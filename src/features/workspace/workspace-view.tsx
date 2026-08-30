@@ -122,13 +122,34 @@ export function WorkspaceView({
     [active],
   );
 
+  function replaceItem(id: string, next: Item | ((item: Item) => Item)) {
+    setItems((current) =>
+      current.map((item) => {
+        if (item.id !== id) return item;
+        return typeof next === "function" ? next(item) : next;
+      }),
+    );
+  }
+
   async function patchState(note: Note, values: { favorite?: boolean; archived?: boolean; pinned?: boolean }) {
-    await apiJson(itemApiHref(note.id, "state"), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    await load();
+    replaceItem(note.id, (item) => ({ ...item, ...values }));
+    try {
+      const updated = await apiJson<Item>(itemApiHref(note.id, "state"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      replaceItem(updated.id, updated);
+    } catch (error) {
+      replaceItem(note.id, (item) => {
+        const reverted = { ...item };
+        for (const key of ["favorite", "archived", "pinned"] as const) {
+          if (key in values) reverted[key] = note[key];
+        }
+        return reverted;
+      });
+      throw error;
+    }
   }
 
   async function remove(note: Note) {
