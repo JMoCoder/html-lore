@@ -100,9 +100,8 @@ export function SettingsPage(props: Props) {
                 : id === "imported"
                   ? t.sidebar.imported
                   : t.sidebar.archived,
-        count: props.libraryCounts[id],
       })),
-    [props.libraryCounts, t.sidebar],
+    [t.sidebar],
   );
 
   const visibleShares = useMemo(
@@ -251,7 +250,6 @@ export function SettingsPage(props: Props) {
                   rows={libraryRows.map((row) => ({
                     name: row.id,
                     label: row.label,
-                    count: row.count,
                     visible: isNavVisible(config, "library", row.id),
                   }))}
                   visibleLabel={t.settings.visible}
@@ -268,7 +266,6 @@ export function SettingsPage(props: Props) {
                   rows={props.collections.map((row) => ({
                     name: row.name,
                     label: row.name,
-                    count: row.count,
                     visible: isNavVisible(config, "collections", row.name),
                   }))}
                   visibleLabel={t.settings.visible}
@@ -291,7 +288,6 @@ export function SettingsPage(props: Props) {
                   rows={props.allTags.map((row) => ({
                     name: row.name,
                     label: `#${row.name}`,
-                    count: row.count,
                     visible: isNavVisible(config, "tags", row.name),
                   }))}
                   visibleLabel={t.settings.visible}
@@ -489,7 +485,7 @@ function ManagementList({
   renameCancel,
   renamePlaceholder,
 }: {
-  rows: { name: string; label: string; count: number; visible: boolean }[];
+  rows: { name: string; label: string; visible: boolean }[];
   visibleLabel: string;
   empty: string;
   disabled: boolean;
@@ -514,17 +510,13 @@ function ManagementList({
     onRename?.(from, next);
   }
 
-  const columns = onRename
-    ? "grid-cols-[7rem_auto_3ch_auto_minmax(0,1fr)]"
-    : "grid-cols-[7rem_3ch_auto_minmax(0,1fr)]";
-
   return (
     <ul className="mt-5 divide-y divide-line rounded-[var(--radius-card)] border border-line bg-panel">
       {rows.map((row) => (
-        <li key={row.name} className={`grid min-h-11 items-center gap-x-3 px-3 py-2 md:px-4 md:py-1.5 ${columns}`}>
+        <li key={row.name} className="flex min-h-11 items-center gap-3 px-3 py-2 md:px-4 md:py-1.5">
           {editing === row.name ? (
             <form
-              className="col-span-2 flex min-w-0 items-center gap-2"
+              className="flex min-w-0 flex-1 items-center gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 commit(row.name);
@@ -544,32 +536,29 @@ function ManagementList({
               <button
                 type="button"
                 disabled={disabled}
-                className="h-8 shrink-0 rounded-md px-2 text-[12px] text-ink-faint hover:bg-panel-raised"
+                className="h-8 shrink-0 rounded-md px-2 text-[12px] text-ink-faint/70 hover:bg-panel-raised"
                 onClick={() => setEditing("")}
               >
                 {renameCancel}
               </button>
             </form>
           ) : (
-            <>
-              <span className="min-w-0 truncate text-[13px] text-ink-soft">{row.label}</span>
-              {onRename ? (
-                <button
-                  type="button"
-                  disabled={disabled}
-                  className="justify-self-start text-left text-[12px] text-ink-faint hover:text-ink-soft"
-                  onClick={() => {
-                    setEditing(row.name);
-                    setDraft(row.name);
-                  }}
-                >
-                  {renameLabel}
-                </button>
-              ) : null}
-            </>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-soft">{row.label}</span>
           )}
-          <span className="w-full text-left text-[12px] tabular-nums text-ink-faint">{row.count}</span>
-          <label className="inline-flex cursor-pointer items-center gap-1.5 justify-self-start text-[12px] text-ink-faint">
+          {onRename && editing !== row.name ? (
+            <button
+              type="button"
+              disabled={disabled}
+              className="shrink-0 text-[12px] text-ink-faint/55 hover:text-ink-faint"
+              onClick={() => {
+                setEditing(row.name);
+                setDraft(row.name);
+              }}
+            >
+              {renameLabel}
+            </button>
+          ) : null}
+          <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] text-ink-faint/55">
             <span>{visibleLabel}</span>
             <input
               type="checkbox"

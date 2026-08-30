@@ -75,7 +75,7 @@ const NOTES = [
 
 const I18N = {
   "zh-CN": {
-    banner: "静态预览 · 2.0.4 · 无后端 / 无登录 / 无 AI",
+    banner: "静态预览 · 2.0.5 · 无后端 / 无登录 / 无 AI",
     library: "资料库",
     collections: "集合",
     tags: "标签",
@@ -99,7 +99,7 @@ const I18N = {
     },
   },
   en: {
-    banner: "Static preview · 2.0.4 · no backend / no login / no AI",
+    banner: "Static preview · 2.0.5 · no backend / no login / no AI",
     library: "Library",
     collections: "Collections",
     tags: "Tags",
@@ -123,7 +123,7 @@ const I18N = {
     },
   },
   ja: {
-    banner: "静的プレビュー · 2.0.4 · バックエンド / ログイン / AI なし",
+    banner: "静的プレビュー · 2.0.5 · バックエンド / ログイン / AI なし",
     library: "ライブラリ",
     collections: "コレクション",
     tags: "タグ",
