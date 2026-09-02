@@ -1,4 +1,4 @@
-const CACHE_NAME = "html-lore-v2.0.6";
+const CACHE_NAME = "html-lore-v2.0.7";
 const SHELL = [
   "/manifest.webmanifest",
   "/html-lore-logo.svg",

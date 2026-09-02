@@ -255,6 +255,20 @@ describe("examples fixtures", () => {
     expect(pinned.pinned).toBe(true);
   });
 
+  it("searches body text after a 300KiB style/script prefix", () => {
+    const settings = tempWorkspace();
+    const prefix = "x".repeat(300 * 1024);
+    const html = `<!doctype html><html><head><style>${prefix}</style><script>window.__hide="script-token-should-not-index";</script><title>Prefixed</title></head><body><p>unique-body-after-css-zzlm</p></body></html>`;
+    fs.writeFileSync(path.join(settings.contentDir, "late-body.html"), html);
+    const items = new ItemService(settings);
+    const emptyQuery = { library: "all" as const, collection: "", tags: [] as string[], tagMatch: "any" as const, favorite: null, archived: null, sort: "newest" as const, limit: null };
+    expect(items.listItems({ ...emptyQuery, q: "unique-body-after-css-zzlm" }).some((item) => item.id === "late-body.html")).toBe(true);
+    expect(items.listItems({ ...emptyQuery, q: "script-token-should-not-index" }).some((item) => item.id === "late-body.html")).toBe(false);
+    const indexed = items.manifest().items.find((item) => item.id === "late-body.html");
+    expect(indexed?.text).toContain("unique-body-after-css-zzlm");
+    expect(indexed?.text.includes("xxxx")).toBe(false);
+  });
+
   it("imports up to five html files and rejects a sixth", () => {
     const settings = tempWorkspace();
     const upload = new UploadService(settings);

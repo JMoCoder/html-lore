@@ -1,11 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { extractHtmlMetadata, extractPlainText, filenameToTitle, slugify } from "@/server/html-meta";
+import { scanHtmlFile, filenameToTitle, slugify } from "@/server/html-meta";
 import { MetadataStore } from "@/server/metadata";
 import type { Item, Manifest } from "@/server/types";
-
-/** Enough HTML to recover title/summary/search text without reading multi-MB files whole. */
-const METADATA_HTML_WINDOW = 256 * 1024;
 
 export type BuildItemOptions = {
   includeText?: boolean;
@@ -41,9 +38,12 @@ export function buildItem(
   let text = "";
   const needHtml = includeText || !sidecar.title;
   if (needHtml) {
-    const html = readHtmlWindow(filePath);
-    extracted = extractHtmlMetadata(html, fallbackTitle);
-    if (includeText) text = extractPlainText(html);
+    const scanned = scanHtmlFile(filePath, fallbackTitle, {
+      includeText,
+      includeMeta: !sidecar.title,
+    });
+    extracted = { title: scanned.title, summary: scanned.summary };
+    if (includeText) text = scanned.text;
   }
   const updated = new Date(fs.statSync(filePath).mtime).toISOString();
   const sourceType = String(sidecar.source_type || inferSourceType(relative));
@@ -69,19 +69,6 @@ export function buildItem(
     agent: isPlainObject(sidecar.agent) ? sidecar.agent : { generated: sourceType === "topic" },
     text,
   };
-}
-
-function readHtmlWindow(filePath: string, max = METADATA_HTML_WINDOW): string {
-  const stat = fs.statSync(filePath);
-  if (stat.size <= max) return fs.readFileSync(filePath, "utf8");
-  const fd = fs.openSync(filePath, "r");
-  try {
-    const buf = Buffer.allocUnsafe(max);
-    const bytes = fs.readSync(fd, buf, 0, max, 0);
-    return buf.subarray(0, bytes).toString("utf8");
-  } finally {
-    fs.closeSync(fd);
-  }
 }
 
 export function inferCollection(itemId: string): string {
