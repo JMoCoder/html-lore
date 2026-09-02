@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildItem } from "@/server/manifest";
+import { invalidateManifestCache } from "@/server/manifest-cache";
 import { MetadataStore } from "@/server/metadata";
 import { dumpSimpleYaml } from "@/server/yaml";
 import { normalizeTags } from "@/server/items";
@@ -53,6 +54,7 @@ export class UploadService {
       now,
     });
     this.writeMetadata(relativePath, metadata);
+    invalidateManifestCache();
     const item = buildItem(contentPath, this.settings.contentDir, MetadataStore.load(this.settings.metaDir));
     const stamp = formatStamp(now);
     return {

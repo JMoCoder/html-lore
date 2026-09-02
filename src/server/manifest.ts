@@ -4,6 +4,13 @@ import { extractHtmlMetadata, extractPlainText, filenameToTitle, slugify } from 
 import { MetadataStore } from "@/server/metadata";
 import type { Item, Manifest } from "@/server/types";
 
+/** Enough HTML to recover title/summary/search text without reading multi-MB files whole. */
+const METADATA_HTML_WINDOW = 256 * 1024;
+
+export type BuildItemOptions = {
+  includeText?: boolean;
+};
+
 export function buildManifest(contentDir: string, metaDir: string | null, siteTitle = "HTMlore"): Manifest {
   const metadata = MetadataStore.load(metaDir);
   const items = listHtmlFiles(contentDir).sort().map((filePath) => buildItem(filePath, contentDir, metadata));
@@ -20,11 +27,24 @@ export function buildManifest(contentDir: string, metaDir: string | null, siteTi
   };
 }
 
-export function buildItem(filePath: string, contentDir: string, metadata: MetadataStore): Item {
+export function buildItem(
+  filePath: string,
+  contentDir: string,
+  metadata: MetadataStore,
+  options: BuildItemOptions = {},
+): Item {
+  const includeText = options.includeText !== false;
   const relative = path.relative(contentDir, filePath).replace(/\\/g, "/");
-  const html = fs.readFileSync(filePath, "utf8");
-  const extracted = extractHtmlMetadata(html, filenameToTitle(path.parse(filePath).name));
   const sidecar = metadata.forItem(relative);
+  const fallbackTitle = filenameToTitle(path.parse(filePath).name);
+  let extracted = { title: fallbackTitle, summary: "" };
+  let text = "";
+  const needHtml = includeText || !sidecar.title;
+  if (needHtml) {
+    const html = readHtmlWindow(filePath);
+    extracted = extractHtmlMetadata(html, fallbackTitle);
+    if (includeText) text = extractPlainText(html);
+  }
   const updated = new Date(fs.statSync(filePath).mtime).toISOString();
   const sourceType = String(sidecar.source_type || inferSourceType(relative));
 
@@ -47,8 +67,21 @@ export function buildItem(filePath: string, contentDir: string, metadata: Metada
     cover: sidecar.cover == null ? null : String(sidecar.cover),
     open_mode: String(sidecar.open_mode || "iframe"),
     agent: isPlainObject(sidecar.agent) ? sidecar.agent : { generated: sourceType === "topic" },
-    text: extractPlainText(html),
+    text,
   };
+}
+
+function readHtmlWindow(filePath: string, max = METADATA_HTML_WINDOW): string {
+  const stat = fs.statSync(filePath);
+  if (stat.size <= max) return fs.readFileSync(filePath, "utf8");
+  const fd = fs.openSync(filePath, "r");
+  try {
+    const buf = Buffer.allocUnsafe(max);
+    const bytes = fs.readSync(fd, buf, 0, max, 0);
+    return buf.subarray(0, bytes).toString("utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 export function inferCollection(itemId: string): string {

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { buildManifest } from "@/server/manifest";
+import { buildItem, buildManifest } from "@/server/manifest";
+import { cachedManifest, invalidateManifestCache, manifestCacheKey } from "@/server/manifest-cache";
 import { MetadataStore } from "@/server/metadata";
 import { dumpSimpleYaml } from "@/server/yaml";
 import { ensureWithin, metadataPathForItem, removeEmptyParents, writeFileDurable } from "@/server/paths";
@@ -54,7 +55,9 @@ export class ItemService {
   constructor(readonly settings: ServerSettings) {}
 
   manifest() {
-    return buildManifest(this.settings.contentDir, this.settings.metaDir, this.settings.siteTitle);
+    return cachedManifest(manifestCacheKey(this.settings.contentDir, this.settings.metaDir, this.settings.siteTitle), () =>
+      buildManifest(this.settings.contentDir, this.settings.metaDir, this.settings.siteTitle),
+    );
   }
 
   listItems(query: ItemQuery): Item[] {
@@ -80,22 +83,47 @@ export class ItemService {
   }
 
   getItem(itemId: string): Item | null {
+    const contentPath = this.resolveExistingContentPath(itemId);
+    if (contentPath) {
+      return buildItem(contentPath, this.settings.contentDir, MetadataStore.loadForItem(this.settings.metaDir, itemId), {
+        includeText: false,
+      });
+    }
     return this.manifest().items.find((item) => item.id === itemId) ?? null;
   }
 
   getItemContentPath(itemId: string): string {
-    const item = this.getItem(itemId);
+    const direct = this.resolveExistingContentPath(itemId);
+    if (direct) return direct;
+    const item = this.manifest().items.find((row) => row.id === itemId);
     if (!item) throw new ItemContentError("Item not found.");
-    const contentPath = path.join(this.settings.contentDir, itemId);
-    ensureWithin(contentPath, this.settings.contentDir);
-    if (!fs.existsSync(contentPath) || !fs.statSync(contentPath).isFile()) {
+    const fromManifest = path.join(this.settings.contentDir, item.path.replace(/^content\//, ""));
+    ensureWithin(fromManifest, this.settings.contentDir);
+    if (!fs.existsSync(fromManifest) || !fs.statSync(fromManifest).isFile()) {
       throw new ItemContentError("Item content not found.");
     }
-    return contentPath;
+    return fromManifest;
+  }
+
+  statItemContent(itemId: string): { path: string; size: number; mtimeMs: number } {
+    const contentPath = this.getItemContentPath(itemId);
+    const stat = fs.statSync(contentPath);
+    return { path: contentPath, size: stat.size, mtimeMs: stat.mtimeMs };
   }
 
   readItemContent(itemId: string): string {
     return fs.readFileSync(this.getItemContentPath(itemId), "utf8");
+  }
+
+  private resolveExistingContentPath(itemId: string): string | null {
+    const contentPath = path.join(this.settings.contentDir, itemId);
+    try {
+      ensureWithin(contentPath, this.settings.contentDir);
+    } catch {
+      return null;
+    }
+    if (!fs.existsSync(contentPath) || !fs.statSync(contentPath).isFile()) return null;
+    return contentPath;
   }
 
   updateItemContent(itemId: string, content: unknown): Item {
@@ -111,6 +139,7 @@ export class ItemService {
     const contentPath = this.getItemContentPath(itemId);
     this.preserveItemDatesForContentEdit(itemId, item);
     writeFileDurable(contentPath, content, this.settings.contentDir);
+    invalidateManifestCache();
     const stored = fs.readFileSync(contentPath, "utf8");
     if (stored !== content) throw new ItemContentUpdateError("Content was not persisted.");
     const updated = this.getItem(itemId);
@@ -182,6 +211,7 @@ export class ItemService {
     delete metadata.text;
     if (metadata.source_url == null) delete metadata.source_url;
     fs.writeFileSync(metadataPath, dumpSimpleYaml(metadata), "utf8");
+    invalidateManifestCache();
     const updated = this.getItem(itemId);
     if (!updated) throw new ItemMetadataError("Updated item not found.");
     return updated;
@@ -201,6 +231,7 @@ export class ItemService {
         removeEmptyParents(path.dirname(metadataPath), path.join(this.settings.metaDir, "items"));
       }
     }
+    invalidateManifestCache();
     return { id: itemId, deleted: true };
   }
 

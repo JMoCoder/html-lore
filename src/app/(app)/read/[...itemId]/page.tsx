@@ -17,8 +17,7 @@ export default async function ReadPage({
   const items = new ItemService(ctx.settings);
   const item = items.getItem(id);
   if (!item) notFound();
-  const html = items.readItemContent(id);
   const share = new ShareService(ctx.settings, ctx.root).activeShareForItem(id);
   const token = share ? String(share.url_path || "").split("/").filter(Boolean)[1] : undefined;
-  return <ReaderChrome note={itemToNote(item, { html, shareToken: token })} html={html} interactiveEnabled={ctx.settings.shareInteractiveEnabled} />;
+  return <ReaderChrome note={itemToNote(item, { shareToken: token })} interactiveEnabled={ctx.settings.shareInteractiveEnabled} />;
 }

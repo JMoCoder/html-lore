@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { ensureWithin, metadataPathForItem } from "@/server/paths";
 import { parseSimpleYaml } from "@/server/yaml";
 
 export class MetadataStore {
@@ -17,6 +18,16 @@ export class MetadataStore {
       items[itemId] = normalizeMetadata(data);
     }
     return new MetadataStore(items);
+  }
+
+  static loadForItem(metaDir: string | null, itemId: string): MetadataStore {
+    const metadataPath = metadataPathForItem(metaDir, itemId);
+    if (!metaDir || !metadataPath || !fs.existsSync(metadataPath)) return new MetadataStore({});
+    ensureWithin(metadataPath, metaDir);
+    const data = readYaml(metadataPath);
+    const normalized = normalizeMetadata(data);
+    const id = String(data.id || itemId);
+    return new MetadataStore({ [itemId]: normalized, [id]: normalized });
   }
 
   forItem(itemId: string): Record<string, unknown> {

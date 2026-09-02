@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { ItemService, contentDispositionAttachment, scanShareContent } from "@/server";
 import { jsonError, jsonOk, mapDomainError, requireApiAuth } from "@/app/api/_lib/http";
 
@@ -6,8 +8,7 @@ export const dynamic = "force-dynamic";
 
 const HTML_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
-  "Cache-Control": "no-store, no-cache, must-revalidate",
-  Pragma: "no-cache",
+  "Cache-Control": "private, no-cache, must-revalidate",
 };
 
 type Action = "get" | "content" | "raw" | "metadata" | "state" | "share-safety";
@@ -29,13 +30,19 @@ export async function GET(request: Request, ctx: RouteContext<"/api/items/[...pa
     const { itemId, action } = parsePath((await ctx.params).path);
     const items = new ItemService(auth.settings);
     if (action === "content" || action === "raw") {
-      const html = items.readItemContent(itemId);
+      const stat = items.statItemContent(itemId);
       const headers: Record<string, string> = { ...HTML_HEADERS };
+      const etag = `"${stat.size}-${Math.round(stat.mtimeMs)}"`;
+      headers.ETag = etag;
+      headers["Last-Modified"] = new Date(stat.mtimeMs).toUTCString();
       const download = new URL(request.url).searchParams.get("download");
       if (download === "1" || download === "true") {
         headers["Content-Disposition"] = contentDispositionAttachment(path.basename(itemId) || "note.html");
+      } else if (request.headers.get("if-none-match") === etag) {
+        return new Response(null, { status: 304, headers });
       }
-      return new Response(html, { headers });
+      const stream = Readable.toWeb(fs.createReadStream(stat.path));
+      return new Response(stream as ReadableStream, { headers });
     }
     if (action !== "get") return jsonError("Method not allowed.", 405);
     const item = items.getItem(itemId);

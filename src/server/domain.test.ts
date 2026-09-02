@@ -265,4 +265,18 @@ describe("examples fixtures", () => {
     expect(upload.importHtmlFiles(files).length).toBe(5);
     expect(() => upload.importHtmlFiles([...files, { filename: "batch-6.html", content: Buffer.from("<p>x</p>") }])).toThrow(/at most 5/);
   });
+
+  it("reads one item from sidecar without loading library text", () => {
+    const settings = tempWorkspace();
+    fs.writeFileSync(path.join(settings.contentDir, "solo.html"), "<!doctype html><html><head><title>FromHtml</title></head><body><p>hello-solo</p></body></html>");
+    const metaPath = path.join(settings.metaDir!, "items", "solo.yml");
+    fs.mkdirSync(path.dirname(metaPath), { recursive: true });
+    fs.writeFileSync(metaPath, "id: solo.html\ntitle: FromSidecar\nsummary: Keep\ncollection: Inbox\n");
+    fs.writeFileSync(path.join(settings.contentDir, "huge-neighbor.html"), `<html><title>Huge</title><body>${"x".repeat(2_000_000)}</body></html>`);
+    const items = new ItemService(settings);
+    const item = items.getItem("solo.html");
+    expect(item?.title).toBe("FromSidecar");
+    expect(item?.text).toBe("");
+    expect(items.readItemContent("solo.html")).toContain("hello-solo");
+  });
 });

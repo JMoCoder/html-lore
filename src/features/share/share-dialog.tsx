@@ -215,12 +215,18 @@ export function ShareDialog(props: Props) {
             <a href={shareUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[12px] text-accent-strong hover:underline">
               {shareUrl}
             </a>
-            <p className="mt-1 text-[11px] text-ink-faint">
-              {existing?.expires_at ? t.shareDialog.expiresAt(formatDateTime(existing.expires_at, locale)) : t.shareDialog.noExpiry}
-            </p>
-            <button type="button" onClick={copy} className="mt-2 text-[11px] text-ink-soft hover:text-ink">
-              {t.shareDialog.copyLink}
-            </button>
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <p className="min-w-0 text-[11px] text-ink-faint">
+                {existing?.expires_at ? t.shareDialog.expiresAt(formatDateTime(existing.expires_at, locale)) : t.shareDialog.noExpiry}
+              </p>
+              <button
+                type="button"
+                onClick={copy}
+                className="h-8 shrink-0 rounded-[var(--radius-control)] bg-accent px-3 text-[12px] font-medium text-white hover:bg-accent-strong"
+              >
+                {t.shareDialog.copyLink}
+              </button>
+            </div>
           </div>
         ) : null}
 

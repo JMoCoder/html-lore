@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/icon-button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { formatDate } from "@/features/workspace/note-meta";
+import { TagField } from "@/features/reader/tag-field";
 import { ShareDialog } from "@/features/share/share-dialog";
 import type { Note } from "@/fixtures/notes";
 import { useI18n } from "@/i18n/locale-provider";
@@ -27,11 +28,11 @@ const PANEL_WIDTH = 320;
 
 export function ReaderChrome({
   note,
-  html,
+  html = "",
   interactiveEnabled = true,
 }: {
   note: Note;
-  html: string;
+  html?: string;
   interactiveEnabled?: boolean;
 }) {
   const router = useRouter();
@@ -45,7 +46,8 @@ export function ReaderChrome({
   const [collection, setCollection] = useState(note.collection || "Inbox");
   const collectionRef = useRef(collection);
   const [collectionOptions, setCollectionOptions] = useState<string[]>([note.collection || "Inbox"]);
-  const [tags, setTags] = useState(note.tags.join(", "));
+  const [tagOptions, setTagOptions] = useState<string[]>(note.tags);
+  const [tags, setTags] = useState<string[]>(note.tags);
   const [source, setSource] = useState(html);
   const [contentRevision, setContentRevision] = useState(0);
   const [message, setMessage] = useState("");
@@ -74,6 +76,7 @@ export function ReaderChrome({
     apiJson<Manifest>("/api/manifest")
       .then((manifest) => {
         setCollectionOptions(manifest.collections.map((row) => row.name).filter(Boolean));
+        setTagOptions(manifest.tags.map((row) => row.name).filter(Boolean));
       })
       .catch(() => {});
   }, []);
@@ -97,7 +100,7 @@ export function ReaderChrome({
         title,
         summary,
         collection: nextCollection,
-        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        tags,
       }),
     });
     setMessage(t.reader.metadataSaved);
@@ -109,6 +112,24 @@ export function ReaderChrome({
     setContentRevision(Date.now());
     setMessage(t.reader.contentSaved);
     router.refresh();
+  }
+
+  async function loadSource() {
+    if (source) return source;
+    const response = await fetch(itemContentHref(note.id), { cache: "no-store", credentials: "same-origin" });
+    if (!response.ok) throw new Error(t.reader.editor.saveFailed);
+    const text = await response.text();
+    setSource(text);
+    return text;
+  }
+
+  function openEditor(kind: "source" | "file") {
+    loadSource()
+      .then(() => {
+        if (kind === "source") setSourceOpen(true);
+        else setFileOpen(true);
+      })
+      .catch((err: Error) => setMessage(err.message));
   }
 
   async function patchState(values: { favorite?: boolean; archived?: boolean }) {
@@ -284,10 +305,18 @@ export function ReaderChrome({
                 {t.reader.collection}
                 <CollectionField value={collection} options={collectionOptions} disabled={archived} onChange={updateCollection} />
               </label>
-              <label className="block text-[11px] text-ink-faint">
+              <div className="block text-[11px] text-ink-faint">
                 {t.reader.tags}
-                <input value={tags} onChange={(e) => setTags(e.target.value)} className="mt-0.5 h-8 w-full rounded-md border border-line bg-panel px-2 text-[13px] text-ink" />
-              </label>
+                <TagField
+                  value={tags}
+                  options={tagOptions}
+                  disabled={archived}
+                  onChange={(next) => {
+                    setTags(next);
+                    setTagOptions((current) => [...new Set([...current, ...next])]);
+                  }}
+                />
+              </div>
               <button
                 type="button"
                 disabled={archived}
@@ -305,14 +334,14 @@ export function ReaderChrome({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setSourceOpen(true)}
+                    onClick={() => openEditor("source")}
                     className="h-8 rounded-[var(--radius-control)] border border-line text-[12px] text-ink hover:bg-panel-raised"
                   >
                     {t.reader.editor.editCode}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFileOpen(true)}
+                    onClick={() => openEditor("file")}
                     className="h-8 rounded-[var(--radius-control)] border border-line text-[12px] text-ink hover:bg-panel-raised"
                   >
                     {t.reader.editor.editFile}

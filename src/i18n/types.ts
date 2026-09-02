@@ -80,6 +80,10 @@ export type Messages = {
     addCollection: string;
     addCollectionPlaceholder: string;
     tags: string;
+    tagsHint: string;
+    tagsPlaceholder: string;
+    tagsPlaceholderMore: string;
+    removeTag: string;
     saveMetadata: string;
     archivedLocked: string;
     sourceEdit: string;

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { buildItem } from "@/server/manifest";
+import { invalidateManifestCache } from "@/server/manifest-cache";
 import { MetadataStore } from "@/server/metadata";
 import { dumpSimpleYaml } from "@/server/yaml";
 import { ItemContentError, ItemService } from "@/server/items";
@@ -240,6 +241,7 @@ export class ShareService {
         fs.writeFileSync(metadataPath, dumpSimpleYaml(metadata), "utf8");
       }
     }
+    invalidateManifestCache();
     const copiedItem = buildItem(contentPath, this.settings.contentDir, MetadataStore.load(this.settings.metaDir));
     return {
       item_id: copiedItem.id,
