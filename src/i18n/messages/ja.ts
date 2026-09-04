@@ -176,6 +176,7 @@ export const ja: Messages = {
   },
   sharePage: {
     brand: "HTMlore",
+    brandHome: "HTMlore のプロジェクトページを開く",
     modeInteractive: "インタラクティブ共有 · サンドボックス",
     modeSafe: "安全な共有 · 読み取り専用",
   },

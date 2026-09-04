@@ -176,6 +176,7 @@ export const zhCN: Messages = {
   },
   sharePage: {
     brand: "HTMlore",
+    brandHome: "打开 HTMlore 项目主页",
     modeInteractive: "互动分享 · 沙箱",
     modeSafe: "安全分享 · 只读",
   },

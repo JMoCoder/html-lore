@@ -183,6 +183,7 @@ export type Messages = {
   };
   sharePage: {
     brand: string;
+    brandHome: string;
     modeInteractive: string;
     modeSafe: string;
   };

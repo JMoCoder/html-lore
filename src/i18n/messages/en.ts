@@ -176,6 +176,7 @@ export const en: Messages = {
   },
   sharePage: {
     brand: "HTMlore",
+    brandHome: "Open the HTMlore project homepage",
     modeInteractive: "Interactive share · sandbox",
     modeSafe: "Safe share · read-only",
   },

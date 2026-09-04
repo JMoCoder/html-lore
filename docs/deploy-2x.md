@@ -1,6 +1,6 @@
 # HTMlore 2.0 独立部署与 1.x 迁移
 
-当前稳定版 **2.0.8**（分支 `main`）。2.0 和冻结的 1.x（tag `v1.2.5`，分支 `legacy`）**并行、互不替换**。不要把 2.0 容器挂到正在运行的 1.x `data/` 上。
+当前稳定版 **2.0.9**（分支 `main`）。2.0 和冻结的 1.x（tag `v1.2.5`，分支 `legacy`）**并行、互不替换**。不要把 2.0 容器挂到正在运行的 1.x `data/` 上。
 
 **没有传统数据库。** 笔记是磁盘上的 HTML + YAML sidecar + `users.json`。所谓「迁移」是复制文件库，不是 SQL dump。
 
@@ -9,7 +9,7 @@
 | 线 | Git | Docker | 端口（默认） | 状态 |
 |---|---|---|---|---|
 | 1.x | `legacy` / tag `v1.2.5` | 原 compose，服务名 `html-lore` | `8080→8787` | **冻结**，不再加功能 |
-| 2.0 | `main` / tag `v2.0.8` | compose 项目 `html-lore-v2` | `3000→3000` | **当前稳定维护线** |
+| 2.0 | `main` / tag `v2.0.9` | compose 项目 `html-lore-v2` | `3000→3000` | **当前稳定维护线** |
 
 后续功能只合入 `main`。需要 1.x 时继续跑旧容器，或从 `legacy` / tag `v1.2.5` 检出旧树。
 
@@ -72,7 +72,7 @@ node scripts/migrate-from-1x.mjs --merge-users /path/to/v1/data /path/to/v2/data
 分享 token 哈希仍在 `shares.json` / `share-index.json` 里，2.0 的 `/share/{token}` 可以继续打开未过期链接。YAML 里的 `agent:` 只读、界面不展示。
 
 4. `.env` 里 `HTML_LORE_DATA` 指向拷贝后的目录（compose 默认 `./data`）。
-5. `docker compose up -d --build` 后看 `GET /api/health` 是否返回 `"version":"2.0.8"`。
+5. `docker compose up -d --build` 后看 `GET /api/health` 是否返回 `"version":"2.0.9"`。
 
 ## 和 1.x 同时跑
 
@@ -95,7 +95,7 @@ HTML_LORE_NODE_IMAGE=node:22-bullseye docker compose up -d --build
 
 公网入口用 Caddy / Cloudflare Access 包住工作台。应用本身不拦静态文件；401 来自反代。分享页 `/share/{token}` 和 `/api/public/shares/{token}` 必须豁免，否则无凭据打不开。
 
-分享页**不再请求** PWA 壳（`/manifest.webmanifest`、`/icons/*`、`/favicon.ico`、`/html-lore-logo.svg`、`/sw.js`）。访客读的是一篇笔记，不是可安装的工作台；把这些品牌资源留在鉴权区即可。若运维仍要在分享页加载图标，再在 Caddy 追加豁免——那会把品牌资源公开。
+分享页**不再请求** PWA 壳（`/manifest.webmanifest`、`/icons/*`、`/favicon.ico`、`/html-lore-logo.svg`、`/sw.js`）。访客读的是一篇笔记，不是可安装的工作台；把这些品牌资源留在鉴权区即可。标签栏图标用内联 SVG（data URI），不额外打这些路径。若运维仍要在分享页加载图标文件，再在 Caddy 追加豁免——那会把品牌资源公开。
 
 Caddy 里「豁免 + 鉴权」必须用**兄弟互斥 `handle`**，不要把 named matcher 嵌进鉴权 `handle`。嵌套时豁免路径仍会掉进鉴权。
 
