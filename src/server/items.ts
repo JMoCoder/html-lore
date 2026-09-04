@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { buildItem, buildManifest } from "@/server/manifest";
+import { buildItem, buildManifest, stripItemSearchText, stripManifestSearchText } from "@/server/manifest";
 import { cachedManifest, invalidateManifestCache, manifestCacheKey } from "@/server/manifest-cache";
 import { MetadataStore } from "@/server/metadata";
 import { dumpSimpleYaml } from "@/server/yaml";
@@ -58,6 +58,10 @@ export class ItemService {
     return cachedManifest(manifestCacheKey(this.settings.contentDir, this.settings.metaDir, this.settings.siteTitle), () =>
       buildManifest(this.settings.contentDir, this.settings.metaDir, this.settings.siteTitle),
     );
+  }
+
+  publicManifest() {
+    return stripManifestSearchText(this.manifest());
   }
 
   listItems(query: ItemQuery): Item[] {
@@ -369,7 +373,7 @@ function searchableText(item: Item): string {
 
 function buildSearchResult(item: Item, query: string) {
   return {
-    item,
+    item: stripItemSearchText(item),
     score: scoreSearchResult(item, query),
     matches: searchMatches(item, query),
     snippet: searchSnippet(item, query),

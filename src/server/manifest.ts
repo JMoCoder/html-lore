@@ -71,6 +71,15 @@ export function buildItem(
   };
 }
 
+export function stripItemSearchText(item: Item): Item {
+  if (!item.text) return item;
+  return { ...item, text: "" };
+}
+
+export function stripManifestSearchText(manifest: Manifest): Manifest {
+  return { ...manifest, items: manifest.items.map(stripItemSearchText) };
+}
+
 export function inferCollection(itemId: string): string {
   const first = itemId.split("/")[0] ?? itemId;
   if (first === itemId) return "Inbox";

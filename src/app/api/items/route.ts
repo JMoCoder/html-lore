@@ -1,4 +1,5 @@
 import { ItemService, normalizeQuery } from "@/server";
+import { stripItemSearchText } from "@/server/manifest";
 import { jsonError, jsonOk, mapDomainError, parseBoolQuery, requireApiAuth } from "@/app/api/_lib/http";
 
 export async function GET(request: Request) {
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
       sort: url.searchParams.get("sort") ?? "created-newest",
       limit,
     });
-    const items = new ItemService(ctx.settings).listItems(query);
+    const items = new ItemService(ctx.settings).listItems(query).map(stripItemSearchText);
     return jsonOk({ items, count: items.length });
   } catch (error) {
     return mapDomainError(error);

@@ -6,7 +6,7 @@ import { WorkspaceView } from "@/features/workspace/workspace-view";
 export default async function HomePage() {
   const ctx = await getServerContext();
   if (authEnabled(ctx.root) && !ctx.user) redirect("/login");
-  const items = new ItemService(ctx.settings).manifest().items;
+  const items = new ItemService(ctx.settings).publicManifest().items;
   const shares = new ShareService(ctx.settings, ctx.root)
     .listShares()
     .filter((row) => row.active)

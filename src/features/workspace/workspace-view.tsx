@@ -51,6 +51,7 @@ export function WorkspaceView({
   const [navOpen, setNavOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareEpoch, setShareEpoch] = useState(0);
+  const [bodyMatches, setBodyMatches] = useState<{ query: string; ids: Set<string> }>();
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -61,6 +62,29 @@ export function WorkspaceView({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navOpen]);
+
+  useEffect(() => {
+    const needle = query.trim();
+    if (!needle) {
+      setBodyMatches(undefined);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        q: needle,
+        library,
+        tag_match: tagMatch,
+        sort,
+      });
+      if (collection) params.set("collection", collection);
+      if (tags.length) params.set("tags", tags.join(","));
+      if (favoritesOnly) params.set("favorite", "true");
+      apiJson<{ items: { item: Item }[] }>(`/api/search?${params}`)
+        .then((body) => setBodyMatches({ query: needle, ids: new Set(body.items.map((row) => row.item.id)) }))
+        .catch(() => setBodyMatches(undefined));
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [query, library, collection, tags, tagMatch, sort, favoritesOnly]);
 
   const load = useCallback(async () => {
     const [manifest, shareList, navigation] = await Promise.all([
@@ -98,8 +122,9 @@ export function WorkspaceView({
         sort,
         query,
         favoritesOnly,
+        bodyMatchIds: bodyMatches?.query === query.trim() ? bodyMatches.ids : undefined,
       }),
-    [notes, library, collection, tags, tagMatch, sort, query, favoritesOnly],
+    [notes, library, collection, tags, tagMatch, sort, query, favoritesOnly, bodyMatches],
   );
 
   const active = notes.filter((n) => !n.archived);

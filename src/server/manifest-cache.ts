@@ -1,7 +1,6 @@
 import type { Manifest } from "@/server/types";
 
-const TTL_MS = 3000;
-const cache = new Map<string, { manifest: Manifest; expiresAt: number; generation: number }>();
+const cache = new Map<string, { manifest: Manifest; generation: number }>();
 let generation = 0;
 
 export function invalidateManifestCache() {
@@ -15,10 +14,10 @@ export function manifestCacheKey(contentDir: string, metaDir: string | null, sit
 
 export function cachedManifest(key: string, build: () => Manifest): Manifest {
   const hit = cache.get(key);
-  if (hit && hit.generation === generation && hit.expiresAt > Date.now()) {
+  if (hit && hit.generation === generation) {
     return hit.manifest;
   }
   const manifest = build();
-  cache.set(key, { manifest, expiresAt: Date.now() + TTL_MS, generation });
+  cache.set(key, { manifest, generation });
   return manifest;
 }

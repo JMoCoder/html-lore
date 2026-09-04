@@ -12,6 +12,7 @@ export function filterNotes(
     sort: SortMode;
     query: string;
     favoritesOnly: boolean;
+    bodyMatchIds?: Set<string>;
   },
 ): Note[] {
   const query = options.query.trim().toLowerCase();
@@ -34,7 +35,9 @@ export function filterNotes(
       if (options.tagMatch === "any" && !hit) return false;
     }
     if (!query) return true;
-    return `${note.title} ${note.summary} ${note.collection} ${note.tags.join(" ")} ${note.html}`.toLowerCase().includes(query);
+    const haystack = `${note.title} ${note.summary} ${note.collection} ${note.tags.join(" ")} ${note.html}`.toLowerCase();
+    if (haystack.includes(query)) return true;
+    return Boolean(options.bodyMatchIds?.has(note.id));
   });
 
   return [...filtered].sort((a, b) => {

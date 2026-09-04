@@ -267,6 +267,10 @@ describe("examples fixtures", () => {
     const indexed = items.manifest().items.find((item) => item.id === "late-body.html");
     expect(indexed?.text).toContain("unique-body-after-css-zzlm");
     expect(indexed?.text.includes("xxxx")).toBe(false);
+    expect(items.publicManifest().items.find((item) => item.id === "late-body.html")?.text).toBe("");
+    const searched = items.searchItems({ ...emptyQuery, q: "unique-body-after-css-zzlm" });
+    expect(searched.items[0]?.item.text).toBe("");
+    expect(searched.items[0]?.snippet).toContain("unique-body-after-css-zzlm");
   });
 
   it("imports up to five html files and rejects a sixth", () => {
