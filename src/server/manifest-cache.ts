@@ -1,11 +1,21 @@
 import type { Manifest } from "@/server/types";
 
-const cache = new Map<string, { manifest: Manifest; generation: number }>();
-let generation = 0;
+type CacheEntry = { manifest: Manifest; generation: number };
+type CacheState = { cache: Map<string, CacheEntry>; generation: number };
+
+const globalForCache = globalThis as typeof globalThis & {
+  __htmlLoreManifestCache?: CacheState;
+};
+
+// Critical: both server runtimes must share one cache object, not module closures.
+const state: CacheState = (globalForCache.__htmlLoreManifestCache ??= {
+  cache: new Map(),
+  generation: 0,
+});
 
 export function invalidateManifestCache() {
-  generation += 1;
-  cache.clear();
+  state.generation += 1;
+  state.cache.clear();
 }
 
 export function manifestCacheKey(contentDir: string, metaDir: string | null, siteTitle: string) {
@@ -13,11 +23,11 @@ export function manifestCacheKey(contentDir: string, metaDir: string | null, sit
 }
 
 export function cachedManifest(key: string, build: () => Manifest): Manifest {
-  const hit = cache.get(key);
-  if (hit && hit.generation === generation) {
+  const hit = state.cache.get(key);
+  if (hit && hit.generation === state.generation) {
     return hit.manifest;
   }
   const manifest = build();
-  cache.set(key, { manifest, generation });
+  state.cache.set(key, { manifest, generation: state.generation });
   return manifest;
 }

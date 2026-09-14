@@ -284,6 +284,20 @@ describe("examples fixtures", () => {
     expect(() => upload.importHtmlFiles([...files, { filename: "batch-6.html", content: Buffer.from("<p>x</p>") }])).toThrow(/at most 5/);
   });
 
+  it("auto-renames imported notes when the title already exists", () => {
+    const settings = tempWorkspace();
+    const upload = new UploadService(settings);
+    const html = (title: string) =>
+      Buffer.from(`<!doctype html><html><head><title>${title}</title></head><body><p>Hi</p></body></html>`, "utf8");
+    const first = upload.importHtml({ filename: "bank-a.html", content: html("银行视角"), collection: "Inbox" });
+    const second = upload.importHtml({ filename: "bank-b.html", content: html("银行视角"), collection: "Inbox" });
+    expect(first.item.title).toBe("银行视角");
+    expect(second.item.title).toBe("银行视角 2");
+    const items = new ItemService(settings).manifest().items;
+    expect(items.filter((item) => item.title === "银行视角").length).toBe(1);
+    expect(items.filter((item) => item.title === "银行视角 2").length).toBe(1);
+  });
+
   it("reads one item from sidecar without loading library text", () => {
     const settings = tempWorkspace();
     fs.writeFileSync(path.join(settings.contentDir, "solo.html"), "<!doctype html><html><head><title>FromHtml</title></head><body><p>hello-solo</p></body></html>");
