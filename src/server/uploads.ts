@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { extractHtmlMetadata, filenameToTitle } from "@/server/html-meta";
 import { buildItem } from "@/server/manifest";
 import { invalidateManifestCache } from "@/server/manifest-cache";
 import { MetadataStore } from "@/server/metadata";
 import { dumpSimpleYaml } from "@/server/yaml";
-import { normalizeTags } from "@/server/items";
+import { ItemService, normalizeTags } from "@/server/items";
 import { ensureWithin } from "@/server/paths";
+import { uniqueTitle } from "@/server/unique-title";
 import type { ServerSettings } from "@/server/settings";
 import type { Item } from "@/server/types";
 
@@ -45,9 +47,16 @@ export class UploadService {
     fs.writeFileSync(contentPath, input.content);
 
     const itemId = relativePath.replace(/\\/g, "/");
+    const fallbackTitle = filenameToTitle(path.parse(input.filename).name);
+    const extracted = extractHtmlMetadata(input.content.toString("utf8"), fallbackTitle);
+    const desiredTitle = (input.title ?? "").trim() || extracted.title || fallbackTitle;
+    const existingTitles = new ItemService(this.settings)
+      .manifest()
+      .items.filter((item) => item.id !== itemId)
+      .map((item) => item.title);
     const metadata = buildUploadMetadata({
       itemId,
-      title: input.title ?? "",
+      title: uniqueTitle(desiredTitle, existingTitles),
       summary: input.summary ?? "",
       collection: input.collection ?? "",
       tags: input.tags ?? "",

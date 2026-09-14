@@ -9,6 +9,7 @@ import { ItemContentError, ItemService } from "@/server/items";
 import { ensureWithin, metadataPathForItem } from "@/server/paths";
 import type { ServerSettings } from "@/server/settings";
 import { forUser } from "@/server/settings";
+import { uniqueTitle } from "@/server/unique-title";
 import {
   INTERACTIVE_SHARE_MODE,
   SAFE_SHARE_MODE,
@@ -213,10 +214,14 @@ export class ShareService {
     fs.writeFileSync(contentPath, repairedContent, "utf8");
     const now = new Date().toISOString();
     const sourceMetadata = MetadataStore.load(this.settings.metaDir).forItem(item.id);
+    const existingTitles = this.itemService
+      .manifest()
+      .items.filter((row) => row.id !== relativePath)
+      .map((row) => row.title);
     const metadata: Record<string, unknown> = {
       ...sourceMetadata,
       id: relativePath,
-      title: `${item.title || "Untitled"} - Safe share copy`,
+      title: uniqueTitle(`${item.title || "Untitled"} - Safe share copy`, existingTitles),
       summary: item.summary || "",
       source_type: "share-safety-copy",
       status: "ready",
